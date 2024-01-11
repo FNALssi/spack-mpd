@@ -5,8 +5,8 @@ import spack.util.spack_yaml as syaml
 import os
 import re
 import argparse
+import sys
 from pathlib import Path
-
 
 def lint_spec(spec):
     spec_str = spec.short_spec
@@ -77,17 +77,28 @@ def make_spack_repo(package, local_packages_dir):
     repo_file = local_packages_dir / 'repo.yaml'
     with open(repo_file.absolute(), "w") as f:
         f.write("repo:\n")
-        f.write("  namespace: 'local'\n")
+        f.write(f"  namespace: '{package}'\n")  # Not sure that we want the repo name to be this specific
 
 
-def process(name, local_packages_dir, packages_to_develop, sources_path):
+def make_setup_file(package, local_packages_dir, ordered_dependencies, build_path):
+    setup_file = local_packages_dir / 'setup.sh'
+    with open(setup_file.absolute(), "w") as f:
+        f.write("#!/bin/bash\n\n")
+        f.write("local_repo=$(realpath $(dirname ${BASH_SOURCE[0]}))\n")
+        f.write("spack repo add --scope=user $local_repo >& /dev/null\n")
+        f.write(f"spack load {package}\n\n")
+        f.write("trap 'spack repo rm $local_repo' EXIT\n")
+
+
+def process(name, local_packages_dir, packages_to_develop, sources_path, build_path):
     spec = Spec(name + "-bootstrap@develop");
     bootstrap_name = spec.name
 
     concretized_spec = spec.concretized()
 
-    # CMake file
     ordered_dependencies = [p.name for p in concretized_spec.traverse(order="topo") if p.name in packages_to_develop]
+    make_setup_file(name, local_packages_dir.parents[0], ordered_dependencies, build_path)
+
     ordered_dependencies.reverse()
     make_cmake_file(name, ordered_dependencies, sources_path)
 
@@ -139,8 +150,7 @@ def process_args(name, top_dir, source_dir, variants):
       lp.mkdir()
       local_packages_dir.mkdir()
       make_spack_repo(name, lp)
-      os.system(f"spack repo add {lp.absolute()}")
-      print(f"Created local Spack repository: {lp.absolute()}")
+      os.system(f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null")
 
     # Always replace the bootstrap bundle file
     make_bundle_file(name + "-bootstrap", local_packages_dir, packages_at_develop)
@@ -159,16 +169,7 @@ def process_args(name, top_dir, source_dir, variants):
         print(f"    - {p}")
 
     print("\nConcretizing project (this may take a few minutes)")
-    process(name, local_packages_dir, packages_to_develop, sp)
+    process(name, local_packages_dir, packages_to_develop, sp, bp)
     print(f"Concretization complete")
-    print(f"\nTo install dependencies, invoke 'spack install {name}@develop'\n")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--name', required=True)
-    parser.add_argument('--top', required=True)
-    parser.add_argument('-D', '--dir', required=True)
-    parser.add_argument('variants', nargs='*')
-    args = parser.parse_args()
-
-    process_args(args.name, args.top, args.dir, args.variants)
+    print(f"\nTo install dependencies, invoke 'spack install {name}'")
+    print(f"To setup your user environment, invoke 'source {lp.absolute()}/setup.sh'\n")
