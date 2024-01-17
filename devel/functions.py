@@ -1,6 +1,8 @@
 from spack.spec import Spec
 import spack.hash_types as ht
 import spack.util.spack_yaml as syaml
+import llnl.util.tty as tty
+
 
 import os
 import re
@@ -8,14 +10,16 @@ import argparse
 import sys
 from pathlib import Path
 
+
 def lint_spec(spec):
     spec_str = spec.short_spec
-    spec_str = re.sub(f"arch={spec.architecture}", "", spec_str) # remove arch
-    spec_str = re.sub(f"%{spec.compiler.display_str}", "", spec_str) # remove compiler
-    spec_str = re.sub(f"/[a-z0-9]+", "", spec_str) # remove hash
-    if "patches" in spec.variants: # remove patches if present
+    spec_str = re.sub(f"arch={spec.architecture}", "", spec_str)  # remove arch
+    spec_str = re.sub(f"%{spec.compiler.display_str}", "", spec_str)  # remove compiler
+    spec_str = re.sub(f"/[a-z0-9]+", "", spec_str)  # remove hash
+    if "patches" in spec.variants:  # remove patches if present
         spec_str = re.sub(f"{spec.variants['patches']}", "", spec_str)
     return spec_str.strip()
+
 
 def entry(package_list, package_name):
     for p in package_list:
@@ -33,9 +37,10 @@ include(CetCMakeEnv)
 
 """
 
+
 def bundle_template(package, dependencies):
-    camel_package = package.split('-')
-    camel_package = ''.join(word.title() for word in camel_package)
+    camel_package = package.split("-")
+    camel_package = "".join(word.title() for word in camel_package)
     bundle_str = f"""from spack.package import *
 
 
@@ -48,9 +53,10 @@ class {camel_package}(BundlePackage):
 
 """
     for dep in dependencies:
-      bundle_str += f'    depends_on("{dep}")\n'
+        bundle_str += f'    depends_on("{dep}")\n'
 
     return bundle_str
+
 
 def make_cmake_file(package, dependencies, source_dir):
     with open((source_dir / "CMakeLists.txt").absolute(), "w") as f:
@@ -60,28 +66,32 @@ def make_cmake_file(package, dependencies, source_dir):
         f.write("\nenable_testing()")
         # print(f"Made {f.name} file")
 
+
 def make_yaml_file(package, spec):
     with open(f"{package}.yaml", "w") as f:
         syaml.dump(spec, stream=f, default_flow_style=False)
         print(f"Made {f.name} file")
 
+
 def make_bundle_file(name, local_packages_dir, deps):
     bundle_dir = local_packages_dir / name
     bundle_dir.mkdir(exist_ok=True)
-    package_recipe = bundle_dir / 'package.py'
+    package_recipe = bundle_dir / "package.py"
     with open(package_recipe.absolute(), "w") as f:
         f.write(bundle_template(name, deps))
 
 
 def make_spack_repo(package, local_packages_dir):
-    repo_file = local_packages_dir / 'repo.yaml'
+    repo_file = local_packages_dir / "repo.yaml"
     with open(repo_file.absolute(), "w") as f:
         f.write("repo:\n")
-        f.write(f"  namespace: '{package}'\n")  # Not sure that we want the repo name to be this specific
+        f.write(
+            f"  namespace: '{package}'\n"
+        )  # Not sure that we want the repo name to be this specific
 
 
 def make_setup_file(package, local_packages_dir, ordered_dependencies, build_path):
-    setup_file = local_packages_dir / 'setup.sh'
+    setup_file = local_packages_dir / "setup.sh"
     with open(setup_file.absolute(), "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write("local_repo=$(realpath $(dirname ${BASH_SOURCE[0]}))\n")
@@ -91,20 +101,26 @@ def make_setup_file(package, local_packages_dir, ordered_dependencies, build_pat
 
 
 def process(name, local_packages_dir, packages_to_develop, sources_path, build_path):
-    spec = Spec(name + "-bootstrap@develop");
+    spec = Spec(name + "-bootstrap@develop")
     bootstrap_name = spec.name
 
     concretized_spec = spec.concretized()
 
-    ordered_dependencies = [p.name for p in concretized_spec.traverse(order="topo") if p.name in packages_to_develop]
-    make_setup_file(name, local_packages_dir.parents[0], ordered_dependencies, build_path)
+    ordered_dependencies = [
+        p.name
+        for p in concretized_spec.traverse(order="topo")
+        if p.name in packages_to_develop
+    ]
+    make_setup_file(
+        name, local_packages_dir.parents[0], ordered_dependencies, build_path
+    )
 
     ordered_dependencies.reverse()
     make_cmake_file(name, ordered_dependencies, sources_path)
 
     # YAML file
     spec_dict = concretized_spec.to_dict(ht.dag_hash)
-    nodes = spec_dict['spec']['nodes']
+    nodes = spec_dict["spec"]["nodes"]
 
     top_level_package = entry(nodes, bootstrap_name)
     assert top_level_package
@@ -126,7 +142,9 @@ def process(name, local_packages_dir, packages_to_develop, sources_path, build_p
     top_level_package["dependencies"] = list(packages.values())
 
     # Always replace the bundle file
-    deps_for_bundlefile = [lint_spec(p) for p in concretized_spec.traverse() if p.name in packages]
+    deps_for_bundlefile = [
+        lint_spec(p) for p in concretized_spec.traverse() if p.name in packages
+    ]
     make_bundle_file(name, local_packages_dir, deps_for_bundlefile)
 
     # final_nodes = [n for n in nodes if n["name"] not in package_names]
@@ -136,28 +154,36 @@ def process(name, local_packages_dir, packages_to_develop, sources_path, build_p
 
 
 def process_args(name, top_dir, source_dir, variants):
-    print(f"\nCreating project: {name}")
+    print()
+
+    tty.msg(f"Creating project: {name}")
 
     sp = Path(source_dir)
-    packages_to_develop = [f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()]
-    stringized_variants = ' '.join(variants)
-    packages_at_develop = [f"{p}@develop {stringized_variants}".strip() for p in packages_to_develop]
+    packages_to_develop = [
+        f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
+    ]
+    stringized_variants = " ".join(variants)
+    packages_at_develop = [
+        f"{p}@develop {stringized_variants}".strip() for p in packages_to_develop
+    ]
 
     p = Path(top_dir)
-    lp = p / 'local'
-    local_packages_dir = lp / 'packages'
+    lp = p / "local"
+    local_packages_dir = lp / "packages"
     if not lp.exists():
-      lp.mkdir()
-      local_packages_dir.mkdir()
-      make_spack_repo(name, lp)
-      os.system(f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null")
+        lp.mkdir()
+        local_packages_dir.mkdir()
+        make_spack_repo(name, lp)
+        os.system(
+            f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null"
+        )
 
     # Always replace the bootstrap bundle file
     make_bundle_file(name + "-bootstrap", local_packages_dir, packages_at_develop)
 
-    bp = p / 'build'
+    bp = p / "build"
     if not bp.exists():
-      bp.mkdir()
+        bp.mkdir()
 
     print(f"\nUsing build area: {bp.absolute()}")
     print(f"Using local area: {lp.absolute()}")
@@ -168,8 +194,15 @@ def process_args(name, top_dir, source_dir, variants):
     for p in packages_to_develop:
         print(f"    - {p}")
 
-    print("\nConcretizing project (this may take a few minutes)")
+    print()
+    tty.msg("Concretizing project (this may take a few minutes)")
     process(name, local_packages_dir, packages_to_develop, sp, bp)
-    print(f"Concretization complete")
-    print(f"\nTo install dependencies, invoke 'spack install {name}'")
-    print(f"To setup your user environment, invoke 'source {lp.absolute()}/setup.sh'\n")
+    tty.msg("Concretization complete\n")
+    tty.msg(
+        tty.color.colorize("@*{To install dependencies, invoke}")
+        + f"\n\n  spack install {name}\n"
+    )
+    tty.msg(
+        tty.color.colorize("@*{To setup your user environment, invoke}")
+        + f"\n\n  source {lp.absolute()}/setup.sh\n"
+    )
