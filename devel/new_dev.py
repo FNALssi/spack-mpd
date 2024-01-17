@@ -153,7 +153,7 @@ def process(name, local_packages_dir, packages_to_develop, sources_path, build_p
     # make_yaml_file(name, spec_dict)
 
 
-def process_args(name, top_dir, source_dir, variants):
+def new_dev(name, top_dir, source_dir, variants):
     print()
 
     tty.msg(f"Creating project: {name}")

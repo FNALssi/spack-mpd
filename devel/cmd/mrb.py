@@ -2,8 +2,8 @@ description = "create multi-repository build area"
 section = "scripting"
 level = "long"
 
-from ..functions import process_args
-from ..help_suites import help_suites
+from ..new_dev import new_dev
+from ..suites import help_suites
 
 def setup_parser(subparser):
     subparsers = subparser.add_subparsers(dest="mrb_subcommand")
@@ -23,9 +23,14 @@ def setup_parser(subparser):
     git.add_argument('--suite')
     git.add_argument('--help-suites', action='store_true', help="list supported suites")
 
+    build = subparsers.add_parser("build",
+                                  description="build repositories under development",
+                                  aliases=["b"],
+                                  help="SHOULD WE PROVIDE THIS?")
+
 def mrb(parser, args):
     if args.mrb_subcommand in ("new-dev", "n"):
-        process_args(args.name, args.top, args.dir, args.variants)
+        new_dev(args.name, args.top, args.dir, args.variants)
         return
     if args.mrb_subcommand in ("git-clone", "g"):
         help_suites()
