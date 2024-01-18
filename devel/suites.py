@@ -18,10 +18,10 @@ _supported_suites = {
 def help_suites():
     print()
     tty.msg("Supported suites:\n")
-    title="Suite"
-    suite_width=max(len(s) for s in _supported_suites.keys())
+    title = "Suite"
+    suite_width = max(len(s) for s in _supported_suites.keys())
     print(f"  {title:<{suite_width}}  Repositories")
-    print("  " + '-' * 100)
+    print("  " + "-" * 100)
     for suite, repositories in _supported_suites.items():
         print(f"  {suite:<{suite_width}}  {repositories}")
     print()
