@@ -7,6 +7,7 @@ import llnl.util.tty as tty
 import os
 import re
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -28,7 +29,7 @@ def entry(package_list, package_name):
     return None
 
 
-def cmake_preamble(package):
+def cmake_lists_preamble(package):
     return f"""cmake_minimum_required (VERSION 3.18.2 FATAL_ERROR)
 project({package}-devel LANGUAGES NONE)
 
@@ -36,6 +37,26 @@ find_package(cetmodules REQUIRED)
 include(CetCMakeEnv)
 
 """
+
+
+def cmake_presets(cxx_standard, preset_file):
+    presets = {
+        "configurePresets": [
+            {
+                "cacheVariables": {
+                    "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
+                    "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
+                    "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
+                    "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxx_standard},
+                },
+                "description": "Configuration settings as created by 'spack mrb new-dev'",
+                "displayName": "Configuration from mrb new-dev",
+                "name": "default",
+            }
+        ],
+        "version": 3,
+    }
+    return json.dump(presets, preset_file, indent=4)
 
 
 def bundle_template(package, dependencies):
@@ -58,13 +79,15 @@ class {camel_package}(BundlePackage):
     return bundle_str
 
 
-def make_cmake_file(package, dependencies, source_dir):
+def make_cmake_file(package, dependencies, source_dir, cxx_standard):
     with open((source_dir / "CMakeLists.txt").absolute(), "w") as f:
-        f.write(cmake_preamble(package))
+        f.write(cmake_lists_preamble(package))
         for d in dependencies:
             f.write(f"add_subdirectory({d})\n")
         f.write("\nenable_testing()")
-        # print(f"Made {f.name} file")
+
+    with open((source_dir / "CMakePresets.json").absolute(), "w") as f:
+        cmake_presets(cxx_standard, f)
 
 
 def make_yaml_file(package, spec):
@@ -105,7 +128,14 @@ def make_setup_file(
         f.write("trap 'spack repo rm $local_repo' EXIT\n")
 
 
-def process(name, local_packages_dir, packages_to_develop, sources_path, build_path):
+def process(
+    name,
+    local_packages_dir,
+    packages_to_develop,
+    sources_path,
+    build_path,
+    cxx_standard,
+):
     spec = Spec(name + "-bootstrap@develop")
     bootstrap_name = spec.name
 
@@ -125,7 +155,7 @@ def process(name, local_packages_dir, packages_to_develop, sources_path, build_p
     )
 
     ordered_dependencies.reverse()
-    make_cmake_file(name, ordered_dependencies, sources_path)
+    make_cmake_file(name, ordered_dependencies, sources_path, cxx_standard)
 
     # YAML file
     spec_dict = concretized_spec.to_dict(ht.dag_hash)
@@ -171,6 +201,14 @@ def new_dev(name, top_dir, source_dir, variants):
     packages_to_develop = [
         f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
     ]
+
+    # Get C++ standard
+    cxx_standard = 17
+    for variant in variants:
+        match = re.fullmatch("cxxstd=(\d{2})", variant)
+        if match:
+            cxx_standard = match[1]
+
     stringized_variants = " ".join(variants)
     packages_at_develop = [
         f"{p}@develop {stringized_variants}".strip() for p in packages_to_develop
@@ -205,7 +243,7 @@ def new_dev(name, top_dir, source_dir, variants):
 
     print()
     tty.msg("Concretizing project (this may take a few minutes)")
-    process(name, local_packages_dir, packages_to_develop, sp, bp)
+    process(name, local_packages_dir, packages_to_develop, sp, bp, cxx_standard)
     tty.msg("Concretization complete\n")
     tty.msg(
         tty.color.colorize("@*{To install dependencies, invoke}")
