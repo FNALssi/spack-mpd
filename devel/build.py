@@ -1,8 +1,16 @@
 import subprocess
 
 
-def build(srcs, build_area, generator, parallel, generator_options):
-    configure_list = ["cmake", "--preset", "default", srcs, "-B", build_area]
+def build(srcs, build_area, install_area, generator, parallel, generator_options):
+    configure_list = [
+        "cmake",
+        "--preset",
+        "default",
+        srcs,
+        "-B",
+        build_area,
+        f"-DCMAKE_INSTALL_PREFIX={install_area}"
+    ]
     if generator:
         configure_list += ["-G", generator]
     subprocess.run(configure_list)

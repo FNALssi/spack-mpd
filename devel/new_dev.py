@@ -113,15 +113,15 @@ def make_spack_repo(package, local_packages_dir):
         )  # Not sure that we want the repo name to be this specific
 
 
-def make_setup_file(
-    package, local_packages_dir, ordered_dependencies, source_path, build_path
-):
-    setup_file = local_packages_dir / "setup.sh"
+def make_setup_file(package, local_dir, ordered_dependencies, source_path, build_path):
+    setup_file = local_dir / "setup.sh"
+    install = local_dir / "install"
     with open(setup_file.absolute(), "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write('alias mrb="spack mrb"\n\n')
         f.write(f"export MRB_SOURCE={source_path.absolute()}\n")
         f.write(f"export MRB_BUILDDIR={build_path.absolute()}\n")
+        f.write(f"export MRB_INSTALL={install.absolute()}\n\n")
         f.write("local_repo=$(realpath $(dirname ${BASH_SOURCE[0]}))\n")
         f.write("spack repo add --scope=user $local_repo >& /dev/null\n")
         f.write(f"spack load {package}\n\n")
@@ -217,6 +217,7 @@ def new_dev(name, top_dir, source_dir, variants):
     p = Path(top_dir)
     lp = p / "local"
     local_packages_dir = lp / "packages"
+    local_install_dir = lp / "install"
     if not lp.exists():
         lp.mkdir()
         local_packages_dir.mkdir()
@@ -224,6 +225,8 @@ def new_dev(name, top_dir, source_dir, variants):
         os.system(
             f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null"
         )
+    local_install_dir = lp / "install"
+    local_install_dir.mkdir(exist_ok=True)
 
     # Always replace the bootstrap bundle file
     make_bundle_file(name + "-bootstrap", local_packages_dir, packages_at_develop)

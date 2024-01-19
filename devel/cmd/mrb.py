@@ -7,7 +7,7 @@ level = "long"
 from ..build import build
 from ..clean import clean
 from ..new_dev import new_dev
-from ..suites import help_suites
+from .. import clone
 
 
 def setup_parser(subparser):
@@ -47,6 +47,7 @@ def setup_parser(subparser):
         help="clone git repositories",
     )
     git.add_argument("--suite")
+    git.add_argument("--help-repos", action="store_true", help="list supported repositories")
     git.add_argument("--help-suites", action="store_true", help="list supported suites")
 
     install = subparsers.add_parser(
@@ -85,14 +86,28 @@ def mrb(parser, args):
         new_dev(args.name, args.top, args.dir, args.variants)
         return
     if args.mrb_subcommand in ("git-clone", "g", "gitCheckout"):
-        help_suites()
+        if args.help_suites:
+            clone.help_suites()
+        if args.help_repos:
+            clone.help_repos()
         return
     if args.mrb_subcommand in ("build", "b"):
-        srcs, build_area = os.environ["MRB_SOURCE"], os.environ["MRB_BUILDDIR"]
+        srcs, build_area, install_area = (
+            os.environ["MRB_SOURCE"],
+            os.environ["MRB_BUILDDIR"],
+            os.environ["MRB_INSTALL"],
+        )
         if args.clean:
-            clean(os.environ["MRB_BUILDDIR"])
+            clean(build_area)
 
-        build(srcs, build_area, args.generator, args.parallel, args.generator_options)
+        build(
+            srcs,
+            build_area,
+            install_area,
+            args.generator,
+            args.parallel,
+            args.generator_options,
+        )
         return
     if args.mrb_subcommand in ("zap-build", "z"):
         clean(os.environ["MRB_BUILDDIR"])
