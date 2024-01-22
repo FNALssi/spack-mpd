@@ -113,7 +113,9 @@ def make_spack_repo(package, local_packages_dir):
         )  # Not sure that we want the repo name to be this specific
 
 
-def make_setup_file(package, local_dir, ordered_dependencies, source_path, build_path):
+def make_setup_file(
+    package, compiler, local_dir, ordered_dependencies, source_path, build_path
+):
     setup_file = local_dir / "setup.sh"
     install = local_dir / "install"
     with open(setup_file.absolute(), "w") as f:
@@ -124,8 +126,10 @@ def make_setup_file(package, local_dir, ordered_dependencies, source_path, build
         f.write(f"export MRB_INSTALL={install.absolute()}\n\n")
         f.write("local_repo=$(realpath $(dirname ${BASH_SOURCE[0]}))\n")
         f.write("spack repo add --scope=user $local_repo >& /dev/null\n")
-        f.write(f"spack load {package}\n\n")
-        f.write("trap 'spack repo rm $local_repo' EXIT\n")
+        f.write(f"spack load {package}\n")
+        if compiler:
+            f.write(f"spack load {compiler}\n")
+        f.write("\ntrap 'spack repo rm $local_repo' EXIT\n")
 
 
 def process(
@@ -148,6 +152,7 @@ def process(
     ]
     make_setup_file(
         name,
+        concretized_spec.compiler,
         local_packages_dir.parents[0],
         ordered_dependencies,
         sources_path,
