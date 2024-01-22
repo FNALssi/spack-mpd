@@ -40,15 +40,22 @@ def setup_parser(subparser):
         help="options passed directly to generator",
     )
 
-    git = subparsers.add_parser(
+    git_parser = subparsers.add_parser(
         "git-clone",
         description="clone git repositories for development",
         aliases=["g", "gitCheckout"],
         help="clone git repositories",
     )
-    git.add_argument("--suite")
-    git.add_argument("--help-repos", action="store_true", help="list supported repositories")
+    git = git_parser.add_mutually_exclusive_group(required=True)
+    git.add_argument(
+        "--help-repos", action="store_true", help="list supported repositories"
+    )
     git.add_argument("--help-suites", action="store_true", help="list supported suites")
+    git.add_argument(
+        "--suite",
+        metavar="<suite name>",
+        help="install repositories corresponding to the given suite name",
+    )
 
     install = subparsers.add_parser(
         "install",
@@ -73,11 +80,31 @@ def setup_parser(subparser):
         aliases=["t"],
         help="build and run tests",
     )
-    zap = subparsers.add_parser(
-        "zap-build",
-        description="delete everything in your build area",
-        aliases=["z", "zapBuild"],
-        help="delete everything in your build area",
+    zap_parser = subparsers.add_parser(
+        "zap",
+        description="delete everything in your build and/or install areas.\n\nIf no optional argument is provided, the '--build' option is assumed.",
+        aliases=["z"],
+        help="delete everything in your build and/or install areas",
+    )
+    zap = zap_parser.add_mutually_exclusive_group()
+    zap.add_argument(
+        "--all",
+        dest="zap_all",
+        action="store_true",
+        help="delete everything in your build and install directories",
+    )
+    zap.add_argument(
+        "--build",
+        dest="zap_build",
+        action="store_true",
+        default=True,
+        help="delete everything in your build directory",
+    )
+    zap.add_argument(
+        "--install",
+        dest="zap_install",
+        action="store_true",
+        help="delete everything in your install directory",
     )
 
 
@@ -109,6 +136,12 @@ def mrb(parser, args):
             args.generator_options,
         )
         return
-    if args.mrb_subcommand in ("zap-build", "z"):
-        clean(os.environ["MRB_BUILDDIR"])
+    if args.mrb_subcommand in ("zap", "z"):
+        if args.zap_install:
+            clean(os.environ["MRB_INSTALL"])
+        if args.zap_all:
+            clean(os.environ["MRB_INSTALL"])
+            clean(os.environ["MRB_BUILDDIR"])
+        if args.zap_build:
+            clean(os.environ["MRB_BUILDDIR"])
         return
