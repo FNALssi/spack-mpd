@@ -39,16 +39,35 @@ include(CetCMakeEnv)
 """
 
 
-def cmake_presets(cxx_standard, preset_file):
+def cmake_presets(source_dir, dependencies, cxx_standard, preset_file):
+    configurePresets, cacheVariables = "configurePresets", "cacheVariables"
+    allCacheVariables = {
+        "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
+        "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
+        "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
+        "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxx_standard},
+    }
+
+    # Pull project-specific presets from each dependency.
+    for dep in dependencies:
+        pkg_presets_file = source_dir / dep / "CMakePresets.json"
+        if not pkg_presets_file.exists():
+            continue
+
+        with open(pkg_presets_file, "r") as f:
+            pkg_presets = json.load(f)
+            pkg_config_presets = pkg_presets[configurePresets]
+            default_presets = next(
+                filter(lambda s: s["name"] == "from_product_deps", pkg_config_presets)
+            )
+            for key, value in default_presets[cacheVariables].items():
+                if key.startswith(dep):
+                    allCacheVariables[key] = value
+
     presets = {
-        "configurePresets": [
+        configurePresets: [
             {
-                "cacheVariables": {
-                    "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
-                    "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
-                    "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
-                    "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxx_standard},
-                },
+                cacheVariables: allCacheVariables,
                 "description": "Configuration settings as created by 'spack mrb new-dev'",
                 "displayName": "Configuration from mrb new-dev",
                 "name": "default",
@@ -87,13 +106,12 @@ def make_cmake_file(package, dependencies, source_dir, cxx_standard):
         f.write("\nenable_testing()")
 
     with open((source_dir / "CMakePresets.json").absolute(), "w") as f:
-        cmake_presets(cxx_standard, f)
+        cmake_presets(source_dir, dependencies, cxx_standard, f)
 
 
 def make_yaml_file(package, spec):
     with open(f"{package}.yaml", "w") as f:
         syaml.dump(spec, stream=f, default_flow_style=False)
-        print(f"Made {f.name} file")
 
 
 def make_bundle_file(name, local_packages_dir, deps):
@@ -113,9 +131,7 @@ def make_spack_repo(package, local_packages_dir):
         )  # Not sure that we want the repo name to be this specific
 
 
-def make_setup_file(
-    package, compiler, local_dir, ordered_dependencies, source_path, build_path
-):
+def make_bare_setup_file(local_dir, source_path, build_path):
     setup_file = local_dir / "setup.sh"
     install = local_dir / "install"
     with open(setup_file.absolute(), "w") as f:
@@ -123,6 +139,19 @@ def make_setup_file(
         f.write('alias mrb="spack mrb"\n\n')
         f.write(f"export MRB_SOURCE={source_path.absolute()}\n")
         f.write(f"export MRB_BUILDDIR={build_path.absolute()}\n")
+        f.write(f"export MRB_LOCAL={local_dir.absolute()}\n")
+        f.write(f"export MRB_INSTALL={install.absolute()}\n")
+
+
+def make_setup_file(package, compiler, local_dir, source_path, build_path):
+    setup_file = local_dir / "setup.sh"
+    install = local_dir / "install"
+    with open(setup_file.absolute(), "w") as f:
+        f.write("#!/bin/bash\n\n")
+        f.write('alias mrb="spack mrb"\n\n')
+        f.write(f"export MRB_SOURCE={source_path.absolute()}\n")
+        f.write(f"export MRB_BUILDDIR={build_path.absolute()}\n")
+        f.write(f"export MRB_LOCAL={local_dir.absolute()}\n")
         f.write(f"export MRB_INSTALL={install.absolute()}\n\n")
         f.write("local_repo=$(realpath $(dirname ${BASH_SOURCE[0]}))\n")
         f.write("spack repo add --scope=user $local_repo >& /dev/null\n")
@@ -139,26 +168,28 @@ def process(
     sources_path,
     build_path,
     cxx_standard,
+    variants,
 ):
-    spec = Spec(name + "-bootstrap@develop")
+    spec_like = name + "-bootstrap@develop" + " ".join(variants)
+    spec = Spec(spec_like)
+
     bootstrap_name = spec.name
 
     concretized_spec = spec.concretized()
+
+    make_setup_file(
+        name,
+        concretized_spec.compiler,
+        local_packages_dir.parents[0],
+        sources_path,
+        build_path,
+    )
 
     ordered_dependencies = [
         p.name
         for p in concretized_spec.traverse(order="topo")
         if p.name in packages_to_develop
     ]
-    make_setup_file(
-        name,
-        concretized_spec.compiler,
-        local_packages_dir.parents[0],
-        ordered_dependencies,
-        sources_path,
-        build_path,
-    )
-
     ordered_dependencies.reverse()
     make_cmake_file(name, ordered_dependencies, sources_path, cxx_standard)
 
@@ -182,16 +213,38 @@ def process(
     for pname in package_names:
         del packages[pname]
 
-    top_level_package["name"] = name
-    top_level_package["dependencies"] = list(packages.values())
-
     # Always replace the bundle file
     deps_for_bundlefile = [
         lint_spec(p) for p in concretized_spec.traverse() if p.name in packages
     ]
     make_bundle_file(name, local_packages_dir, deps_for_bundlefile)
 
-    # final_nodes = [n for n in nodes if n["name"] not in package_names]
+    final_nodes = [n for n in nodes if n["name"] not in package_names]
+    missing_intermediate_deps = {}
+    for n in final_nodes:
+        if n["name"] == bootstrap_name:
+            continue
+
+        missing_deps = [
+            p["name"]
+            for p in n.get("dependencies", [])
+            if p["name"] in packages_to_develop
+        ]
+        if missing_deps:
+            missing_intermediate_deps[n["name"]] = missing_deps
+
+    if missing_intermediate_deps:
+        error_msg = "The following packages are intermediate dependencies and must also be checked out:\n\n"
+        for pkg_name, missing_deps in missing_intermediate_deps.items():
+            missing_deps_str = ", ".join(missing_deps)
+            error_msg += "      - " + tty.color.colorize("@*{" + pkg_name + "}")
+            error_msg += f" (depends on {missing_deps_str})\n"
+
+        print()
+        tty.error(error_msg)
+        print()
+        sys.exit(1)
+
     # spec_dict["spec"]["nodes"] = final_nodes
     #
     # make_yaml_file(name, spec_dict)
@@ -202,17 +255,27 @@ def new_dev(name, top_dir, source_dir, variants):
 
     tty.msg(f"Creating project: {name}")
 
-    sp = Path(source_dir)
-    packages_to_develop = [
-        f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
-    ]
+    sp = Path(source_dir) if source_dir else Path("srcs")
+    packages_to_develop = []
+    if source_dir:
+        packages_to_develop = [
+            f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
+        ]
+    else:
+        sp.mkdir(exist_ok=True)
 
     # Get C++ standard
-    cxx_standard = 17
-    for variant in variants:
+    cxx_standard = "17"  # Must be a string for CMake
+    cxxstd_index = None
+    for i, variant in enumerate(variants):
         match = re.fullmatch("cxxstd=(\d{2})", variant)
         if match:
             cxx_standard = match[1]
+            cxxstd_index = i
+
+    # Remove cxxstd variant
+    if cxxstd_index is not None:
+        del variants[cxxstd_index]
 
     stringized_variants = " ".join(variants)
     packages_at_develop = [
@@ -234,7 +297,8 @@ def new_dev(name, top_dir, source_dir, variants):
     local_install_dir.mkdir(exist_ok=True)
 
     # Always replace the bootstrap bundle file
-    make_bundle_file(name + "-bootstrap", local_packages_dir, packages_at_develop)
+    if packages_at_develop:
+        make_bundle_file(name + "-bootstrap", local_packages_dir, packages_at_develop)
 
     bp = p / "build"
     if not bp.exists():
@@ -245,19 +309,43 @@ def new_dev(name, top_dir, source_dir, variants):
     print(f"Using sources area: {sp.absolute()}")
     packages_to_develop.sort()
 
-    print(f"  Will develop:")
-    for p in packages_to_develop:
-        print(f"    - {p}")
+    if packages_to_develop:
+        print(f"  Will develop:")
+        for p in packages_to_develop:
+            print(f"    - {p}")
 
-    print()
-    tty.msg("Concretizing project (this may take a few minutes)")
-    process(name, local_packages_dir, packages_to_develop, sp, bp, cxx_standard)
-    tty.msg("Concretization complete\n")
-    tty.msg(
-        tty.color.colorize("@*{To install dependencies, invoke}")
-        + f"\n\n  spack install {name}\n"
-    )
-    tty.msg(
-        tty.color.colorize("@*{To setup your user environment, invoke}")
-        + f"\n\n  source {lp.absolute()}/setup.sh\n"
-    )
+        print()
+        tty.msg("Concretizing project (this may take a few minutes)")
+        process(
+            name,
+            local_packages_dir,
+            packages_to_develop,
+            sp,
+            bp,
+            cxx_standard,
+            variants,
+        )
+        tty.msg("Concretization complete\n")
+        tty.msg(
+            tty.color.colorize("@*{To install dependencies, invoke}")
+            + f"\n\n  spack install {name}\n"
+        )
+
+        tty.msg(
+            tty.color.colorize("@*{To setup your user environment, invoke}")
+            + f"\n\n  source {lp.absolute()}/setup.sh\n"
+        )
+    else:
+        print()
+        make_bare_setup_file(local_packages_dir.parents[0], sp, bp)
+        tty.msg(
+            tty.color.colorize("@*{To setup your user environment, invoke}")
+            + f"\n\n  source {lp.absolute()}/setup.sh\n"
+        )
+        tty.msg(
+            tty.color.colorize(
+                "@*{You can then clone repositories for development by invoking}"
+            )
+            + f"\n\n  spack mrb g --suite <suite name>\n\n"
+            "  (or type 'spack mrb g --help' for more options)\n"
+        )

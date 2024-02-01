@@ -71,7 +71,9 @@ def setup_parser(subparser):
     )
     newDev.add_argument("--name", required=True)
     newDev.add_argument("--top", required=True)
-    newDev.add_argument("-D", "--dir", required=True)
+    newDev.add_argument(
+        "-D", "--dir", help="Directory containing repositories to develop"
+    )
     newDev.add_argument("variants", nargs="*")
 
     test = subparsers.add_parser(
@@ -113,6 +115,10 @@ def mrb(parser, args):
         new_dev(args.name, args.top, args.dir, args.variants)
         return
     if args.mrb_subcommand in ("git-clone", "g", "gitCheckout"):
+        if args.suite:
+            clone.clone_suite(
+                args.suite, os.environ["MRB_SOURCE"], os.environ["MRB_LOCAL"]
+            )
         if args.help_suites:
             clone.help_suites()
         if args.help_repos:
