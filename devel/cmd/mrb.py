@@ -1,13 +1,14 @@
 import os
+from pathlib import Path
 
 description = "create multi-repository build area"
 section = "scripting"
 level = "long"
 
+from .. import clone
 from ..build import build
 from ..clean import clean
 from ..new_dev import new_dev
-from .. import clone
 
 
 def setup_parser(subparser):
@@ -24,9 +25,7 @@ def setup_parser(subparser):
         metavar="<generator name>",
         help="generator used to build CMake project",
     )
-    build.add_argument(
-        "--clean", action="store_true", help="clean build area before building"
-    )
+    build.add_argument("--clean", action="store_true", help="clean build area before building")
     build.add_argument(
         "-j",
         dest="parallel",
@@ -47,9 +46,7 @@ def setup_parser(subparser):
         help="clone git repositories",
     )
     git = git_parser.add_mutually_exclusive_group(required=True)
-    git.add_argument(
-        "--help-repos", action="store_true", help="list supported repositories"
-    )
+    git.add_argument("--help-repos", action="store_true", help="list supported repositories")
     git.add_argument("--help-suites", action="store_true", help="list supported suites")
     git.add_argument(
         "--suite",
@@ -63,24 +60,24 @@ def setup_parser(subparser):
         aliases=["i"],
         help="install built repositories",
     )
+
+    default_top = Path.cwd()
+    new_dev_description = f"create new development area\n\nIf the '--top' option is not specified, the current working directory will be used:\n  {default_top}"
     newDev = subparsers.add_parser(
         "new-dev",
-        description="create new development area",
+        description=new_dev_description,
         aliases=["n", "newDev"],
         help="create new development area",
     )
     newDev.add_argument("--name", required=True)
-    newDev.add_argument("--top", required=True)
     newDev.add_argument(
-        "-D", "--dir", help="Directory containing repositories to develop"
+        "--top", metavar="<dir>", default=default_top, help="Top-level directory for MRSB area"
     )
+    newDev.add_argument("-D", "--dir", help="Directory containing repositories to develop")
     newDev.add_argument("variants", nargs="*")
 
     test = subparsers.add_parser(
-        "test",
-        description="build and run tests",
-        aliases=["t"],
-        help="build and run tests",
+        "test", description="build and run tests", aliases=["t"], help="build and run tests"
     )
     zap_parser = subparsers.add_parser(
         "zap",
@@ -116,9 +113,7 @@ def mrb(parser, args):
         return
     if args.mrb_subcommand in ("git-clone", "g", "gitCheckout"):
         if args.suite:
-            clone.clone_suite(
-                args.suite, os.environ["MRB_SOURCE"], os.environ["MRB_LOCAL"]
-            )
+            clone.clone_suite(args.suite, os.environ["MRB_SOURCE"], os.environ["MRB_LOCAL"])
         if args.help_suites:
             clone.help_suites()
         if args.help_repos:
@@ -134,12 +129,7 @@ def mrb(parser, args):
             clean(build_area)
 
         build(
-            srcs,
-            build_area,
-            install_area,
-            args.generator,
-            args.parallel,
-            args.generator_options,
+            srcs, build_area, install_area, args.generator, args.parallel, args.generator_options
         )
         return
     if args.mrb_subcommand in ("zap", "z"):

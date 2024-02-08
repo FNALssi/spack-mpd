@@ -1,15 +1,15 @@
-from spack.spec import Spec
-import spack.hash_types as ht
-import spack.util.spack_yaml as syaml
-import llnl.util.tty as tty
-
-
-import os
-import re
 import argparse
 import json
+import os
+import re
 import sys
 from pathlib import Path
+
+import llnl.util.tty as tty
+
+import spack.hash_types as ht
+import spack.util.spack_yaml as syaml
+from spack.spec import Spec
 
 
 def lint_spec(spec):
@@ -162,13 +162,7 @@ def make_setup_file(package, compiler, local_dir, source_path, build_path):
 
 
 def process(
-    name,
-    local_packages_dir,
-    packages_to_develop,
-    sources_path,
-    build_path,
-    cxx_standard,
-    variants,
+    name, local_packages_dir, packages_to_develop, sources_path, build_path, cxx_standard, variants
 ):
     spec_like = name + "-bootstrap@develop" + " ".join(variants)
     spec = Spec(spec_like)
@@ -178,17 +172,11 @@ def process(
     concretized_spec = spec.concretized()
 
     make_setup_file(
-        name,
-        concretized_spec.compiler,
-        local_packages_dir.parents[0],
-        sources_path,
-        build_path,
+        name, concretized_spec.compiler, local_packages_dir.parents[0], sources_path, build_path
     )
 
     ordered_dependencies = [
-        p.name
-        for p in concretized_spec.traverse(order="topo")
-        if p.name in packages_to_develop
+        p.name for p in concretized_spec.traverse(order="topo") if p.name in packages_to_develop
     ]
     ordered_dependencies.reverse()
     make_cmake_file(name, ordered_dependencies, sources_path, cxx_standard)
@@ -214,9 +202,7 @@ def process(
         del packages[pname]
 
     # Always replace the bundle file
-    deps_for_bundlefile = [
-        lint_spec(p) for p in concretized_spec.traverse() if p.name in packages
-    ]
+    deps_for_bundlefile = [lint_spec(p) for p in concretized_spec.traverse() if p.name in packages]
     make_bundle_file(name, local_packages_dir, deps_for_bundlefile)
 
     final_nodes = [n for n in nodes if n["name"] not in package_names]
@@ -226,9 +212,7 @@ def process(
             continue
 
         missing_deps = [
-            p["name"]
-            for p in n.get("dependencies", [])
-            if p["name"] in packages_to_develop
+            p["name"] for p in n.get("dependencies", []) if p["name"] in packages_to_develop
         ]
         if missing_deps:
             missing_intermediate_deps[n["name"]] = missing_deps
@@ -278,9 +262,7 @@ def new_dev(name, top_dir, source_dir, variants):
         del variants[cxxstd_index]
 
     stringized_variants = " ".join(variants)
-    packages_at_develop = [
-        f"{p}@develop {stringized_variants}".strip() for p in packages_to_develop
-    ]
+    packages_at_develop = [f"{p}@develop" for p in packages_to_develop]
 
     p = Path(top_dir)
     lp = p / "local"
@@ -290,9 +272,7 @@ def new_dev(name, top_dir, source_dir, variants):
         lp.mkdir()
         local_packages_dir.mkdir()
         make_spack_repo(name, lp)
-        os.system(
-            f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null"
-        )
+        os.system(f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null")
     local_install_dir = lp / "install"
     local_install_dir.mkdir(exist_ok=True)
 
@@ -316,15 +296,7 @@ def new_dev(name, top_dir, source_dir, variants):
 
         print()
         tty.msg("Concretizing project (this may take a few minutes)")
-        process(
-            name,
-            local_packages_dir,
-            packages_to_develop,
-            sp,
-            bp,
-            cxx_standard,
-            variants,
-        )
+        process(name, local_packages_dir, packages_to_develop, sp, bp, cxx_standard, variants)
         tty.msg("Concretization complete\n")
         tty.msg(
             tty.color.colorize("@*{To install dependencies, invoke}")
@@ -343,9 +315,7 @@ def new_dev(name, top_dir, source_dir, variants):
             + f"\n\n  source {lp.absolute()}/setup.sh\n"
         )
         tty.msg(
-            tty.color.colorize(
-                "@*{You can then clone repositories for development by invoking}"
-            )
+            tty.color.colorize("@*{You can then clone repositories for development by invoking}")
             + f"\n\n  spack mrb g --suite <suite name>\n\n"
             "  (or type 'spack mrb g --help' for more options)\n"
         )
