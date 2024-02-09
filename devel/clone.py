@@ -1,13 +1,18 @@
-import llnl.util.tty as tty
-import spack.util.git
 import os.path
 import pathlib
+
+import llnl.util.tty as tty
+
+import spack.util.git
 
 
 class GitHubRepo:
     def __init__(self, organization, repo):
         self._org = organization
         self._repo = repo
+
+    def name(self):
+        return self._repo
 
     def url(self):
         return f"https://github.com/{self._org}/{self._repo}.git"
@@ -17,8 +22,22 @@ class RedmineRepo:
     def __init__(self, repo):
         self._repo = repo
 
+    def name(self):
+        return self._repo
+
     def url(self):
         return f"https://cdcvs.fnal.gov/projects/{self._repo}"
+
+
+class SimpleGitRepo:
+    def __init__(self, url):
+        self._url = url
+
+    def name(self):
+        return self._url
+
+    def url(self):
+        return self._url
 
 
 class GitHubOrg:
@@ -161,15 +180,7 @@ _supported_suites = {
     Suite(
         "nu",
         gh_org_name="NuSoftHEP",
-        repos=[
-            "nusimdata",
-            "nuevdb",
-            "nug4",
-            "nugen",
-            "nurandom",
-            "nufinder",
-            "nutools",
-        ],
+        repos=["nusimdata", "nuevdb", "nug4", "nugen", "nurandom", "nufinder", "nutools"],
     ),
     Suite(
         "sbn",
@@ -321,17 +332,49 @@ def help_repos():
     print()
 
 
-def clone_suite(suite_name, srcs_area, local_area):
+def _clone(repo, srcs_area):
     git = spack.util.git.git(required=True)
     git.add_default_arg("-C", srcs_area)
+    local_src_dir = os.path.join(srcs_area, repo.name())
+    result = git("clone", repo.url(), fail_on_error=False, error=str)
+    if "Cloning into" in result and git.returncode == 0:
+        return True
+
+    if "already exists" in result:
+        tty.warn(result.rstrip())
+    else:
+        tty.error(result.rstrip())
+    return False
+
+
+def clone_repos(repo_specs, srcs_area, local_area):
+    repos = known_repos()
+    cloned_repos = []
+    for repo_spec in repo_specs:
+        repo_to_try = known_repos().get(repo_spec)
+        if not repo_to_try:
+            repo_to_try = SimpleGitRepo(repo_spec)
+
+        if _clone(repo_to_try, srcs_area):
+            cloned_repos.append(repo_spec)
+
+    if cloned_repos:
+        print()
+        local_area_path = pathlib.Path(local_area)
+        msg = tty.color.colorize("@*{The following repositories have been cloned:}\n")
+        for repo in cloned_repos:
+            msg += f"\n  - {repo}"
+        tty.msg(msg + "\n")
+        msg = tty.color.colorize("@*{You may now invoke:}")
+        msg += f"\n\n  source {local_area_path.absolute()}/finalize.sh\n"
+        tty.msg(msg)
+
+
+def clone_suite(suite_name, srcs_area, local_area):
     suite = suite_for(suite_name)
     print()
     for name, repo in suite.repositories().items():
-        local_src_dir = os.path.join(srcs_area, name)
-        if os.path.exists(local_src_dir):
-            tty.warn(f"{name} already cloned (skipping)")
-            continue
-        git("clone", repo.url())
+        _clone(name, repo, srcs_area)
 
     print()
     local_area_path = pathlib.Path(local_area)

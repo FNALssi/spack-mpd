@@ -239,14 +239,25 @@ def new_dev(name, top_dir, source_dir, variants):
 
     tty.msg(f"Creating project: {name}")
 
-    sp = Path(source_dir) if source_dir else Path("srcs")
-    packages_to_develop = []
-    if source_dir:
-        packages_to_develop = [
-            f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
-        ]
-    else:
-        sp.mkdir(exist_ok=True)
+    bp = top_dir / "build"
+    print(f"\nUsing build area: {bp.absolute()}")
+    bp.mkdir(exist_ok=True)
+
+    lp = top_dir / "local"
+    print(f"Using local area: {lp.absolute()}")
+    local_packages_dir = lp / "packages"
+    local_install_dir = lp / "install"
+    if not lp.exists():
+        lp.mkdir()
+        local_packages_dir.mkdir()
+        make_spack_repo(name, lp)
+        os.system(f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null")
+    local_install_dir = lp / "install"
+    local_install_dir.mkdir(exist_ok=True)
+
+    sp = Path(source_dir) if source_dir else top_dir / "srcs"
+    print(f"Using sources area: {sp.absolute()}")
+    sp.mkdir(exist_ok=True)
 
     # Get C++ standard
     cxx_standard = "17"  # Must be a string for CMake
@@ -261,38 +272,18 @@ def new_dev(name, top_dir, source_dir, variants):
     if cxxstd_index is not None:
         del variants[cxxstd_index]
 
-    stringized_variants = " ".join(variants)
-    packages_at_develop = [f"{p}@develop" for p in packages_to_develop]
-
-    p = Path(top_dir)
-    lp = p / "local"
-    local_packages_dir = lp / "packages"
-    local_install_dir = lp / "install"
-    if not lp.exists():
-        lp.mkdir()
-        local_packages_dir.mkdir()
-        make_spack_repo(name, lp)
-        os.system(f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null")
-    local_install_dir = lp / "install"
-    local_install_dir.mkdir(exist_ok=True)
-
-    # Always replace the bootstrap bundle file
-    if packages_at_develop:
-        make_bundle_file(name + "-bootstrap", local_packages_dir, packages_at_develop)
-
-    bp = p / "build"
-    if not bp.exists():
-        bp.mkdir()
-
-    print(f"\nUsing build area: {bp.absolute()}")
-    print(f"Using local area: {lp.absolute()}")
-    print(f"Using sources area: {sp.absolute()}")
-    packages_to_develop.sort()
+    packages_to_develop = sorted(
+        f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
+    )
 
     if packages_to_develop:
         print(f"  Will develop:")
         for p in packages_to_develop:
             print(f"    - {p}")
+
+        # Always replace the bootstrap bundle file
+        packages_at_develop = [f"{p}@develop" for p in packages_to_develop]
+        make_bundle_file(name + "-bootstrap", local_packages_dir, packages_at_develop)
 
         print()
         tty.msg("Concretizing project (this may take a few minutes)")

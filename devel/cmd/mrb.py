@@ -45,13 +45,21 @@ def setup_parser(subparser):
         aliases=["g", "gitCheckout"],
         help="clone git repositories",
     )
-    git = git_parser.add_mutually_exclusive_group(required=True)
+    git_parser.add_argument(
+        "repos",
+        metavar="<repo spec>",
+        nargs="*",
+        help="a specification of a repository to clone. The repo spec may either be:\n"
+        + "(a) any repository name listed by the --help-repos option, or\n"
+        + "(b) any URL to a Git repository.",
+    )
+    git = git_parser.add_mutually_exclusive_group()
     git.add_argument("--help-repos", action="store_true", help="list supported repositories")
     git.add_argument("--help-suites", action="store_true", help="list supported suites")
     git.add_argument(
         "--suite",
         metavar="<suite name>",
-        help="install repositories corresponding to the given suite name",
+        help="clone repositories corresponding to the given suite name",
     )
 
     install = subparsers.add_parser(
@@ -109,9 +117,11 @@ def setup_parser(subparser):
 
 def mrb(parser, args):
     if args.mrb_subcommand in ("new-dev", "n", "newDev"):
-        new_dev(args.name, args.top, args.dir, args.variants)
+        new_dev(args.name, Path(args.top), args.dir, args.variants)
         return
     if args.mrb_subcommand in ("git-clone", "g", "gitCheckout"):
+        if args.repos:
+            clone.clone_repos(args.repos, os.environ["MRB_SOURCE"], os.environ["MRB_LOCAL"])
         if args.suite:
             clone.clone_suite(args.suite, os.environ["MRB_SOURCE"], os.environ["MRB_LOCAL"])
         if args.help_suites:
