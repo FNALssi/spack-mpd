@@ -8,6 +8,8 @@ level = "long"
 from .. import clone
 from ..build import build
 from ..clean import clean
+from ..list_projects import list_projects, project_details, project_path
+from ..mrb_config import update_mrb_config
 from ..new_dev import new_dev
 
 
@@ -69,6 +71,21 @@ def setup_parser(subparser):
         help="install built repositories",
     )
 
+    lst_description = (
+        "list MRB projects\n\n"
+        + "When no arguments are specified, prints a list of known MRB projects\n"
+        + "and their corresponding top-level directories."
+    )
+    lst = subparsers.add_parser(
+        "list", description=lst_description, aliases=["ls"], help="list MRB projects"
+    )
+    lst.add_argument(
+        "project", metavar="<project name>", nargs="*", help="print details of the MRB project"
+    )
+    lst.add_argument(
+        "-t", "--top", metavar="<project name>", help="print top-level directory for project"
+    )
+
     default_top = Path.cwd()
     new_dev_description = f"create new development area\n\nIf the '--top' option is not specified, the current working directory will be used:\n  {default_top}"
     newDev = subparsers.add_parser(
@@ -79,9 +96,12 @@ def setup_parser(subparser):
     )
     newDev.add_argument("--name", required=True)
     newDev.add_argument(
-        "--top", metavar="<dir>", default=default_top, help="Top-level directory for MRSB area"
+        "--top", metavar="<dir>", default=default_top, help="top-level directory for MRSB area"
     )
-    newDev.add_argument("-D", "--dir", help="Directory containing repositories to develop")
+    newDev.add_argument("-D", "--dir", help="directory containing repositories to develop")
+    newDev.add_argument(
+        "-f", "--force", action="store_true", help="overwrite existing project with same name"
+    )
     newDev.add_argument("variants", nargs="*")
 
     test = subparsers.add_parser(
@@ -117,7 +137,14 @@ def setup_parser(subparser):
 
 def mrb(parser, args):
     if args.mrb_subcommand in ("new-dev", "n", "newDev"):
-        new_dev(args.name, Path(args.top), args.dir, args.variants)
+        project_config = update_mrb_config(
+            args.name,
+            Path(args.top).absolute(),
+            Path(args.dir).absolute(),
+            args.variants,
+            args.force,
+        )
+        new_dev(args.name, project_config)
         return
     if args.mrb_subcommand in ("git-clone", "g", "gitCheckout"):
         if args.repos:
@@ -141,6 +168,14 @@ def mrb(parser, args):
         build(
             srcs, build_area, install_area, args.generator, args.parallel, args.generator_options
         )
+        return
+    if args.mrb_subcommand in ("list", "ls"):
+        if args.project:
+            project_details(args.project)
+        elif args.top:
+            project_path(args.top, "top")
+        else:
+            list_projects()
         return
     if args.mrb_subcommand in ("zap", "z"):
         if args.zap_install:

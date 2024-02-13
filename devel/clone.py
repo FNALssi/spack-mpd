@@ -366,7 +366,7 @@ def clone_repos(repo_specs, srcs_area, local_area):
             msg += f"\n  - {repo}"
         tty.msg(msg + "\n")
         msg = tty.color.colorize("@*{You may now invoke:}")
-        msg += f"\n\n  source {local_area_path.absolute()}/finalize.sh\n"
+        msg += f"\n\n  source {local_area_path.absolute()}/refresh.sh\n"
         tty.msg(msg)
 
 
@@ -382,5 +382,5 @@ def clone_suite(suite_name, srcs_area, local_area):
         tty.color.colorize(
             "@*{The " + suite_name + " suite has been cloned.  You may now invoke:}"
         )
-        + f"\n\n  source {local_area_path.absolute()}/finalize.sh\n"
+        + f"\n\n  source {local_area_path.absolute()}/refresh.sh\n"
     )

@@ -164,7 +164,7 @@ def make_setup_file(package, compiler, local_dir, source_path, build_path):
 def process(
     name, local_packages_dir, packages_to_develop, sources_path, build_path, cxx_standard, variants
 ):
-    spec_like = name + "-bootstrap@develop" + " ".join(variants)
+    spec_like = name + "-bootstrap@develop" + variants
     spec = Spec(spec_like)
 
     bootstrap_name = spec.name
@@ -234,43 +234,33 @@ def process(
     # make_yaml_file(name, spec_dict)
 
 
-def new_dev(name, top_dir, source_dir, variants):
+def new_dev(name, mrb_project_config):
     print()
 
     tty.msg(f"Creating project: {name}")
 
-    bp = top_dir / "build"
-    print(f"\nUsing build area: {bp.absolute()}")
+    build_dir = mrb_project_config["build"]
+    print(f"\nUsing build area: {build_dir}")
+    bp = Path(build_dir)
     bp.mkdir(exist_ok=True)
 
-    lp = top_dir / "local"
-    print(f"Using local area: {lp.absolute()}")
+    local_dir = mrb_project_config["local"]
+    print(f"Using local area: {local_dir}")
+    lp = Path(local_dir)
     local_packages_dir = lp / "packages"
-    local_install_dir = lp / "install"
     if not lp.exists():
         lp.mkdir()
         local_packages_dir.mkdir()
         make_spack_repo(name, lp)
         os.system(f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null")
-    local_install_dir = lp / "install"
+    local_install_dir = mrb_project_config["install"]
+    local_install_dir = Path(local_install_dir)
     local_install_dir.mkdir(exist_ok=True)
 
-    sp = Path(source_dir) if source_dir else top_dir / "srcs"
-    print(f"Using sources area: {sp.absolute()}")
+    source_dir = mrb_project_config["source"]
+    print(f"Using sources area: {source_dir}")
+    sp = Path(source_dir)
     sp.mkdir(exist_ok=True)
-
-    # Get C++ standard
-    cxx_standard = "17"  # Must be a string for CMake
-    cxxstd_index = None
-    for i, variant in enumerate(variants):
-        match = re.fullmatch("cxxstd=(\d{2})", variant)
-        if match:
-            cxx_standard = match[1]
-            cxxstd_index = i
-
-    # Remove cxxstd variant
-    if cxxstd_index is not None:
-        del variants[cxxstd_index]
 
     packages_to_develop = sorted(
         f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
@@ -287,7 +277,15 @@ def new_dev(name, top_dir, source_dir, variants):
 
         print()
         tty.msg("Concretizing project (this may take a few minutes)")
-        process(name, local_packages_dir, packages_to_develop, sp, bp, cxx_standard, variants)
+        process(
+            name,
+            local_packages_dir,
+            packages_to_develop,
+            sp,
+            bp,
+            mrb_project_config["cxxstd"],
+            mrb_project_config["variants"],
+        )
         tty.msg("Concretization complete\n")
         tty.msg(
             tty.color.colorize("@*{To install dependencies, invoke}")
@@ -300,7 +298,7 @@ def new_dev(name, top_dir, source_dir, variants):
         )
     else:
         print()
-        make_bare_setup_file(local_packages_dir.parents[0], sp, bp)
+        make_bare_setup_file(Path(mrb_project_config["local"]), sp, bp)
         tty.msg(
             tty.color.colorize("@*{To setup your user environment, invoke}")
             + f"\n\n  source {lp.absolute()}/setup.sh\n"
