@@ -9,6 +9,7 @@ import llnl.util.tty as tty
 
 import spack.hash_types as ht
 import spack.util.spack_yaml as syaml
+from spack.repo import PATH
 from spack.spec import Spec
 
 
@@ -267,7 +268,18 @@ def concretize_project(name, project_config):
     packages_to_develop = project_config["packages"]
 
     # Always replace the bootstrap bundle file
-    packages_at_develop = [f"{p}@develop" for p in packages_to_develop]
+    cxxstd = project_config["cxxstd"]
+    packages_at_develop = []
+    for p in packages_to_develop:
+        # Check to see if packages support a 'cxxstd' variant
+        spec = Spec(p)
+        pkg_cls = PATH.get_pkg_class(spec.name)
+        pkg = pkg_cls(spec)
+        base_spec = f"{p}@develop"
+        if "cxxstd" in pkg.variants:
+            base_spec += f" cxxstd={cxxstd}"
+        packages_at_develop.append(base_spec)
+
     make_bundle_file(
         name + "-bootstrap", Path(project_config["local_spack_packages"]), packages_at_develop
     )
