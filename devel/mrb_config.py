@@ -60,7 +60,16 @@ def update_mrb_config(project_name, top_dir, srcs_dir, variants, overwrite_allow
     project["source"] = str(srcs_dir)
     project["build"] = str((top_dir / "build").absolute())
     project["local"] = str((top_dir / "local").absolute())
-    project["install"] = str((top_dir / "install").absolute())
+    project["install"] = str((top_dir / "local" / "install").absolute())
+    project["local_spack_packages"] = str((top_dir / "local" / "packages").absolute())
+    sp = Path(srcs_dir)
+
+    packages_to_develop = []
+    if sp.exists():
+        packages_to_develop = sorted(
+            f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
+        )
+    project["packages"] = packages_to_develop
 
     # Select and remove compiler
     compiler, compiler_index = _compiler(variants)
@@ -85,3 +94,24 @@ def update_mrb_config(project_name, top_dir, srcs_dir, variants, overwrite_allow
 
     # Return configuration for this project
     return project
+
+
+def project_config(name):
+    mrb_config_file = Path.home() / ".mrb"
+    mrb_config = None
+    if mrb_config_file.exists():
+        with open(mrb_config_file, "r") as f:
+            mrb_config = syaml.load(f)
+
+    if mrb_config is None:
+        print()
+        tty.die("Missing MRB configuration.  Please contact scisoft-team@fnal.gov\n")
+
+    projects = mrb_config.get("projects")
+    if name not in projects:
+        print()
+        tty.die(
+            f"Project '{name}' not supported by MRB configuration.  Please contact scisoft-team@fnal.gov\n"
+        )
+
+    return projects[name]

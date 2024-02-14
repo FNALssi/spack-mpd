@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import llnl.util.tty as tty
@@ -36,8 +37,10 @@ def list_projects():
     msg += f"  {name:<{name_width}}    Top-level directory\n"
     msg += "  " + "-" * name_width + "    " + "-" * 30
 
+    current_project = os.environ.get("MRB_PROJECT")
     for key, value in projects.items():
-        msg += f"\n  {key:<{name_width}}    {value['top']}"
+        active = "*" if current_project and key == current_project else " "
+        msg += f"\n {active}{key:<{name_width}}    {value['top']}"
     msg += "\n"
     print()
     tty.msg(msg)

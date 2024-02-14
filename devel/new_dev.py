@@ -39,7 +39,7 @@ include(CetCMakeEnv)
 """
 
 
-def cmake_presets(source_dir, dependencies, cxx_standard, preset_file):
+def cmake_presets(source_path, dependencies, cxx_standard, preset_file):
     configurePresets, cacheVariables = "configurePresets", "cacheVariables"
     allCacheVariables = {
         "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
@@ -50,7 +50,7 @@ def cmake_presets(source_dir, dependencies, cxx_standard, preset_file):
 
     # Pull project-specific presets from each dependency.
     for dep in dependencies:
-        pkg_presets_file = source_dir / dep / "CMakePresets.json"
+        pkg_presets_file = source_path / dep / "CMakePresets.json"
         if not pkg_presets_file.exists():
             continue
 
@@ -98,15 +98,16 @@ class {camel_package}(BundlePackage):
     return bundle_str
 
 
-def make_cmake_file(package, dependencies, source_dir, cxx_standard):
-    with open((source_dir / "CMakeLists.txt").absolute(), "w") as f:
+def make_cmake_file(package, dependencies, project_config):
+    source_path = Path(project_config["source"])
+    with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
         f.write(cmake_lists_preamble(package))
         for d in dependencies:
             f.write(f"add_subdirectory({d})\n")
         f.write("\nenable_testing()")
 
-    with open((source_dir / "CMakePresets.json").absolute(), "w") as f:
-        cmake_presets(source_dir, dependencies, cxx_standard, f)
+    with open((source_path / "CMakePresets.json").absolute(), "w") as f:
+        cmake_presets(source_path, dependencies, project_config["cxxstd"], f)
 
 
 def make_yaml_file(package, spec):
@@ -114,16 +115,16 @@ def make_yaml_file(package, spec):
         syaml.dump(spec, stream=f, default_flow_style=False)
 
 
-def make_bundle_file(name, local_packages_dir, deps):
-    bundle_dir = local_packages_dir / name
-    bundle_dir.mkdir(exist_ok=True)
-    package_recipe = bundle_dir / "package.py"
+def make_bundle_file(name, local_packages_path, deps):
+    bundle_path = local_packages_path / name
+    bundle_path.mkdir(exist_ok=True)
+    package_recipe = bundle_path / "package.py"
     with open(package_recipe.absolute(), "w") as f:
         f.write(bundle_template(name, deps))
 
 
-def make_spack_repo(package, local_packages_dir):
-    repo_file = local_packages_dir / "repo.yaml"
+def make_spack_repo(package, local_dir):
+    repo_file = local_dir / "repo.yaml"
     with open(repo_file.absolute(), "w") as f:
         f.write("repo:\n")
         f.write(
@@ -131,55 +132,52 @@ def make_spack_repo(package, local_packages_dir):
         )  # Not sure that we want the repo name to be this specific
 
 
-def make_bare_setup_file(local_dir, source_path, build_path):
-    setup_file = local_dir / "setup.sh"
-    install = local_dir / "install"
+def make_bare_setup_file(name, project_config):
+    setup_file = Path(project_config["local"]) / "setup.sh"
     with open(setup_file.absolute(), "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write('alias mrb="spack mrb"\n\n')
-        f.write(f"export MRB_SOURCE={source_path.absolute()}\n")
-        f.write(f"export MRB_BUILDDIR={build_path.absolute()}\n")
-        f.write(f"export MRB_LOCAL={local_dir.absolute()}\n")
-        f.write(f"export MRB_INSTALL={install.absolute()}\n")
+        f.write(f"export MRB_PROJECT={name}\n")
+        f.write(f"export MRB_SOURCE={project_config['source']}\n")
+        f.write(f"export MRB_BUILDDIR={project_config['build']}\n")
+        f.write(f"export MRB_LOCAL={project_config['local']}\n")
+        f.write(f"export MRB_INSTALL={project_config['install']}\n\n")
 
 
-def make_setup_file(package, compiler, local_dir, source_path, build_path):
-    setup_file = local_dir / "setup.sh"
-    install = local_dir / "install"
+def make_setup_file(name, compiler, project_config):
+    setup_file = Path(project_config["local"]) / "setup.sh"
     with open(setup_file.absolute(), "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write('alias mrb="spack mrb"\n\n')
-        f.write(f"export MRB_SOURCE={source_path.absolute()}\n")
-        f.write(f"export MRB_BUILDDIR={build_path.absolute()}\n")
-        f.write(f"export MRB_LOCAL={local_dir.absolute()}\n")
-        f.write(f"export MRB_INSTALL={install.absolute()}\n\n")
+        f.write(f"export MRB_PROJECT={name}\n")
+        f.write(f"export MRB_SOURCE={project_config['source']}\n")
+        f.write(f"export MRB_BUILDDIR={project_config['build']}\n")
+        f.write(f"export MRB_LOCAL={project_config['local']}\n")
+        f.write(f"export MRB_INSTALL={project_config['install']}\n\n")
         f.write("local_repo=$(realpath $(dirname ${BASH_SOURCE[0]}))\n")
         f.write("spack repo add --scope=user $local_repo >& /dev/null\n")
-        f.write(f"spack load {package}\n")
+        f.write(f"spack load {name}\n")
         if compiler:
             f.write(f"spack load {compiler}\n")
         f.write("\ntrap 'spack repo rm $local_repo' EXIT\n")
 
 
-def process(
-    name, local_packages_dir, packages_to_develop, sources_path, build_path, cxx_standard, variants
-):
-    spec_like = name + "-bootstrap@develop" + variants
+def process(name, project_config):
+    spec_like = name + "-bootstrap@develop" + project_config["variants"]
     spec = Spec(spec_like)
 
     bootstrap_name = spec.name
 
     concretized_spec = spec.concretized()
 
-    make_setup_file(
-        name, concretized_spec.compiler, local_packages_dir.parents[0], sources_path, build_path
-    )
+    make_setup_file(name, concretized_spec.compiler, project_config)
 
+    packages_to_develop = project_config["packages"]
     ordered_dependencies = [
         p.name for p in concretized_spec.traverse(order="topo") if p.name in packages_to_develop
     ]
     ordered_dependencies.reverse()
-    make_cmake_file(name, ordered_dependencies, sources_path, cxx_standard)
+    make_cmake_file(name, ordered_dependencies, project_config)
 
     # YAML file
     spec_dict = concretized_spec.to_dict(ht.dag_hash)
@@ -203,7 +201,7 @@ def process(
 
     # Always replace the bundle file
     deps_for_bundlefile = [lint_spec(p) for p in concretized_spec.traverse() if p.name in packages]
-    make_bundle_file(name, local_packages_dir, deps_for_bundlefile)
+    make_bundle_file(name, Path(project_config["local_spack_packages"]), deps_for_bundlefile)
 
     final_nodes = [n for n in nodes if n["name"] not in package_names]
     missing_intermediate_deps = {}
@@ -234,38 +232,34 @@ def process(
     # make_yaml_file(name, spec_dict)
 
 
-def new_dev(name, mrb_project_config):
+def new_dev(name, project_config):
     print()
 
     tty.msg(f"Creating project: {name}")
 
-    build_dir = mrb_project_config["build"]
+    build_dir = project_config["build"]
     print(f"\nUsing build area: {build_dir}")
     bp = Path(build_dir)
     bp.mkdir(exist_ok=True)
 
-    local_dir = mrb_project_config["local"]
+    local_dir = project_config["local"]
     print(f"Using local area: {local_dir}")
     lp = Path(local_dir)
-    local_packages_dir = lp / "packages"
+    local_packages_path = Path(project_config["local_spack_packages"])
     if not lp.exists():
         lp.mkdir()
-        local_packages_dir.mkdir()
+        local_packages_path.mkdir()
         make_spack_repo(name, lp)
         os.system(f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null")
-    local_install_dir = mrb_project_config["install"]
-    local_install_dir = Path(local_install_dir)
-    local_install_dir.mkdir(exist_ok=True)
+    local_install_path = Path(project_config["install"])
+    local_install_path.mkdir(exist_ok=True)
 
-    source_dir = mrb_project_config["source"]
+    source_dir = project_config["source"]
     print(f"Using sources area: {source_dir}")
     sp = Path(source_dir)
     sp.mkdir(exist_ok=True)
 
-    packages_to_develop = sorted(
-        f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
-    )
-
+    packages_to_develop = project_config["packages"]
     if packages_to_develop:
         print(f"  Will develop:")
         for p in packages_to_develop:
@@ -273,19 +267,11 @@ def new_dev(name, mrb_project_config):
 
         # Always replace the bootstrap bundle file
         packages_at_develop = [f"{p}@develop" for p in packages_to_develop]
-        make_bundle_file(name + "-bootstrap", local_packages_dir, packages_at_develop)
+        make_bundle_file(name + "-bootstrap", local_packages_path, packages_at_develop)
 
         print()
         tty.msg("Concretizing project (this may take a few minutes)")
-        process(
-            name,
-            local_packages_dir,
-            packages_to_develop,
-            sp,
-            bp,
-            mrb_project_config["cxxstd"],
-            mrb_project_config["variants"],
-        )
+        process(name, project_config)
         tty.msg("Concretization complete\n")
         tty.msg(
             tty.color.colorize("@*{To install dependencies, invoke}")
@@ -298,7 +284,7 @@ def new_dev(name, mrb_project_config):
         )
     else:
         print()
-        make_bare_setup_file(Path(mrb_project_config["local"]), sp, bp)
+        make_bare_setup_file(name, project_config)
         tty.msg(
             tty.color.colorize("@*{To setup your user environment, invoke}")
             + f"\n\n  source {lp.absolute()}/setup.sh\n"

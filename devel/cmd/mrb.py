@@ -1,5 +1,8 @@
 import os
+import sys
 from pathlib import Path
+
+import llnl.util.tty as tty
 
 description = "create multi-repository build area"
 section = "scripting"
@@ -9,7 +12,7 @@ from .. import clone
 from ..build import build
 from ..clean import clean
 from ..list_projects import list_projects, project_details, project_path
-from ..mrb_config import update_mrb_config
+from ..mrb_config import project_config, update_mrb_config
 from ..new_dev import new_dev
 
 
@@ -135,6 +138,15 @@ def setup_parser(subparser):
     )
 
 
+def _active_project_config():
+    name = os.environ.get("MRB_PROJECT")
+    if name is None:
+        print()
+        tty.die(f"Active MRB project required to invoke 'spack {' '.join(sys.argv[1:])}'\n")
+
+    return project_config(name)
+
+
 def mrb(parser, args):
     if args.mrb_subcommand in ("new-dev", "n", "newDev"):
         project_config = update_mrb_config(
@@ -146,29 +158,6 @@ def mrb(parser, args):
         )
         new_dev(args.name, project_config)
         return
-    if args.mrb_subcommand in ("git-clone", "g", "gitCheckout"):
-        if args.repos:
-            clone.clone_repos(args.repos, os.environ["MRB_SOURCE"], os.environ["MRB_LOCAL"])
-        if args.suite:
-            clone.clone_suite(args.suite, os.environ["MRB_SOURCE"], os.environ["MRB_LOCAL"])
-        if args.help_suites:
-            clone.help_suites()
-        if args.help_repos:
-            clone.help_repos()
-        return
-    if args.mrb_subcommand in ("build", "b"):
-        srcs, build_area, install_area = (
-            os.environ["MRB_SOURCE"],
-            os.environ["MRB_BUILDDIR"],
-            os.environ["MRB_INSTALL"],
-        )
-        if args.clean:
-            clean(build_area)
-
-        build(
-            srcs, build_area, install_area, args.generator, args.parallel, args.generator_options
-        )
-        return
     if args.mrb_subcommand in ("list", "ls"):
         if args.project:
             project_details(args.project)
@@ -177,12 +166,45 @@ def mrb(parser, args):
         else:
             list_projects()
         return
+    if args.mrb_subcommand in ("git-clone", "g", "gitCheckout"):
+        if args.repos:
+            project_config = _active_project_config()
+            clone.clone_repos(args.repos, project_config["source"], project_config["local"])
+        else:
+            if args.suite:
+                project_config = _active_project_config()
+                clone.clone_suite(args.suite, project_config["source"], project_config["local"])
+            elif args.help_suites:
+                clone.help_suites()
+            elif args.help_repos:
+                clone.help_repos()
+            else:
+                print()
+                tty.die(
+                    f"At least one option required when invoking 'spack {' '.join(sys.argv[1:])}'\n"
+                )
+        return
+    if args.mrb_subcommand in ("build", "b"):
+        project_config = _active_project_config()
+        srcs, build_area, install_area = (
+            project_config["source"],
+            project_config["build"],
+            project_config["install"],
+        )
+        if args.clean:
+            clean(build_area)
+
+        build(
+            srcs, build_area, install_area, args.generator, args.parallel, args.generator_options
+        )
+        return
     if args.mrb_subcommand in ("zap", "z"):
+        project_config = _active_project_config()
         if args.zap_install:
-            clean(os.environ["MRB_INSTALL"])
+            clean(project_config["install"])
         if args.zap_all:
-            clean(os.environ["MRB_INSTALL"])
-            clean(os.environ["MRB_BUILDDIR"])
+            clean(project_config["install"])
+            clean(project_config["build"])
         if args.zap_build:
-            clean(os.environ["MRB_BUILDDIR"])
+            clean(project_config["build"])
         return
