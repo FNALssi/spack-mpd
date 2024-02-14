@@ -12,8 +12,8 @@ from .. import clone
 from ..build import build
 from ..clean import clean
 from ..list_projects import list_projects, project_details, project_path
-from ..mrb_config import project_config, update_mrb_config
-from ..new_dev import new_dev
+from ..mrb_config import project_config, refresh_mrb_config, update_mrb_config
+from ..new_project import new_project
 
 
 def setup_parser(subparser):
@@ -90,10 +90,10 @@ def setup_parser(subparser):
     )
 
     default_top = Path.cwd()
-    new_dev_description = f"create new development area\n\nIf the '--top' option is not specified, the current working directory will be used:\n  {default_top}"
+    new_project_description = f"create new development area\n\nIf the '--top' option is not specified, the current working directory will be used:\n  {default_top}"
     newDev = subparsers.add_parser(
-        "new-dev",
-        description=new_dev_description,
+        "new-project",
+        description=new_project_description,
         aliases=["n", "newDev"],
         help="create new development area",
     )
@@ -106,6 +106,10 @@ def setup_parser(subparser):
         "-f", "--force", action="store_true", help="overwrite existing project with same name"
     )
     newDev.add_argument("variants", nargs="*")
+
+    refresh = subparsers.add_parser(
+        "refresh", description="refresh project area", help="refresh project area"
+    )
 
     test = subparsers.add_parser(
         "test", description="build and run tests", aliases=["t"], help="build and run tests"
@@ -138,25 +142,28 @@ def setup_parser(subparser):
     )
 
 
-def _active_project_config():
+def _active_project():
     name = os.environ.get("MRB_PROJECT")
     if name is None:
         print()
         tty.die(f"Active MRB project required to invoke 'spack {' '.join(sys.argv[1:])}'\n")
+    return name
 
-    return project_config(name)
+
+def _active_project_config():
+    return project_config(_active_project())
 
 
 def mrb(parser, args):
-    if args.mrb_subcommand in ("new-dev", "n", "newDev"):
-        project_config = update_mrb_config(
+    if args.mrb_subcommand in ("new-project", "n", "newDev"):
+        config = update_mrb_config(
             args.name,
             Path(args.top).absolute(),
             Path(args.dir).absolute(),
             args.variants,
             args.force,
         )
-        new_dev(args.name, project_config)
+        new_project(args.name, config)
         return
     if args.mrb_subcommand in ("list", "ls"):
         if args.project:
@@ -168,12 +175,12 @@ def mrb(parser, args):
         return
     if args.mrb_subcommand in ("git-clone", "g", "gitCheckout"):
         if args.repos:
-            project_config = _active_project_config()
-            clone.clone_repos(args.repos, project_config["source"], project_config["local"])
+            config = _active_project_config()
+            clone.clone_repos(args.repos, config["source"], config["local"])
         else:
             if args.suite:
-                project_config = _active_project_config()
-                clone.clone_suite(args.suite, project_config["source"], project_config["local"])
+                config = _active_project_config()
+                clone.clone_suite(args.suite, config["source"], config["local"])
             elif args.help_suites:
                 clone.help_suites()
             elif args.help_repos:
@@ -185,12 +192,8 @@ def mrb(parser, args):
                 )
         return
     if args.mrb_subcommand in ("build", "b"):
-        project_config = _active_project_config()
-        srcs, build_area, install_area = (
-            project_config["source"],
-            project_config["build"],
-            project_config["install"],
-        )
+        config = _active_project_config()
+        srcs, build_area, install_area = (config["source"], config["build"], config["install"])
         if args.clean:
             clean(build_area)
 
@@ -198,13 +201,23 @@ def mrb(parser, args):
             srcs, build_area, install_area, args.generator, args.parallel, args.generator_options
         )
         return
+
     if args.mrb_subcommand in ("zap", "z"):
-        project_config = _active_project_config()
+        config = _active_project_config()
         if args.zap_install:
-            clean(project_config["install"])
+            clean(config["install"])
         if args.zap_all:
-            clean(project_config["install"])
-            clean(project_config["build"])
+            clean(config["install"])
+            clean(config["build"])
         if args.zap_build:
-            clean(project_config["build"])
+            clean(config["build"])
         return
+
+    if args.mrb_subcommand == "refresh":
+        name = _active_project()
+        current_config = project_config(name)
+        new_config = refresh_mrb_config(name)
+        if current_config == new_config:
+            tty.msg(f"Project {name} is up-to-date")
+            return
+        update_project(name, new_config)

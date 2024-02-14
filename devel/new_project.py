@@ -216,34 +216,38 @@ def process(name, project_config):
             missing_intermediate_deps[n["name"]] = missing_deps
 
     if missing_intermediate_deps:
-        error_msg = "The following packages are intermediate dependencies and must also be checked out:\n\n"
+        error_msg = "\nThe following packages are intermediate dependencies and must also be checked out:\n\n"
         for pkg_name, missing_deps in missing_intermediate_deps.items():
             missing_deps_str = ", ".join(missing_deps)
             error_msg += "      - " + tty.color.colorize("@*{" + pkg_name + "}")
             error_msg += f" (depends on {missing_deps_str})\n"
-
-        print()
-        tty.error(error_msg)
-        print()
-        sys.exit(1)
+        error_msg += "\n"
+        tty.die(error_msg)
 
     # spec_dict["spec"]["nodes"] = final_nodes
     #
     # make_yaml_file(name, spec_dict)
 
 
-def new_dev(name, project_config):
-    print()
+def print_config_info(config):
+    print(f"\nUsing build area: {config['build']}")
+    print(f"Using local area: {config['local']}")
+    print(f"Using sources area: {config['source']}\n")
+    packages = config["packages"]
+    if not packages:
+        return
 
-    tty.msg(f"Creating project: {name}")
+    print(f"  Will develop:")
+    for p in packages:
+        print(f"    - {p}")
 
+
+def prepare_project(name, project_config):
     build_dir = project_config["build"]
-    print(f"\nUsing build area: {build_dir}")
     bp = Path(build_dir)
     bp.mkdir(exist_ok=True)
 
     local_dir = project_config["local"]
-    print(f"Using local area: {local_dir}")
     lp = Path(local_dir)
     local_packages_path = Path(project_config["local_spack_packages"])
     if not lp.exists():
@@ -255,35 +259,44 @@ def new_dev(name, project_config):
     local_install_path.mkdir(exist_ok=True)
 
     source_dir = project_config["source"]
-    print(f"Using sources area: {source_dir}")
     sp = Path(source_dir)
     sp.mkdir(exist_ok=True)
 
+
+def concretize_project(name, project_config):
     packages_to_develop = project_config["packages"]
-    if packages_to_develop:
-        print(f"  Will develop:")
-        for p in packages_to_develop:
-            print(f"    - {p}")
 
-        # Always replace the bootstrap bundle file
-        packages_at_develop = [f"{p}@develop" for p in packages_to_develop]
-        make_bundle_file(name + "-bootstrap", local_packages_path, packages_at_develop)
+    # Always replace the bootstrap bundle file
+    packages_at_develop = [f"{p}@develop" for p in packages_to_develop]
+    make_bundle_file(
+        name + "-bootstrap", Path(project_config["local_spack_packages"]), packages_at_develop
+    )
 
-        print()
-        tty.msg("Concretizing project (this may take a few minutes)")
-        process(name, project_config)
-        tty.msg("Concretization complete\n")
-        tty.msg(
-            tty.color.colorize("@*{To install dependencies, invoke}")
-            + f"\n\n  spack install {name}\n"
-        )
+    print()
+    tty.msg("Concretizing project (this may take a few minutes)")
+    process(name, project_config)
+    tty.msg("Concretization complete\n")
+    tty.msg(
+        tty.color.colorize("@*{To install dependencies, invoke}") + f"\n\n  spack install {name}\n"
+    )
 
-        tty.msg(
-            tty.color.colorize("@*{To setup your user environment, invoke}")
-            + f"\n\n  source {lp.absolute()}/setup.sh\n"
-        )
+    tty.msg(
+        tty.color.colorize("@*{To setup your user environment, invoke}")
+        + f"\n\n  source {project_config['local']}/setup.sh\n"
+    )
+
+
+def new_project(name, project_config):
+    print()
+
+    tty.msg(f"Creating project: {name}")
+    print_config_info(project_config)
+
+    prepare_project(name, project_config)
+
+    if len(project_config["packages"]):
+        concretize_project(name, project_config)
     else:
-        print()
         make_bare_setup_file(name, project_config)
         tty.msg(
             tty.color.colorize("@*{To setup your user environment, invoke}")
@@ -294,3 +307,12 @@ def new_dev(name, project_config):
             + f"\n\n  spack mrb g --suite <suite name>\n\n"
             "  (or type 'spack mrb g --help' for more options)\n"
         )
+
+
+def update_project(name, project_config):
+    print()
+
+    tty.msg(f"Updating project: {name}")
+    print_config_info(project_config)
+
+    concretize_project(name, project_config)

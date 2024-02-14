@@ -62,8 +62,8 @@ def update_mrb_config(project_name, top_dir, srcs_dir, variants, overwrite_allow
     project["local"] = str((top_dir / "local").absolute())
     project["install"] = str((top_dir / "local" / "install").absolute())
     project["local_spack_packages"] = str((top_dir / "local" / "packages").absolute())
-    sp = Path(srcs_dir)
 
+    sp = Path(srcs_dir)
     packages_to_develop = []
     if sp.exists():
         packages_to_develop = sorted(
@@ -96,12 +96,38 @@ def update_mrb_config(project_name, top_dir, srcs_dir, variants, overwrite_allow
     return project
 
 
-def project_config(name):
+def refresh_mrb_config(project_name):
     mrb_config_file = Path.home() / ".mrb"
-    mrb_config = None
     if mrb_config_file.exists():
         with open(mrb_config_file, "r") as f:
             mrb_config = syaml.load(f)
+
+    # Update packages field
+    assert mrb_config is not None
+    assert project_name is not None
+    config = project_config(project_name, mrb_config)
+    sp = Path(config["source"])
+    assert sp.exists()
+    packages_to_develop = sorted(
+        f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
+    )
+
+    # Update .mrb file
+    mrb_config["projects"][project_name]["packages"] = packages_to_develop
+    mrb_config_file = Path.home() / ".mrb"
+    with open(mrb_config_file, "w") as f:
+        syaml.dump(mrb_config, stream=f)
+
+    # Return configuration for this project
+    return mrb_config["projects"][project_name]
+
+
+def project_config(name, mrb_config=None):
+    if mrb_config is None:
+        mrb_config_file = Path.home() / ".mrb"
+        if mrb_config_file.exists():
+            with open(mrb_config_file, "r") as f:
+                mrb_config = syaml.load(f)
 
     if mrb_config is None:
         print()
