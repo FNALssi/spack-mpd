@@ -5,6 +5,8 @@ import llnl.util.tty as tty
 
 import spack.util.spack_yaml as syaml
 
+from .util import bold
+
 
 def _mrb_config():
     home_dir = Path.home()
@@ -55,9 +57,8 @@ def project_path(project_name, path_kind):
     if not projects:
         _no_known_projects()
 
-    boldname = tty.color.colorize("@*{" + project_name + "}")
     if project_name not in projects:
-        tty.die(f"No known MRB project named {boldname}")
+        tty.die(f"No known MRB project named {bold(project_name)}")
 
     print(projects[project_name][path_kind])
 
@@ -73,10 +74,9 @@ def project_details(project_names):
 
     print()
     for name in project_names:
-        boldname = tty.color.colorize("@*{" + name + "}")
         if name not in projects:
-            tty.warn(f"No known MRB project named {boldname}")
+            tty.warn(f"No known MRB project named {bold(name)}")
             continue
 
-        msg = f"Details for {boldname}\n\n" + syaml.dump_config(projects[name])
+        msg = f"Details for {bold(name)}\n\n" + syaml.dump_config(projects[name])
         tty.msg(msg)

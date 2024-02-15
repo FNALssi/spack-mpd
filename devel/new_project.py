@@ -12,6 +12,8 @@ import spack.util.spack_yaml as syaml
 from spack.repo import PATH
 from spack.spec import Spec
 
+from .util import bold
+
 
 def lint_spec(spec):
     spec_str = spec.short_spec
@@ -220,7 +222,7 @@ def process(name, project_config):
         error_msg = "\nThe following packages are intermediate dependencies and must also be checked out:\n\n"
         for pkg_name, missing_deps in missing_intermediate_deps.items():
             missing_deps_str = ", ".join(missing_deps)
-            error_msg += "      - " + tty.color.colorize("@*{" + pkg_name + "}")
+            error_msg += "      - " + bold(pkg_name)
             error_msg += f" (depends on {missing_deps_str})\n"
         error_msg += "\n"
         tty.die(error_msg)
@@ -288,12 +290,10 @@ def concretize_project(name, project_config):
     tty.msg("Concretizing project (this may take a few minutes)")
     process(name, project_config)
     tty.msg("Concretization complete\n")
-    tty.msg(
-        tty.color.colorize("@*{To install dependencies, invoke}") + f"\n\n  spack install {name}\n"
-    )
+    tty.msg(bold("To install dependencies, invoke") + f"\n\n  spack install {name}\n")
 
     tty.msg(
-        tty.color.colorize("@*{To setup your user environment, invoke}")
+        bold("To setup your user environment, invoke")
         + f"\n\n  source {project_config['local']}/setup.sh\n"
     )
 
@@ -311,11 +311,11 @@ def new_project(name, project_config):
     else:
         make_bare_setup_file(name, project_config)
         tty.msg(
-            tty.color.colorize("@*{To setup your user environment, invoke}")
-            + f"\n\n  source {lp.absolute()}/setup.sh\n"
+            bold("To setup your user environment, invoke")
+            + f"\n\n  source {project_config['local']}/setup.sh\n"
         )
         tty.msg(
-            tty.color.colorize("@*{You can then clone repositories for development by invoking}")
+            bold("You can then clone repositories for development by invoking")
             + f"\n\n  spack mrb g --suite <suite name>\n\n"
             "  (or type 'spack mrb g --help' for more options)\n"
         )
@@ -326,5 +326,13 @@ def update_project(name, project_config):
 
     tty.msg(f"Updating project: {name}")
     print_config_info(project_config)
+
+    if not project_config["packages"]:
+        tty.msg(
+            bold("No packages to develop.  You can clone repositories for development by invoking")
+            + f"\n\n  spack mrb g --suite <suite name>\n\n"
+            "  (or type 'spack mrb g --help' for more options)\n"
+        )
+        return
 
     concretize_project(name, project_config)

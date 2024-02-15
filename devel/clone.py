@@ -5,6 +5,8 @@ import llnl.util.tty as tty
 
 import spack.util.git
 
+from .util import bold
+
 
 class GitHubRepo:
     def __init__(self, organization, repo):
@@ -361,12 +363,12 @@ def clone_repos(repo_specs, srcs_area, local_area):
     if cloned_repos:
         print()
         local_area_path = pathlib.Path(local_area)
-        msg = tty.color.colorize("@*{The following repositories have been cloned:}\n")
+        msg = bold("The following repositories have been cloned:\n")
         for repo in cloned_repos:
             msg += f"\n  - {repo}"
         tty.msg(msg + "\n")
-        msg = tty.color.colorize("@*{You may now invoke:}")
-        msg += f"\n\n  source {local_area_path.absolute()}/refresh.sh\n"
+        msg = bold("You may now invoke:")
+        msg += f"\n\n  spack mrb refresh\n"
         tty.msg(msg)
 
 
@@ -379,8 +381,6 @@ def clone_suite(suite_name, srcs_area, local_area):
     print()
     local_area_path = pathlib.Path(local_area)
     tty.msg(
-        tty.color.colorize(
-            "@*{The " + suite_name + " suite has been cloned.  You may now invoke:}"
-        )
+        bold("The " + suite_name + " suite has been cloned.  You may now invoke:")
         + f"\n\n  source {local_area_path.absolute()}/refresh.sh\n"
     )

@@ -7,6 +7,8 @@ import llnl.util.tty as tty
 
 import spack.util.spack_yaml as syaml
 
+from .util import bold
+
 
 def _compiler(variants):
     compiler = None
@@ -42,15 +44,14 @@ def update_mrb_config(project_name, top_dir, srcs_dir, variants, overwrite_allow
         mrb_config["projects"] = ruamel.yaml.comments.CommentedMap()
 
     projects = mrb_config.get("projects")
-    boldname = tty.color.colorize("@*{" + project_name + "}")
     if project_name in projects:
         print()
         if overwrite_allowed:
-            tty.warn(f"Overwriting existing MRB project {boldname}\n")
+            tty.warn(f"Overwriting existing MRB project {bold(project_name)}\n")
         else:
             indent = " " * len("==> Error: ")
             tty.die(
-                f"An MRB project with the name {boldname} already exists.\n"
+                f"An MRB project with the name {bold(project_name)} already exists.\n"
                 + f"{indent}Either choose a different name or use the '--force' option to overwrite the existing project.\n"
             )
 
@@ -85,7 +86,7 @@ def update_mrb_config(project_name, top_dir, srcs_dir, variants, overwrite_allow
         project["compiler"] = compiler
 
     project["cxxstd"] = cxxstd
-    project["variants"] = ruamel.yaml.scalarstring.SingleQuotedScalarString(" ".join(variants))
+    project["variants"] = " ".join(variants)
     mrb_config["projects"][project_name] = project
 
     # Update .mrb file
@@ -120,6 +121,21 @@ def refresh_mrb_config(project_name):
 
     # Return configuration for this project
     return mrb_config["projects"][project_name]
+
+
+def rm_config(project_name):
+    mrb_config_file = Path.home() / ".mrb"
+    if mrb_config_file.exists():
+        with open(mrb_config_file, "r") as f:
+            mrb_config = syaml.load(f)
+
+    assert mrb_config is not None
+    assert project_name is not None
+
+    # Remove project entry
+    del mrb_config["projects"][project_name]
+    with open(mrb_config_file, "w") as f:
+        syaml.dump(mrb_config, stream=f)
 
 
 def project_config(name, mrb_config=None):

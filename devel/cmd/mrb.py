@@ -10,10 +10,11 @@ level = "long"
 
 from .. import clone
 from ..build import build
-from ..clean import clean
 from ..list_projects import list_projects, project_details, project_path
 from ..mrb_config import project_config, refresh_mrb_config, update_mrb_config
-from ..new_project import new_project
+from ..new_project import new_project, update_project
+from ..rm_project import rm_project
+from ..util import bold, clean
 
 
 def setup_parser(subparser):
@@ -74,11 +75,10 @@ def setup_parser(subparser):
         help="install built repositories",
     )
 
-    lst_description = (
-        "list MRB projects\n\n"
-        + "When no arguments are specified, prints a list of known MRB projects\n"
-        + "and their corresponding top-level directories."
-    )
+    lst_description = """list MRB projects
+
+When no arguments are specified, prints a list of known MRB projects
+and their corresponding top-level directories."""
     lst = subparsers.add_parser(
         "list", description=lst_description, aliases=["ls"], help="list MRB projects"
     )
@@ -90,25 +90,48 @@ def setup_parser(subparser):
     )
 
     default_top = Path.cwd()
-    new_project_description = f"create new development area\n\nIf the '--top' option is not specified, the current working directory will be used:\n  {default_top}"
-    newDev = subparsers.add_parser(
+    new_project_description = f"""create new development area
+
+If the '--top' option is not specified, the current working directory will be used:
+  {default_top}"""
+    new_project = subparsers.add_parser(
         "new-project",
         description=new_project_description,
         aliases=["n", "newDev"],
         help="create new development area",
     )
-    newDev.add_argument("--name", required=True)
-    newDev.add_argument(
+    new_project.add_argument("--name", required=True)
+    new_project.add_argument(
         "--top", metavar="<dir>", default=default_top, help="top-level directory for MRSB area"
     )
-    newDev.add_argument("-D", "--dir", help="directory containing repositories to develop")
-    newDev.add_argument(
+    new_project.add_argument("-D", "--dir", help="directory containing repositories to develop")
+    new_project.add_argument(
         "-f", "--force", action="store_true", help="overwrite existing project with same name"
     )
-    newDev.add_argument("variants", nargs="*")
+    new_project.add_argument("variants", nargs="*")
 
     refresh = subparsers.add_parser(
         "refresh", description="refresh project area", help="refresh project area"
+    )
+
+    rm_proj_description = """remove MRB project
+
+Removing a project will:
+
+  * Remove the project entry from the list printed by 'spack mrb list'
+  * Delete the 'build' and 'local' directories
+  * If '--full' specified, delete the entire 'top' level directory tree of the
+    project (including the specified sources directory if it resides
+    within the top-level directory).
+  * Uninstall the project's package/environment"""
+    rm_proj = subparsers.add_parser(
+        "rm-project", description=rm_proj_description, aliases=["rm"], help="remove MRB project"
+    )
+    rm_proj.add_argument("project", metavar="<project name>", help="MRB project to remove")
+    rm_proj.add_argument(
+        "--full",
+        action="store_true",
+        help="remove entire directory tree starting at the top level of the project",
     )
 
     test = subparsers.add_parser(
@@ -155,24 +178,17 @@ def _active_project_config():
 
 
 def mrb(parser, args):
-    if args.mrb_subcommand in ("new-project", "n", "newDev"):
-        config = update_mrb_config(
-            args.name,
-            Path(args.top).absolute(),
-            Path(args.dir).absolute(),
-            args.variants,
-            args.force,
+    if args.mrb_subcommand in ("build", "b"):
+        config = _active_project_config()
+        srcs, build_area, install_area = (config["source"], config["build"], config["install"])
+        if args.clean:
+            clean(build_area)
+
+        build(
+            srcs, build_area, install_area, args.generator, args.parallel, args.generator_options
         )
-        new_project(args.name, config)
         return
-    if args.mrb_subcommand in ("list", "ls"):
-        if args.project:
-            project_details(args.project)
-        elif args.top:
-            project_path(args.top, "top")
-        else:
-            list_projects()
-        return
+
     if args.mrb_subcommand in ("git-clone", "g", "gitCheckout"):
         if args.repos:
             config = _active_project_config()
@@ -191,15 +207,44 @@ def mrb(parser, args):
                     f"At least one option required when invoking 'spack {' '.join(sys.argv[1:])}'\n"
                 )
         return
-    if args.mrb_subcommand in ("build", "b"):
-        config = _active_project_config()
-        srcs, build_area, install_area = (config["source"], config["build"], config["install"])
-        if args.clean:
-            clean(build_area)
 
-        build(
-            srcs, build_area, install_area, args.generator, args.parallel, args.generator_options
+    if args.mrb_subcommand in ("list", "ls"):
+        if args.project:
+            project_details(args.project)
+        elif args.top:
+            project_path(args.top, "top")
+        else:
+            list_projects()
+        return
+
+    if args.mrb_subcommand in ("new-project", "n", "newDev"):
+        top_path = Path(args.top)
+        srcs_path = Path(args.dir) if args.dir else top_path / "srcs"
+        config = update_mrb_config(
+            args.name, top_path.absolute(), srcs_path.absolute(), args.variants, args.force
         )
+        new_project(args.name, config)
+        return
+
+    if args.mrb_subcommand == "refresh":
+        name = _active_project()
+        current_config = project_config(name)
+        new_config = refresh_mrb_config(name)
+        if current_config == new_config:
+            tty.msg(f"Project {name} is up-to-date")
+            return
+        update_project(name, new_config)
+        return
+
+    if args.mrb_subcommand in ("rm-project", "rm"):
+        config = project_config(args.project)
+        if args.project == _active_project():
+            print()
+            tty.die(
+                f"Cannot remove active MRB project {bold(args.project)}.  Deactivate by invoking:\n\n"
+                + f"           spack unload {args.project}\n"
+            )
+        rm_project(args.project, config, args.full)
         return
 
     if args.mrb_subcommand in ("zap", "z"):
@@ -212,12 +257,3 @@ def mrb(parser, args):
         if args.zap_build:
             clean(config["build"])
         return
-
-    if args.mrb_subcommand == "refresh":
-        name = _active_project()
-        current_config = project_config(name)
-        new_config = refresh_mrb_config(name)
-        if current_config == new_config:
-            tty.msg(f"Project {name} is up-to-date")
-            return
-        update_project(name, new_config)
