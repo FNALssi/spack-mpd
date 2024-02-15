@@ -238,7 +238,7 @@ def mrb(parser, args):
 
     if args.mrb_subcommand in ("rm-project", "rm"):
         config = project_config(args.project)
-        if args.project == _active_project():
+        if args.project == os.environ.get("MRB_PROJECT"):
             print()
             tty.die(
                 f"Cannot remove active MRB project {bold(args.project)}.  Deactivate by invoking:\n\n"

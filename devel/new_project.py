@@ -118,12 +118,25 @@ def make_yaml_file(package, spec):
         syaml.dump(spec, stream=f, default_flow_style=False)
 
 
-def make_bundle_file(name, local_packages_path, deps):
-    bundle_path = local_packages_path / name
+def mrb_envs(name, project_config):
+    return f"""
+    def setup_run_environment(self, env):
+        env.set("MRB_PROJECT", "{name}")
+        env.set("MRB_SOURCE", "{project_config['source']}")
+        env.set("MRB_BUILDDIR", "{project_config['build']}")
+        env.set("MRB_LOCAL", "{project_config['local']}")
+        env.set("MRB_INSTALL", "{project_config['install']}")
+"""
+
+
+def make_bundle_file(name, deps, project_config, include_mrb_envs=False):
+    bundle_path = Path(project_config["local_spack_packages"]) / name
     bundle_path.mkdir(exist_ok=True)
     package_recipe = bundle_path / "package.py"
     with open(package_recipe.absolute(), "w") as f:
         f.write(bundle_template(name, deps))
+        if include_mrb_envs:
+            f.write(mrb_envs(name, project_config))
 
 
 def make_spack_repo(package, local_dir):
@@ -140,11 +153,6 @@ def make_bare_setup_file(name, project_config):
     with open(setup_file.absolute(), "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write('alias mrb="spack mrb"\n\n')
-        f.write(f"export MRB_PROJECT={name}\n")
-        f.write(f"export MRB_SOURCE={project_config['source']}\n")
-        f.write(f"export MRB_BUILDDIR={project_config['build']}\n")
-        f.write(f"export MRB_LOCAL={project_config['local']}\n")
-        f.write(f"export MRB_INSTALL={project_config['install']}\n\n")
 
 
 def make_setup_file(name, compiler, project_config):
@@ -152,11 +160,6 @@ def make_setup_file(name, compiler, project_config):
     with open(setup_file.absolute(), "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write('alias mrb="spack mrb"\n\n')
-        f.write(f"export MRB_PROJECT={name}\n")
-        f.write(f"export MRB_SOURCE={project_config['source']}\n")
-        f.write(f"export MRB_BUILDDIR={project_config['build']}\n")
-        f.write(f"export MRB_LOCAL={project_config['local']}\n")
-        f.write(f"export MRB_INSTALL={project_config['install']}\n\n")
         f.write("local_repo=$(realpath $(dirname ${BASH_SOURCE[0]}))\n")
         f.write("spack repo add --scope=user $local_repo >& /dev/null\n")
         f.write(f"spack load {name}\n")
@@ -204,7 +207,7 @@ def process(name, project_config):
 
     # Always replace the bundle file
     deps_for_bundlefile = [lint_spec(p) for p in concretized_spec.traverse() if p.name in packages]
-    make_bundle_file(name, Path(project_config["local_spack_packages"]), deps_for_bundlefile)
+    make_bundle_file(name, deps_for_bundlefile, project_config, include_mrb_envs=True)
 
     final_nodes = [n for n in nodes if n["name"] not in package_names]
     missing_intermediate_deps = {}
@@ -282,9 +285,7 @@ def concretize_project(name, project_config):
             base_spec += f" cxxstd={cxxstd}"
         packages_at_develop.append(base_spec)
 
-    make_bundle_file(
-        name + "-bootstrap", Path(project_config["local_spack_packages"]), packages_at_develop
-    )
+    make_bundle_file(name + "-bootstrap", packages_at_develop, project_config)
 
     print()
     tty.msg("Concretizing project (this may take a few minutes)")
