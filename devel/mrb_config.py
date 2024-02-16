@@ -1,4 +1,5 @@
 import re
+import subprocess
 from pathlib import Path
 
 import ruamel
@@ -32,7 +33,9 @@ def _cxxstd(variants):
     return cxx_standard, cxxstd_index
 
 
-def update_mrb_config(project_name, top_dir, srcs_dir, variants, overwrite_allowed=False):
+def update_mrb_config(
+    project_name, top_dir, srcs_dir, variants, overwrite_allowed=False, update_file=False
+):
     mrb_config_file = Path.home() / ".mrb"
     mrb_config = None
     if mrb_config_file.exists():
@@ -47,13 +50,22 @@ def update_mrb_config(project_name, top_dir, srcs_dir, variants, overwrite_allow
     if project_name in projects:
         print()
         if overwrite_allowed:
-            tty.warn(f"Overwriting existing MRB project {bold(project_name)}\n")
+            tty.warn(
+                f"Installing {bold(project_name)} again will overwriting existing MRB project"
+            )
         else:
             indent = " " * len("==> Error: ")
             tty.die(
                 f"An MRB project with the name {bold(project_name)} already exists.\n"
                 + f"{indent}Either choose a different name or use the '--force' option to overwrite the existing project.\n"
             )
+    else:
+        # Check if package already exists
+        result = subprocess.run(
+            ["spack", "find", project_name], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL
+        )
+        if result.returncode == 0:
+            tty.die(f"A package with the name {bold(project_name)} already exists.")
 
     # Can update
     project = ruamel.yaml.comments.CommentedMap()
@@ -90,8 +102,9 @@ def update_mrb_config(project_name, top_dir, srcs_dir, variants, overwrite_allow
     mrb_config["projects"][project_name] = project
 
     # Update .mrb file
-    with open(mrb_config_file, "w") as f:
-        syaml.dump(mrb_config, stream=f)
+    if update_file:
+        with open(mrb_config_file, "w") as f:
+            syaml.dump(mrb_config, stream=f)
 
     # Return configuration for this project
     return project

@@ -1,8 +1,6 @@
-import argparse
 import json
 import os
 import re
-import sys
 from pathlib import Path
 
 import llnl.util.tty as tty
@@ -85,6 +83,7 @@ def bundle_template(package, dependencies):
     camel_package = package.split("-")
     camel_package = "".join(word.title() for word in camel_package)
     bundle_str = f"""from spack.package import *
+import spack.extensions
 
 
 class {camel_package}(BundlePackage):
@@ -120,13 +119,23 @@ def make_yaml_file(package, spec):
 
 def mrb_envs(name, project_config):
     return f"""
+
     def setup_run_environment(self, env):
         env.set("MRB_PROJECT", "{name}")
         env.set("MRB_SOURCE", "{project_config['source']}")
         env.set("MRB_BUILDDIR", "{project_config['build']}")
         env.set("MRB_LOCAL", "{project_config['local']}")
         env.set("MRB_INSTALL", "{project_config['install']}")
+
+    @run_after("install")
+    def post_install(self):
+        mrb = spack.extensions.get_module("mrb")
+        mrb.add_project("{name}",
+                        "{project_config['top']}",
+                        "{project_config['source']}",
+                        "cxxstd={project_config['cxxstd']} %{project_config['compiler']} {project_config['variants']}")
 """
+    # FIXME: Should replace the above "variants" string with something safer...like the variants actually presented at command-line
 
 
 def make_bundle_file(name, deps, project_config, include_mrb_envs=False):
@@ -169,14 +178,14 @@ def make_setup_file(name, compiler, project_config):
 
 
 def process(name, project_config):
+    print()
+    tty.msg("Concretizing project (this may take a few minutes)")
     spec_like = name + "-bootstrap@develop" + project_config["variants"]
     spec = Spec(spec_like)
 
     bootstrap_name = spec.name
 
     concretized_spec = spec.concretized()
-
-    make_setup_file(name, concretized_spec.compiler, project_config)
 
     packages_to_develop = project_config["packages"]
     ordered_dependencies = [
@@ -229,6 +238,12 @@ def process(name, project_config):
             error_msg += f" (depends on {missing_deps_str})\n"
         error_msg += "\n"
         tty.die(error_msg)
+
+    tty.msg("Concretization complete\n")
+    tty.msg(
+        bold("To install dependencies, invoke")
+        + f"\n\n  spack install {name} %{concretized_spec.compiler}\n"
+    )
 
     # spec_dict["spec"]["nodes"] = final_nodes
     #
@@ -287,21 +302,11 @@ def concretize_project(name, project_config):
 
     make_bundle_file(name + "-bootstrap", packages_at_develop, project_config)
 
-    print()
-    tty.msg("Concretizing project (this may take a few minutes)")
     process(name, project_config)
-    tty.msg("Concretization complete\n")
-    tty.msg(bold("To install dependencies, invoke") + f"\n\n  spack install {name}\n")
-
-    tty.msg(
-        bold("To setup your user environment, invoke")
-        + f"\n\n  source {project_config['local']}/setup.sh\n"
-    )
 
 
 def new_project(name, project_config):
     print()
-
     tty.msg(f"Creating project: {name}")
     print_config_info(project_config)
 

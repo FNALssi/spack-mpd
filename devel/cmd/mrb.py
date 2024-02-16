@@ -12,7 +12,7 @@ from .. import clone
 from ..build import build
 from ..list_projects import list_projects, project_details, project_path
 from ..mrb_config import project_config, refresh_mrb_config, update_mrb_config
-from ..new_project import new_project, update_project
+from ..new_project import make_setup_file, new_project, update_project
 from ..rm_project import rm_project
 from ..util import bold, clean
 
@@ -257,3 +257,17 @@ def mrb(parser, args):
         if args.zap_build:
             clean(config["build"])
         return
+
+
+# The following is invoked post-installation
+def add_project(name, top_dir, srcs_dir, variants):
+    config = update_mrb_config(
+        name,
+        Path(top_dir),
+        Path(srcs_dir),
+        variants.split(),
+        overwrite_allowed=True,
+        update_file=True,
+    )
+    make_setup_file(name, config["compiler"], config)
+    tty.msg(bold("To setup your user environment, invoke") + f"\n\n  source {srcs_dir}/setup.sh\n")
