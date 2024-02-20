@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import subprocess
 from pathlib import Path
 
 import llnl.util.tty as tty
@@ -11,6 +12,7 @@ from spack.repo import PATH
 from spack.spec import Spec
 from spack.traverse import traverse_tree
 
+from .mrb_config import mrb_local_dir
 from .util import bold
 
 
@@ -28,6 +30,13 @@ def entry(package_list, package_name):
     for p in package_list:
         if package_name == p["name"]:
             return p
+    return None
+
+
+def entry_with_index(package_list, package_name):
+    for i, p in enumerate(package_list):
+        if package_name == p["name"]:
+            return i, p
     return None
 
 
@@ -114,8 +123,10 @@ def make_cmake_file(package, dependencies, project_config):
 
 
 def make_yaml_file(package, spec):
-    with open(f"{package}.yaml", "w") as f:
+    filename = f"{package}.yaml"
+    with open(filename, "w") as f:
         syaml.dump(spec, stream=f, default_flow_style=False)
+    return filename
 
 
 def mrb_envs(name, project_config):
@@ -140,22 +151,13 @@ def mrb_envs(name, project_config):
 
 
 def make_bundle_file(name, deps, project_config, include_mrb_envs=False):
-    bundle_path = Path(project_config["local_spack_packages"]) / name
+    bundle_path = mrb_local_dir() / "packages" / name
     bundle_path.mkdir(exist_ok=True)
     package_recipe = bundle_path / "package.py"
     with open(package_recipe.absolute(), "w") as f:
         f.write(bundle_template(name, deps))
         if include_mrb_envs:
             f.write(mrb_envs(name, project_config))
-
-
-def make_spack_repo(package, local_dir):
-    repo_file = local_dir / "repo.yaml"
-    with open(repo_file.absolute(), "w") as f:
-        f.write("repo:\n")
-        f.write(
-            f"  namespace: '{package}'\n"
-        )  # Not sure that we want the repo name to be this specific
 
 
 def make_bare_setup_file(name, project_config):
@@ -170,12 +172,9 @@ def make_setup_file(name, compiler, project_config):
     with open(setup_file.absolute(), "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write('alias mrb="spack mrb"\n\n')
-        f.write("local_repo=$(realpath $(dirname ${BASH_SOURCE[0]}))\n")
-        f.write("spack repo add --scope=user $local_repo >& /dev/null\n")
         f.write(f"spack load {name}\n")
         if compiler:
             f.write(f"spack load {compiler}\n")
-        f.write("\ntrap 'spack repo rm $local_repo' EXIT\n")
 
 
 def process(name, project_config):
@@ -218,11 +217,12 @@ def process(name, project_config):
     packages = {dep["name"]: dep for dep in top_level_package["dependencies"]}
 
     for pname in package_names:
-        p = entry(nodes, pname)
+        i, p = entry_with_index(nodes, pname)
         assert p
 
         pdeps = {pdep["name"]: pdep for pdep in p["dependencies"]}
         packages.update(pdeps)
+        del nodes[i]
 
     for pname in package_names:
         del packages[pname]
@@ -231,9 +231,10 @@ def process(name, project_config):
     deps_for_bundlefile = [lint_spec(p) for p in concretized_spec.traverse() if p.name in packages]
     make_bundle_file(name, deps_for_bundlefile, project_config, include_mrb_envs=True)
 
-    final_nodes = [n for n in nodes if n["name"] not in package_names]
+    top_level_package["name"] = name
+    top_level_package["dependencies"] = list(packages.values())
     missing_intermediate_deps = {}
-    for n in final_nodes:
+    for n in nodes:
         if n["name"] == bootstrap_name:
             continue
 
@@ -267,21 +268,31 @@ def process(name, project_config):
     if should_install is False:
         print()
         tty.msg(
-            bold("To install dependencies later, invoke")
+            f"To install {bold(name)} later, invoke:"
             + f"\n\n  spack install {name} %{concretized_spec.compiler}\n"
         )
     else:
-        spec_to_install = Spec(f"{name} %{concretized_spec.compiler}")
-        tty.msg(f"Installing {spec_to_install}")
-        spec_dict["spec"]["nodes"] = final_nodes
-        # FIXME: Should change this to a 'Spec.from_dict' call
-        spec_to_install.concretized().package.do_install()
-        print()
-        msg = f"MRB project {bold(name)} has been installed.  To load it, invoke:\n\n  spack load {name}\n"
-        tty.msg(msg)
-    #
-    #
-    # make_yaml_file(name, spec_dict)
+        spec_dict["spec"]["nodes"] = nodes
+
+        # FIXME: Ideally, we wouldn't do this song-and-dance.  We'd just to
+        #
+        #   Spec.from_dict(spec_dict).concretized().package.do_install()
+        #
+        # However, because the bundle recipe .py files are dynamically
+        # created, there are problems whenever Spack tries to import
+        # the module using importlib.import_module(<recipe>).
+        # Invoking importlib.invalidate_caches() appears to not help.
+        # Therefore we run the installation step in a separate
+        # subprocess.
+
+        filename = make_yaml_file(name, spec_dict)
+        tty.msg(f"Installing {name}")
+        result = subprocess.run(["spack", "install", "-f", filename])
+
+        if result.returncode == 0:
+            print()
+            msg = f"MRB project {bold(name)} has been installed.  To load it, invoke:\n\n  spack load {name}\n"
+            tty.msg(msg)
 
 
 def print_config_info(config):
@@ -304,12 +315,8 @@ def prepare_project(name, project_config):
 
     local_dir = project_config["local"]
     lp = Path(local_dir)
-    local_packages_path = Path(project_config["local_spack_packages"])
-    if not lp.exists():
-        lp.mkdir()
-        local_packages_path.mkdir()
-        make_spack_repo(name, lp)
-        os.system(f"spack repo add --scope=user $(realpath {lp.absolute()}) >& /dev/null")
+    lp.mkdir(exist_ok=True)
+
     local_install_path = Path(project_config["install"])
     local_install_path.mkdir(exist_ok=True)
 

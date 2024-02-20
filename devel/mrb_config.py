@@ -11,6 +11,14 @@ import spack.util.spack_yaml as syaml
 from .util import bold
 
 
+def mrb_local_dir():
+    return Path.home() / ".mrb"
+
+
+def mrb_config_file():
+    return mrb_local_dir() / "config"
+
+
 def _compiler(variants):
     compiler = None
     compiler_index = None
@@ -36,17 +44,17 @@ def _cxxstd(variants):
 def update_mrb_config(
     project_name, top_dir, srcs_dir, variants, overwrite_allowed=False, update_file=False
 ):
-    mrb_config_file = Path.home() / ".mrb"
-    mrb_config = None
-    if mrb_config_file.exists():
-        with open(mrb_config_file, "r") as f:
-            mrb_config = syaml.load(f)
+    config_file = mrb_config_file()
+    config = None
+    if config_file.exists():
+        with open(config_file, "r") as f:
+            config = syaml.load(f)
 
-    if mrb_config is None:
-        mrb_config = ruamel.yaml.comments.CommentedMap()
-        mrb_config["projects"] = ruamel.yaml.comments.CommentedMap()
+    if config is None:
+        config = ruamel.yaml.comments.CommentedMap()
+        config["projects"] = ruamel.yaml.comments.CommentedMap()
 
-    projects = mrb_config.get("projects")
+    projects = config.get("projects")
     if project_name in projects:
         print()
         if overwrite_allowed:
@@ -74,7 +82,6 @@ def update_mrb_config(
     project["build"] = str((top_dir / "build").absolute())
     project["local"] = str((top_dir / "local").absolute())
     project["install"] = str((top_dir / "local" / "install").absolute())
-    project["local_spack_packages"] = str((top_dir / "local" / "packages").absolute())
 
     sp = Path(srcs_dir)
     packages_to_develop = []
@@ -99,27 +106,27 @@ def update_mrb_config(
 
     project["cxxstd"] = cxxstd
     project["variants"] = " ".join(variants)
-    mrb_config["projects"][project_name] = project
+    config["projects"][project_name] = project
 
     # Update .mrb file
     if update_file:
-        with open(mrb_config_file, "w") as f:
-            syaml.dump(mrb_config, stream=f)
+        with open(config_file, "w") as f:
+            syaml.dump(config, stream=f)
 
     # Return configuration for this project
     return project
 
 
 def refresh_mrb_config(project_name):
-    mrb_config_file = Path.home() / ".mrb"
-    if mrb_config_file.exists():
-        with open(mrb_config_file, "r") as f:
-            mrb_config = syaml.load(f)
+    config_file = mrb_config_file()
+    if config_file.exists():
+        with open(config_file, "r") as f:
+            config = syaml.load(f)
 
     # Update packages field
-    assert mrb_config is not None
+    assert config is not None
     assert project_name is not None
-    config = project_config(project_name, mrb_config)
+    config = project_config(project_name, config)
     sp = Path(config["source"])
     assert sp.exists()
     packages_to_develop = sorted(
@@ -127,42 +134,41 @@ def refresh_mrb_config(project_name):
     )
 
     # Update .mrb file
-    mrb_config["projects"][project_name]["packages"] = packages_to_develop
-    mrb_config_file = Path.home() / ".mrb"
-    with open(mrb_config_file, "w") as f:
-        syaml.dump(mrb_config, stream=f)
+    config["projects"][project_name]["packages"] = packages_to_develop
+    with open(config_file, "w") as f:
+        syaml.dump(config, stream=f)
 
     # Return configuration for this project
-    return mrb_config["projects"][project_name]
+    return config["projects"][project_name]
 
 
 def rm_config(project_name):
-    mrb_config_file = Path.home() / ".mrb"
-    if mrb_config_file.exists():
-        with open(mrb_config_file, "r") as f:
-            mrb_config = syaml.load(f)
+    config_file = mrb_config_file()
+    if config_file.exists():
+        with open(config_file, "r") as f:
+            config = syaml.load(f)
 
-    assert mrb_config is not None
+    assert config is not None
     assert project_name is not None
 
     # Remove project entry
-    del mrb_config["projects"][project_name]
-    with open(mrb_config_file, "w") as f:
-        syaml.dump(mrb_config, stream=f)
+    del config["projects"][project_name]
+    with open(config_file, "w") as f:
+        syaml.dump(config, stream=f)
 
 
-def project_config(name, mrb_config=None):
-    if mrb_config is None:
-        mrb_config_file = Path.home() / ".mrb"
-        if mrb_config_file.exists():
-            with open(mrb_config_file, "r") as f:
-                mrb_config = syaml.load(f)
+def project_config(name, config=None):
+    if config is None:
+        config_file = mrb_config_file()
+        if config_file.exists():
+            with open(config_file, "r") as f:
+                config = syaml.load(f)
 
-    if mrb_config is None:
+    if config is None:
         print()
         tty.die("Missing MRB configuration.  Please contact scisoft-team@fnal.gov\n")
 
-    projects = mrb_config.get("projects")
+    projects = config.get("projects")
     if name not in projects:
         print()
         tty.die(

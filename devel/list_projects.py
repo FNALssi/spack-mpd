@@ -5,12 +5,12 @@ import llnl.util.tty as tty
 
 import spack.util.spack_yaml as syaml
 
+from .mrb_config import mrb_config_file
 from .util import bold
 
 
 def _mrb_config():
-    home_dir = Path.home()
-    config_file = home_dir / ".mrb"
+    config_file = mrb_config_file()
     if not config_file.exists():
         return None
 
@@ -27,10 +27,12 @@ def list_projects():
     mrb_config = _mrb_config()
     if not mrb_config:
         _no_known_projects()
+        return
 
     projects = mrb_config.get("projects")
     if not projects:
         _no_known_projects()
+        return
 
     msg = "Known MRB projects:\n\n"
     name = "Project name"
@@ -52,10 +54,12 @@ def project_path(project_name, path_kind):
     mrb_config = _mrb_config()
     if not mrb_config:
         _no_known_projects()
+        return
 
     projects = mrb_config.get("projects")
     if not projects:
         _no_known_projects()
+        return
 
     if project_name not in projects:
         tty.die(f"No known MRB project named {bold(project_name)}")
@@ -67,10 +71,12 @@ def project_details(project_names):
     mrb_config = _mrb_config()
     if not mrb_config:
         _no_known_projects()
+        return
 
     projects = mrb_config.get("projects")
     if not projects:
         _no_known_projects()
+        return
 
     print()
     for name in project_names:

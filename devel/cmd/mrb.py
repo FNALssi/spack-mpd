@@ -10,6 +10,7 @@ level = "long"
 
 from .. import clone
 from ..build import build
+from ..init import init
 from ..list_projects import list_projects, project_details, project_path
 from ..mrb_config import project_config, refresh_mrb_config, update_mrb_config
 from ..new_project import make_setup_file, new_project, update_project
@@ -66,6 +67,10 @@ def setup_parser(subparser):
         "--suite",
         metavar="<suite name>",
         help="clone repositories corresponding to the given suite name",
+    )
+
+    init = subparsers.add_parser(
+        "init", description="initialize MRB on this system", help="initialize MRB on this system"
     )
 
     install = subparsers.add_parser(
@@ -206,6 +211,10 @@ def mrb(parser, args):
                 tty.die(
                     f"At least one option required when invoking 'spack {' '.join(sys.argv[1:])}'\n"
                 )
+        return
+
+    if args.mrb_subcommand == "init":
+        init()
         return
 
     if args.mrb_subcommand in ("list", "ls"):
