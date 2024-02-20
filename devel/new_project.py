@@ -9,6 +9,7 @@ import spack.hash_types as ht
 import spack.util.spack_yaml as syaml
 from spack.repo import PATH
 from spack.spec import Spec
+from spack.traverse import traverse_tree
 
 from .util import bold
 
@@ -192,6 +193,18 @@ def process(name, project_config):
         p.name for p in concretized_spec.traverse(order="topo") if p.name in packages_to_develop
     ]
     ordered_dependencies.reverse()
+
+    uninstalled_dependencies = []
+    for depth, p in traverse_tree([concretized_spec]):
+        if p.spec.name in packages_to_develop:
+            continue
+        if depth <= 1:
+            # depth=0 is {name}-bootstrap, depth=1 corresponds to developed packages
+            continue
+        if depth == 2 and not p.spec.installed:
+            # dependencies of developed packages
+            uninstalled_dependencies.append(p.spec)
+
     make_cmake_file(name, ordered_dependencies, project_config)
 
     # YAML file
@@ -240,12 +253,33 @@ def process(name, project_config):
         tty.die(error_msg)
 
     tty.msg("Concretization complete\n")
-    tty.msg(
-        bold("To install dependencies, invoke")
-        + f"\n\n  spack install {name} %{concretized_spec.compiler}\n"
-    )
 
-    # spec_dict["spec"]["nodes"] = final_nodes
+    msg = "Ready to install MRB project " + bold(name) + "\n"
+    if uninstalled_dependencies:
+        msg += "\nThe following direct dependencies will be installed (along with their transitive dependencies):\n"
+        for dep in uninstalled_dependencies:
+            msg += f"\n{dep}"
+        msg += "\n\nPlease ensure you have adequate space for these installations.\n"
+    tty.msg(msg)
+
+    should_install = tty.get_yes_or_no(f"Would you like to install it?", default=True)
+
+    if should_install is False:
+        print()
+        tty.msg(
+            bold("To install dependencies later, invoke")
+            + f"\n\n  spack install {name} %{concretized_spec.compiler}\n"
+        )
+    else:
+        spec_to_install = Spec(f"{name} %{concretized_spec.compiler}")
+        tty.msg(f"Installing {spec_to_install}")
+        spec_dict["spec"]["nodes"] = final_nodes
+        # FIXME: Should change this to a 'Spec.from_dict' call
+        spec_to_install.concretized().package.do_install()
+        print()
+        msg = f"MRB project {bold(name)} has been installed.  To load it, invoke:\n\n  spack load {name}\n"
+        tty.msg(msg)
+    #
     #
     # make_yaml_file(name, spec_dict)
 
