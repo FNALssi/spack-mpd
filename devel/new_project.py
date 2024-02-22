@@ -9,7 +9,7 @@ import llnl.util.tty as tty
 import spack.hash_types as ht
 import spack.util.spack_yaml as syaml
 from spack.repo import PATH
-from spack.spec import Spec
+from spack.spec import Spec, InstallStatus
 from spack.traverse import traverse_tree
 
 from .mrb_config import mrb_local_dir
@@ -193,16 +193,15 @@ def process(name, project_config):
     ]
     ordered_dependencies.reverse()
 
-    uninstalled_dependencies = []
+    absent_dependencies = []
     for depth, p in traverse_tree([concretized_spec]):
         if p.spec.name in packages_to_develop:
             continue
         if depth <= 1:
             # depth=0 is {name}-bootstrap, depth=1 corresponds to developed packages
             continue
-        if depth == 2 and not p.spec.installed:
-            # dependencies of developed packages
-            uninstalled_dependencies.append(p.spec)
+        if p.spec.install_status() == InstallStatus.absent:
+            absent_dependencies.append(p.spec.cshort_spec)
 
     make_cmake_file(name, ordered_dependencies, project_config)
 
@@ -255,15 +254,19 @@ def process(name, project_config):
 
     tty.msg("Concretization complete\n")
 
+    spec_dict["spec"]["nodes"] = nodes
+
     msg = "Ready to install MRB project " + bold(name) + "\n"
-    if uninstalled_dependencies:
-        msg += "\nThe following direct dependencies will be installed (along with their transitive dependencies):\n"
-        for dep in uninstalled_dependencies:
-            msg += f"\n{dep}"
+    if absent_dependencies:
+        msg += "\nThe following packages will be installed:\n"
+        width = len(str(len(absent_dependencies)))
+        for i, dep in enumerate(absent_dependencies):
+            j = i + 1
+            msg += f"\n ({j:>{width}})  {dep}"
         msg += "\n\nPlease ensure you have adequate space for these installations.\n"
     tty.msg(msg)
 
-    should_install = tty.get_yes_or_no(f"Would you like to install it?", default=True)
+    should_install = tty.get_yes_or_no("Would you like to continue with installation?", default=True)
 
     if should_install is False:
         print()
@@ -271,28 +274,28 @@ def process(name, project_config):
             f"To install {bold(name)} later, invoke:"
             + f"\n\n  spack install {name} %{concretized_spec.compiler}\n"
         )
-    else:
-        spec_dict["spec"]["nodes"] = nodes
+        return
 
-        # FIXME: Ideally, we wouldn't do this song-and-dance.  We'd just to
-        #
-        #   Spec.from_dict(spec_dict).concretized().package.do_install()
-        #
-        # However, because the bundle recipe .py files are dynamically
-        # created, there are problems whenever Spack tries to import
-        # the module using importlib.import_module(<recipe>).
-        # Invoking importlib.invalidate_caches() appears to not help.
-        # Therefore we run the installation step in a separate
-        # subprocess.
+    ncores = tty.get_number("Specify number of cores to use", default=os.cpu_count() // 2)
 
-        filename = make_yaml_file(name, spec_dict)
-        tty.msg(f"Installing {name}")
-        result = subprocess.run(["spack", "install", "-f", filename])
+    # FIXME: Ideally, we wouldn't do this song-and-dance.  We'd just to
+    #
+    #   Spec.from_dict(spec_dict).concretized().package.do_install()
+    #
+    # However, because the bundle recipe .py files are dynamically
+    # created, there are problems whenever Spack tries to import the
+    # module using importlib.import_module(<recipe>).  Invoking
+    # importlib.invalidate_caches() appears to not help.  Therefore we
+    # run the installation step in a separate subprocess.
 
-        if result.returncode == 0:
-            print()
-            msg = f"MRB project {bold(name)} has been installed.  To load it, invoke:\n\n  spack load {name}\n"
-            tty.msg(msg)
+    filename = make_yaml_file(name, spec_dict)
+    tty.msg(f"Installing {name}")
+    result = subprocess.run(["spack", "install", f"-j{ncores}", "-f", filename])
+
+    if result.returncode == 0:
+        print()
+        msg = f"MRB project {bold(name)} has been installed.  To load it, invoke:\n\n  spack load {name}\n"
+        tty.msg(msg)
 
 
 def print_config_info(config):
