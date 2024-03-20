@@ -1,16 +1,19 @@
+import copy
 import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import llnl.util.tty as tty
 
+import spack.environment as ev
 import spack.hash_types as ht
 import spack.util.spack_yaml as syaml
 from spack.repo import PATH
-from spack.spec import Spec, InstallStatus
-from spack.traverse import traverse_tree
+from spack.spec import InstallStatus, Spec
+from spack.traverse import traverse_nodes
 
 from .mrb_config import mrb_local_dir
 from .util import bold
@@ -18,6 +21,7 @@ from .util import bold
 
 def lint_spec(spec):
     spec_str = spec.short_spec
+    spec_str = re.sub(f"@{spec.version}", "", spec_str)  # remove version
     spec_str = re.sub(f"arch={spec.architecture}", "", spec_str)  # remove arch
     spec_str = re.sub(f"%{spec.compiler.display_str}", "", spec_str)  # remove compiler
     spec_str = re.sub(f"/[a-z0-9]+", "", spec_str)  # remove hash
@@ -122,11 +126,13 @@ def make_cmake_file(package, dependencies, project_config):
         cmake_presets(source_path, dependencies, project_config["cxxstd"], f)
 
 
-def make_yaml_file(package, spec):
-    filename = f"{package}.yaml"
-    with open(filename, "w") as f:
+def make_yaml_file(package, spec, prefix=None):
+    filepath = Path(f"{package}.yaml")
+    if prefix:
+        filepath = prefix / filepath
+    with open(filepath, "w") as f:
         syaml.dump(spec, stream=f, default_flow_style=False)
-    return filename
+    return str(filepath)
 
 
 def mrb_envs(name, project_config):
@@ -177,10 +183,19 @@ def make_setup_file(name, compiler, project_config):
             f.write(f"spack load {compiler}\n")
 
 
-def process(name, project_config):
+def process(name, from_env, project_config):
+    # What happens if there's no environment?
+    proto_env = ev.read(from_env)
+    proto_env_packages_config = dict(packages=proto_env.manifest.configuration.get("packages", {}))
+    proto_env_packages_file = make_yaml_file(
+        f"{from_env}-packages-config", proto_env_packages_config, prefix=mrb_local_dir()
+    )
+
     print()
     tty.msg("Concretizing project (this may take a few minutes)")
-    spec_like = name + "-bootstrap@develop" + project_config["variants"]
+    spec_like = (
+        f"{name}-bootstrap@develop %{project_config['compiler']} {project_config['variants']}"
+    )
     spec = Spec(spec_like)
 
     bootstrap_name = spec.name
@@ -192,16 +207,6 @@ def process(name, project_config):
         p.name for p in concretized_spec.traverse(order="topo") if p.name in packages_to_develop
     ]
     ordered_dependencies.reverse()
-
-    absent_dependencies = []
-    for depth, p in traverse_tree([concretized_spec]):
-        if p.spec.name in packages_to_develop:
-            continue
-        if depth <= 1:
-            # depth=0 is {name}-bootstrap, depth=1 corresponds to developed packages
-            continue
-        if p.spec.install_status() == InstallStatus.absent:
-            absent_dependencies.append(p.spec.cshort_spec)
 
     make_cmake_file(name, ordered_dependencies, project_config)
 
@@ -226,22 +231,65 @@ def process(name, project_config):
     for pname in package_names:
         del packages[pname]
 
-    # Always replace the bundle file
-    deps_for_bundlefile = [lint_spec(p) for p in concretized_spec.traverse() if p.name in packages]
-    make_bundle_file(name, deps_for_bundlefile, project_config, include_mrb_envs=True)
-
-    top_level_package["name"] = name
-    top_level_package["dependencies"] = list(packages.values())
-    missing_intermediate_deps = {}
-    for n in nodes:
-        if n["name"] == bootstrap_name:
+    deps_for_bundlefile = []
+    packages_block = {}
+    for p in concretized_spec.traverse():
+        if p.name not in packages:
             continue
 
-        missing_deps = [
-            p["name"] for p in n.get("dependencies", []) if p["name"] in packages_to_develop
-        ]
+        deps_for_bundlefile.append(p.name)
+
+        if proto_env.matching_spec(p):
+            continue
+
+        requires = []
+        if version := str(p.version):
+            requires.append(f"@{version}")
+        if compiler := str(p.compiler):
+            requires.append(f"%{compiler}")
+        if p.variants:
+            variants = copy.deepcopy(p.variants)
+            if "patches" in variants:
+                del variants["patches"]
+            requires.extend(str(variants).split())
+        if compiler_flags := str(p.compiler_flags):
+            requires.append(compiler_flags)
+
+        packages_block[p.name] = dict(require=requires)
+
+    # Always replace the bundle file
+    mrb_name = name + "-mrb"
+    make_bundle_file(mrb_name, deps_for_bundlefile, project_config, include_mrb_envs=True)
+
+    concretizer = dict(unify=True, reuse=True)
+    full_block = dict(
+        include=[proto_env_packages_file],
+        definitions=[dict(compiler=[project_config["compiler"]])],
+        specs=[project_config["compiler"], mrb_name],
+        concretizer=dict(unify=True, reuse=True),
+        packages=packages_block,
+    )
+
+    env_file = make_yaml_file(name, dict(spack=full_block), prefix=mrb_local_dir())
+    env = ev.create(name, init_file=env_file)
+
+    concretized_specs = None
+    with env.write_transaction():
+        concretized_specs = env.concretize()
+        env.write()
+
+    absent_dependencies = []
+    missing_intermediate_deps = {}
+    for n in traverse_nodes([p[1] for p in concretized_specs], order="post"):
+        if n.name == bootstrap_name:
+            continue
+
+        if n.install_status() == InstallStatus.absent:
+            absent_dependencies.append(n.cshort_spec)
+
+        missing_deps = [p.name for p in n.dependencies() if p.name in packages_to_develop]
         if missing_deps:
-            missing_intermediate_deps[n["name"]] = missing_deps
+            missing_intermediate_deps[n.name] = missing_deps
 
     if missing_intermediate_deps:
         error_msg = "\nThe following packages are intermediate dependencies and must also be checked out:\n\n"
@@ -254,47 +302,40 @@ def process(name, project_config):
 
     tty.msg("Concretization complete\n")
 
-    spec_dict["spec"]["nodes"] = nodes
-
     msg = "Ready to install MRB project " + bold(name) + "\n"
     if absent_dependencies:
+
+        def _parens_number(i):
+            return f"({i})"
+
         msg += "\nThe following packages will be installed:\n"
-        width = len(str(len(absent_dependencies)))
+        width = len(_parens_number(len(absent_dependencies)))
         for i, dep in enumerate(absent_dependencies):
-            j = i + 1
-            msg += f"\n ({j:>{width}})  {dep}"
+            num_str = _parens_number(i + 1)
+            msg += f"\n {num_str:>{width}}  {dep}"
         msg += "\n\nPlease ensure you have adequate space for these installations.\n"
     tty.msg(msg)
 
-    should_install = tty.get_yes_or_no("Would you like to continue with installation?", default=True)
+    should_install = tty.get_yes_or_no(
+        "Would you like to continue with installation?", default=True
+    )
 
     if should_install is False:
         print()
         tty.msg(
-            f"To install {bold(name)} later, invoke:"
-            + f"\n\n  spack install {name} %{concretized_spec.compiler}\n"
+            f"To install {name} later, invoke:\n\n"
+            + bold(f"  spack -e {name} install -j<ncores>\n")
         )
         return
 
     ncores = tty.get_number("Specify number of cores to use", default=os.cpu_count() // 2)
 
-    # FIXME: Ideally, we wouldn't do this song-and-dance.  We'd just to
-    #
-    #   Spec.from_dict(spec_dict).concretized().package.do_install()
-    #
-    # However, because the bundle recipe .py files are dynamically
-    # created, there are problems whenever Spack tries to import the
-    # module using importlib.import_module(<recipe>).  Invoking
-    # importlib.invalidate_caches() appears to not help.  Therefore we
-    # run the installation step in a separate subprocess.
-
-    filename = make_yaml_file(name, spec_dict)
     tty.msg(f"Installing {name}")
-    result = subprocess.run(["spack", "install", f"-j{ncores}", "-f", filename])
+    result = subprocess.run(["spack", "-e", name, "install", f"-j{ncores}"])
 
     if result.returncode == 0:
         print()
-        msg = f"MRB project {bold(name)} has been installed.  To load it, invoke:\n\n  spack load {name}\n"
+        msg = f"MRB project {bold(name)} has been installed.  To load it, invoke:\n\n  spack env activate {name}\n"
         tty.msg(msg)
 
 
@@ -328,7 +369,7 @@ def prepare_project(name, project_config):
     sp.mkdir(exist_ok=True)
 
 
-def concretize_project(name, project_config):
+def concretize_project(name, from_env, project_config):
     packages_to_develop = project_config["packages"]
 
     # Always replace the bootstrap bundle file
@@ -346,10 +387,10 @@ def concretize_project(name, project_config):
 
     make_bundle_file(name + "-bootstrap", packages_at_develop, project_config)
 
-    process(name, project_config)
+    process(name, from_env, project_config)
 
 
-def new_project(name, project_config):
+def new_project(name, from_env, project_config):
     print()
     tty.msg(f"Creating project: {name}")
     print_config_info(project_config)
@@ -357,7 +398,7 @@ def new_project(name, project_config):
     prepare_project(name, project_config)
 
     if len(project_config["packages"]):
-        concretize_project(name, project_config)
+        concretize_project(name, from_env, project_config)
     else:
         make_bare_setup_file(name, project_config)
         tty.msg(

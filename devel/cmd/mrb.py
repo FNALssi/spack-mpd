@@ -107,11 +107,20 @@ If the '--top' option is not specified, the current working directory will be us
     )
     new_project.add_argument("--name", required=True)
     new_project.add_argument(
-        "--top", metavar="<dir>", default=default_top, help="top-level directory for MRSB area"
+        "-T",
+        "--top",
+        metavar="<dir>",
+        default=default_top,
+        help="top-level directory for MRSB area",
     )
-    new_project.add_argument("-D", "--dir", help="directory containing repositories to develop")
+    new_project.add_argument(
+        "-S", "--srcs", metavar="<dir>", help="directory containing repositories to develop"
+    )
     new_project.add_argument(
         "-f", "--force", action="store_true", help="overwrite existing project with same name"
+    )
+    new_project.add_argument(
+        "-E", "--from-env", metavar="<env>", help="environment from which to create project"
     )
     new_project.add_argument("variants", nargs="*")
 
@@ -228,11 +237,11 @@ def mrb(parser, args):
 
     if args.mrb_subcommand in ("new-project", "n", "newDev"):
         top_path = Path(args.top)
-        srcs_path = Path(args.dir) if args.dir else top_path / "srcs"
+        srcs_path = Path(args.srcs) if args.srcs else top_path / "srcs"
         config = update_mrb_config(
             args.name, top_path.absolute(), srcs_path.absolute(), args.variants, args.force
         )
-        new_project(args.name, config)
+        new_project(args.name, args.from_env, config)
         return
 
     if args.mrb_subcommand == "refresh":
