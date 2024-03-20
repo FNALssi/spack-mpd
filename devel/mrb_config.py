@@ -15,6 +15,10 @@ def mrb_local_dir():
     return Path.home() / ".mrb"
 
 
+def mrb_packages():
+    return mrb_local_dir() / "packages"
+
+
 def mrb_config_file():
     return mrb_local_dir() / "config"
 
