@@ -15,7 +15,7 @@ from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
 from spack.traverse import traverse_nodes
 
-from .mrb_config import mrb_local_dir
+from .mrb_config import mrb_local_dir, mrb_project_exists, project_config_from_args
 from .util import bold
 
 
@@ -148,51 +148,47 @@ def mrb_envs(name, project_config):
     @run_after("install")
     def post_install(self):
         mrb = spack.extensions.get_module("mrb")
-        mrb.add_project("{name}",
-                        "{project_config['top']}",
-                        "{project_config['source']}",
-                        "cxxstd={project_config['cxxstd']} %{project_config['compiler']} {project_config['variants']}")
+        mrb.add_project({dict(**project_config)})
 """
     # FIXME: Should replace the above "variants" string with something safer...like the variants actually presented at command-line
 
 
-def make_bundle_file(name, deps, project_config, include_mrb_envs=False):
+def make_bundle_file(name, deps, project_config, mrb_project_name=None):
     bundle_path = mrb_local_dir() / "packages" / name
     bundle_path.mkdir(exist_ok=True)
     package_recipe = bundle_path / "package.py"
     with open(package_recipe.absolute(), "w") as f:
         f.write(bundle_template(name, deps))
-        if include_mrb_envs:
-            f.write(mrb_envs(name, project_config))
+        if mrb_project_name:
+            f.write(mrb_envs(mrb_project_name, project_config))
 
 
-def make_bare_setup_file(name, project_config):
+def make_bare_setup_file(project_config):
     setup_file = Path(project_config["local"]) / "setup.sh"
     with open(setup_file.absolute(), "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write('alias mrb="spack mrb"\n\n')
 
 
-def make_setup_file(name, compiler, project_config):
-    setup_file = Path(project_config["local"]) / "setup.sh"
-    with open(setup_file.absolute(), "w") as f:
-        f.write("#!/bin/bash\n\n")
-        f.write('alias mrb="spack mrb"\n\n')
-        f.write(f"spack load {name}\n")
-        if compiler:
-            f.write(f"spack load {compiler}\n")
-
-
-def process(name, from_env, project_config):
-    # What happens if there's no environment?
-    proto_env = ev.read(from_env)
-    proto_env_packages_config = dict(packages=proto_env.manifest.configuration.get("packages", {}))
-    proto_env_packages_file = make_yaml_file(
-        f"{from_env}-packages-config", proto_env_packages_config, prefix=mrb_local_dir()
-    )
+def process(project_config):
+    proto_env_packages_files = []
+    proto_envs = []
+    for penv_name in project_config["envs"]:
+        proto_env = ev.read(penv_name)
+        proto_envs.append(proto_env)
+        proto_env_packages_config = dict(
+            packages=proto_env.manifest.configuration.get("packages", {})
+        )
+        proto_env_packages_files.append(
+            make_yaml_file(
+                f"{penv_name}-packages-config", proto_env_packages_config, prefix=mrb_local_dir()
+            )
+        )
 
     print()
     tty.msg("Concretizing project (this may take a few minutes)")
+
+    name = project_config["name"]
     spec_like = (
         f"{name}-bootstrap@develop %{project_config['compiler']} {project_config['variants']}"
     )
@@ -239,7 +235,7 @@ def process(name, from_env, project_config):
 
         deps_for_bundlefile.append(p.name)
 
-        if proto_env.matching_spec(p):
+        if any(penv.matching_spec(p) for penv in proto_envs):
             continue
 
         requires = []
@@ -259,11 +255,11 @@ def process(name, from_env, project_config):
 
     # Always replace the bundle file
     mrb_name = name + "-mrb"
-    make_bundle_file(mrb_name, deps_for_bundlefile, project_config, include_mrb_envs=True)
+    make_bundle_file(mrb_name, deps_for_bundlefile, project_config, mrb_project_name=name)
 
     concretizer = dict(unify=True, reuse=True)
     full_block = dict(
-        include=[proto_env_packages_file],
+        include=proto_env_packages_files,
         definitions=[dict(compiler=[project_config["compiler"]])],
         specs=[project_config["compiler"], mrb_name],
         concretizer=dict(unify=True, reuse=True),
@@ -272,6 +268,7 @@ def process(name, from_env, project_config):
 
     env_file = make_yaml_file(name, dict(spack=full_block), prefix=mrb_local_dir())
     env = ev.create(name, init_file=env_file)
+    tty.info(f"Environment {name} has been created")
 
     concretized_specs = None
     with env.write_transaction():
@@ -323,8 +320,7 @@ def process(name, from_env, project_config):
     if should_install is False:
         print()
         tty.msg(
-            f"To install {name} later, invoke:\n\n"
-            + bold(f"  spack -e {name} install -j<ncores>\n")
+            f"To install {name} later, invoke:\n\n" + f"  spack -e {name} install -j<ncores>\n"
         )
         return
 
@@ -352,7 +348,7 @@ def print_config_info(config):
         print(f"    - {p}")
 
 
-def prepare_project(name, project_config):
+def prepare_project(project_config):
     build_dir = project_config["build"]
     bp = Path(build_dir)
     bp.mkdir(exist_ok=True)
@@ -369,7 +365,7 @@ def prepare_project(name, project_config):
     sp.mkdir(exist_ok=True)
 
 
-def concretize_project(name, from_env, project_config):
+def concretize_project(project_config):
     packages_to_develop = project_config["packages"]
 
     # Always replace the bootstrap bundle file
@@ -385,22 +381,41 @@ def concretize_project(name, from_env, project_config):
             base_spec += f" cxxstd={cxxstd}"
         packages_at_develop.append(base_spec)
 
-    make_bundle_file(name + "-bootstrap", packages_at_develop, project_config)
+    make_bundle_file(project_config["name"] + "-bootstrap", packages_at_develop, project_config)
 
-    process(name, from_env, project_config)
+    process(project_config)
 
 
-def new_project(name, from_env, project_config):
+def new_project(args):
     print()
-    tty.msg(f"Creating project: {name}")
-    print_config_info(project_config)
 
-    prepare_project(name, project_config)
+    name = args.name
+    if mrb_project_exists(name):
+        if args.force:
+            tty.warn(f"Overwriting existing MRB project {bold(name)}")
+            env = ev.read(name)
+            if env.active:
+                tty.die(f"Must deactivate environment {name} to overwrite it\n")
+            env.destroy()
+            tty.info(f"Existing environment {name} has been removed")
+        else:
+            indent = " " * len("==> Error: ")
+            tty.die(
+                f"An MRB project with the name {bold(name)} already exists.\n"
+                + f"{indent}Either choose a different name or use the '--force' option to overwrite the existing project.\n"
+            )
+    else:
+        tty.msg(f"Creating project: {name}")
+
+    project_config = project_config_from_args(args)
+
+    print_config_info(project_config)
+    prepare_project(project_config)
 
     if len(project_config["packages"]):
-        concretize_project(name, from_env, project_config)
+        concretize_project(project_config)
     else:
-        make_bare_setup_file(name, project_config)
+        make_bare_setup_file(project_config)
         tty.msg(
             bold("To setup your user environment, invoke")
             + f"\n\n  source {project_config['local']}/setup.sh\n"

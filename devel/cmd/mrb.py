@@ -13,7 +13,7 @@ from ..build import build
 from ..init import init
 from ..list_projects import list_projects, project_details, project_path
 from ..mrb_config import project_config, refresh_mrb_config, update_mrb_config
-from ..new_project import make_setup_file, new_project, update_project
+from ..new_project import new_project, update_project
 from ..rm_project import rm_project
 from ..util import bold, clean
 
@@ -120,7 +120,11 @@ If the '--top' option is not specified, the current working directory will be us
         "-f", "--force", action="store_true", help="overwrite existing project with same name"
     )
     new_project.add_argument(
-        "-E", "--from-env", metavar="<env>", help="environment from which to create project"
+        "-E",
+        "--from-env",
+        metavar="<env>",
+        help="environments from which to create project",
+        action="append",
     )
     new_project.add_argument("variants", nargs="*")
 
@@ -236,12 +240,7 @@ def mrb(parser, args):
         return
 
     if args.mrb_subcommand in ("new-project", "n", "newDev"):
-        top_path = Path(args.top)
-        srcs_path = Path(args.srcs) if args.srcs else top_path / "srcs"
-        config = update_mrb_config(
-            args.name, top_path.absolute(), srcs_path.absolute(), args.variants, args.force
-        )
-        new_project(args.name, args.from_env, config)
+        new_project(args)
         return
 
     if args.mrb_subcommand == "refresh":
@@ -278,14 +277,5 @@ def mrb(parser, args):
 
 
 # The following is invoked post-installation
-def add_project(name, top_dir, srcs_dir, variants):
-    config = update_mrb_config(
-        name,
-        Path(top_dir),
-        Path(srcs_dir),
-        variants.split(),
-        overwrite_allowed=True,
-        update_file=True,
-    )
-    make_setup_file(name, config["compiler"], config)
-    tty.msg(bold("To setup your user environment, invoke") + f"\n\n  source {srcs_dir}/setup.sh\n")
+def add_project(project_config):
+    update_mrb_config(project_config)
