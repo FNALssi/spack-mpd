@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import llnl.util.tty as tty
+import llnl.util.filesystem as fs
 
 description = "create multi-repository build area"
 section = "scripting"
@@ -15,7 +16,7 @@ from ..list_projects import list_projects, project_details, project_path
 from ..mrb_config import project_config, refresh_mrb_config, update_mrb_config
 from ..new_project import new_project, update_project
 from ..rm_project import rm_project
-from ..util import bold, clean
+from ..util import bold
 
 
 def setup_parser(subparser):
@@ -200,7 +201,7 @@ def mrb(parser, args):
         config = _active_project_config()
         srcs, build_area, install_area = (config["source"], config["build"], config["install"])
         if args.clean:
-            clean(build_area)
+            fs.remove_directory_contents(build_area)
 
         build(
             srcs, build_area, install_area, args.generator, args.parallel, args.generator_options
@@ -259,7 +260,7 @@ def mrb(parser, args):
             print()
             tty.die(
                 f"Cannot remove active MRB project {bold(args.project)}.  Deactivate by invoking:\n\n"
-                + f"           spack unload {args.project}\n"
+                + f"           spack env deactivate\n"
             )
         rm_project(args.project, config, args.full)
         return
@@ -267,12 +268,12 @@ def mrb(parser, args):
     if args.mrb_subcommand in ("zap", "z"):
         config = _active_project_config()
         if args.zap_install:
-            clean(config["install"])
+            fs.remove_directory_contents(config["install"])
         if args.zap_all:
-            clean(config["install"])
-            clean(config["build"])
+            fs.remove_directory_contents(config["install"])
+            fs.remove_directory_contents(config["build"])
         if args.zap_build:
-            clean(config["build"])
+            fs.remove_directory_contents(config["build"])
         return
 
 
