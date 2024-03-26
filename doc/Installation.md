@@ -20,4 +20,4 @@ scripting:
 ...
 ```
 
-Now that MPD has been installed, you can [initialize your system to use MPD](doc/Initialization.md).
+Now that MPD has been installed, you can [initialize your system to use MPD](Initialization.md).
