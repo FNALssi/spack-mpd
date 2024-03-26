@@ -14,7 +14,7 @@ from ..new_project import new_project, update_project
 from ..rm_project import rm_project
 from ..util import bold
 
-description = "create multi-repository build area"
+description = "develop multiple packages using Spack for external software"
 section = "scripting"
 level = "long"
 
@@ -117,7 +117,7 @@ If the '--top' option is not specified, the current working directory will be us
         "--top",
         metavar="<dir>",
         default=default_top,
-        help="top-level directory for MRSB area",
+        help="top-level directory for MPD area",
     )
     new_project.add_argument(
         "-S", "--srcs", metavar="<dir>", help="directory containing repositories to develop"
