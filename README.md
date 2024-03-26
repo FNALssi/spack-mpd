@@ -18,7 +18,7 @@ Spack MRB is a Spack extension that allows users to develop CMake-based packages
 5. Cleaning/zapping a project
 6. Removing a project
 7. Helper commands
-   1. Cloning repositories to build
+   1. Cloning repositories to develop
    2. Listing projects
 
 ## Limitations
