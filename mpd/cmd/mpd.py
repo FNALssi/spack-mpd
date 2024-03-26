@@ -13,14 +13,14 @@ from .. import clone
 from ..build import build
 from ..init import init
 from ..list_projects import list_projects, project_details, project_path
-from ..mrb_config import project_config, refresh_mrb_config, update_mrb_config
+from ..mpd_config import project_config, refresh_mpd_config, update_mpd_config
 from ..new_project import new_project, update_project
 from ..rm_project import rm_project
 from ..util import bold
 
 
 def setup_parser(subparser):
-    subparsers = subparser.add_subparsers(dest="mrb_subcommand")
+    subparsers = subparser.add_subparsers(dest="mpd_subcommand")
     build = subparsers.add_parser(
         "build",
         description="build repositories under development",
@@ -71,7 +71,7 @@ def setup_parser(subparser):
     )
 
     init = subparsers.add_parser(
-        "init", description="initialize MRB on this system", help="initialize MRB on this system"
+        "init", description="initialize MPD on this system", help="initialize MPD on this system"
     )
 
     install = subparsers.add_parser(
@@ -81,15 +81,15 @@ def setup_parser(subparser):
         help="install built repositories",
     )
 
-    lst_description = """list MRB projects
+    lst_description = """list MPD projects
 
-When no arguments are specified, prints a list of known MRB projects
+When no arguments are specified, prints a list of known MPD projects
 and their corresponding top-level directories."""
     lst = subparsers.add_parser(
-        "list", description=lst_description, aliases=["ls"], help="list MRB projects"
+        "list", description=lst_description, aliases=["ls"], help="list MPD projects"
     )
     lst.add_argument(
-        "project", metavar="<project name>", nargs="*", help="print details of the MRB project"
+        "project", metavar="<project name>", nargs="*", help="print details of the MPD project"
     )
     lst.add_argument(
         "-t", "--top", metavar="<project name>", help="print top-level directory for project"
@@ -133,20 +133,20 @@ If the '--top' option is not specified, the current working directory will be us
         "refresh", description="refresh project area", help="refresh project area"
     )
 
-    rm_proj_description = """remove MRB project
+    rm_proj_description = """remove MPD project
 
 Removing a project will:
 
-  * Remove the project entry from the list printed by 'spack mrb list'
+  * Remove the project entry from the list printed by 'spack mpd list'
   * Delete the 'build' and 'local' directories
   * If '--full' specified, delete the entire 'top' level directory tree of the
     project (including the specified sources directory if it resides
     within the top-level directory).
   * Uninstall the project's package/environment"""
     rm_proj = subparsers.add_parser(
-        "rm-project", description=rm_proj_description, aliases=["rm"], help="remove MRB project"
+        "rm-project", description=rm_proj_description, aliases=["rm"], help="remove MPD project"
     )
-    rm_proj.add_argument("project", metavar="<project name>", help="MRB project to remove")
+    rm_proj.add_argument("project", metavar="<project name>", help="MPD project to remove")
     rm_proj.add_argument(
         "--full",
         action="store_true",
@@ -185,10 +185,10 @@ Removing a project will:
 
 
 def _active_project():
-    name = os.environ.get("MRB_PROJECT")
+    name = os.environ.get("MPD_PROJECT")
     if name is None:
         print()
-        tty.die(f"Active MRB project required to invoke 'spack {' '.join(sys.argv[1:])}'\n")
+        tty.die(f"Active MPD project required to invoke 'spack {' '.join(sys.argv[1:])}'\n")
     return name
 
 
@@ -196,8 +196,8 @@ def _active_project_config():
     return project_config(_active_project())
 
 
-def mrb(parser, args):
-    if args.mrb_subcommand in ("build", "b"):
+def mpd(parser, args):
+    if args.mpd_subcommand in ("build", "b"):
         config = _active_project_config()
         srcs, build_area, install_area = (config["source"], config["build"], config["install"])
         if args.clean:
@@ -208,7 +208,7 @@ def mrb(parser, args):
         )
         return
 
-    if args.mrb_subcommand in ("git-clone", "g", "gitCheckout"):
+    if args.mpd_subcommand in ("git-clone", "g", "gitCheckout"):
         if args.repos:
             config = _active_project_config()
             clone.clone_repos(args.repos, config["source"], config["local"])
@@ -227,11 +227,11 @@ def mrb(parser, args):
                 )
         return
 
-    if args.mrb_subcommand == "init":
+    if args.mpd_subcommand == "init":
         init()
         return
 
-    if args.mrb_subcommand in ("list", "ls"):
+    if args.mpd_subcommand in ("list", "ls"):
         if args.project:
             project_details(args.project)
         elif args.top:
@@ -240,32 +240,32 @@ def mrb(parser, args):
             list_projects()
         return
 
-    if args.mrb_subcommand in ("new-project", "n", "newDev"):
+    if args.mpd_subcommand in ("new-project", "n", "newDev"):
         new_project(args)
         return
 
-    if args.mrb_subcommand == "refresh":
+    if args.mpd_subcommand == "refresh":
         name = _active_project()
         current_config = project_config(name)
-        new_config = refresh_mrb_config(name)
+        new_config = refresh_mpd_config(name)
         if current_config == new_config:
             tty.msg(f"Project {name} is up-to-date")
             return
         update_project(name, new_config)
         return
 
-    if args.mrb_subcommand in ("rm-project", "rm"):
+    if args.mpd_subcommand in ("rm-project", "rm"):
         config = project_config(args.project)
-        if args.project == os.environ.get("MRB_PROJECT"):
+        if args.project == os.environ.get("MPD_PROJECT"):
             print()
             tty.die(
-                f"Cannot remove active MRB project {bold(args.project)}.  Deactivate by invoking:\n\n"
+                f"Cannot remove active MPD project {bold(args.project)}.  Deactivate by invoking:\n\n"
                 + f"           spack env deactivate\n"
             )
         rm_project(args.project, config, args.full)
         return
 
-    if args.mrb_subcommand in ("zap", "z"):
+    if args.mpd_subcommand in ("zap", "z"):
         config = _active_project_config()
         if args.zap_install:
             fs.remove_directory_contents(config["install"])
@@ -279,4 +279,4 @@ def mrb(parser, args):
 
 # The following is invoked post-installation
 def add_project(project_config):
-    update_mrb_config(project_config)
+    update_mpd_config(project_config)

@@ -11,16 +11,16 @@ import spack.util.spack_yaml as syaml
 from .util import bold
 
 
-def mrb_local_dir():
-    return Path.home() / ".mrb"
+def mpd_local_dir():
+    return Path.home() / ".mpd"
 
 
-def mrb_packages():
-    return mrb_local_dir() / "packages"
+def mpd_packages():
+    return mpd_local_dir() / "packages"
 
 
-def mrb_config_file():
-    return mrb_local_dir() / "config"
+def mpd_config_file():
+    return mpd_local_dir() / "config"
 
 
 def _compiler(variants):
@@ -86,8 +86,8 @@ def project_config_from_args(args):
     return project
 
 
-def mrb_project_exists(project_name):
-    config_file = mrb_config_file()
+def mpd_project_exists(project_name):
+    config_file = mpd_config_file()
     config = None
     if config_file.exists():
         with open(config_file, "r") as f:
@@ -103,8 +103,8 @@ def mrb_project_exists(project_name):
     return project_name in projects
 
 
-def update_mrb_config(project_config):
-    config_file = mrb_config_file()
+def update_mpd_config(project_config):
+    config_file = mpd_config_file()
     config = None
     if config_file.exists():
         with open(config_file, "r") as f:
@@ -118,13 +118,13 @@ def update_mrb_config(project_config):
     yaml_project_config.update(project_config)
     config["projects"][project_config["name"]] = yaml_project_config
 
-    # Update .mrb file
+    # Update .mpd file
     with open(config_file, "w") as f:
         syaml.dump(config, stream=f)
 
 
-def refresh_mrb_config(project_name):
-    config_file = mrb_config_file()
+def refresh_mpd_config(project_name):
+    config_file = mpd_config_file()
     if config_file.exists():
         with open(config_file, "r") as f:
             config = syaml.load(f)
@@ -139,7 +139,7 @@ def refresh_mrb_config(project_name):
         f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
     )
 
-    # Update .mrb file
+    # Update .mpd file
     config["projects"][project_name]["packages"] = packages_to_develop
     with open(config_file, "w") as f:
         syaml.dump(config, stream=f)
@@ -149,7 +149,7 @@ def refresh_mrb_config(project_name):
 
 
 def rm_config(project_name):
-    config_file = mrb_config_file()
+    config_file = mpd_config_file()
     if config_file.exists():
         with open(config_file, "r") as f:
             config = syaml.load(f)
@@ -165,20 +165,20 @@ def rm_config(project_name):
 
 def project_config(name, config=None):
     if config is None:
-        config_file = mrb_config_file()
+        config_file = mpd_config_file()
         if config_file.exists():
             with open(config_file, "r") as f:
                 config = syaml.load(f)
 
     if config is None:
         print()
-        tty.die("Missing MRB configuration.  Please contact scisoft-team@fnal.gov\n")
+        tty.die("Missing MPD configuration.  Please contact scisoft-team@fnal.gov\n")
 
     projects = config.get("projects")
     if name not in projects:
         print()
         tty.die(
-            f"Project '{name}' not supported by MRB configuration.  Please contact scisoft-team@fnal.gov\n"
+            f"Project '{name}' not supported by MPD configuration.  Please contact scisoft-team@fnal.gov\n"
         )
 
     return projects[name]

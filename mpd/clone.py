@@ -368,7 +368,7 @@ def clone_repos(repo_specs, srcs_area, local_area):
             msg += f"\n  - {repo}"
         tty.msg(msg + "\n")
         msg = bold("You may now invoke:")
-        msg += f"\n\n  spack mrb refresh\n"
+        msg += f"\n\n  spack mpd refresh\n"
         tty.msg(msg)
 
 

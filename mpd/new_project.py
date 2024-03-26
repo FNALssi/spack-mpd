@@ -15,7 +15,7 @@ from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
 from spack.traverse import traverse_nodes
 
-from .mrb_config import mrb_local_dir, mrb_project_exists, project_config_from_args
+from .mpd_config import mpd_local_dir, mpd_project_exists, project_config_from_args
 from .util import bold
 
 
@@ -83,8 +83,8 @@ def cmake_presets(source_path, dependencies, cxx_standard, preset_file):
         configurePresets: [
             {
                 cacheVariables: allCacheVariables,
-                "description": "Configuration settings as created by 'spack mrb new-dev'",
-                "displayName": "Configuration from mrb new-dev",
+                "description": "Configuration settings as created by 'spack mpd new-dev'",
+                "displayName": "Configuration from mpd new-dev",
                 "name": "default",
             }
         ],
@@ -135,39 +135,39 @@ def make_yaml_file(package, spec, prefix=None):
     return str(filepath)
 
 
-def mrb_envs(name, project_config):
+def mpd_envs(name, project_config):
     return f"""
 
     def setup_run_environment(self, env):
-        env.set("MRB_PROJECT", "{name}")
-        env.set("MRB_SOURCE", "{project_config['source']}")
-        env.set("MRB_BUILDDIR", "{project_config['build']}")
-        env.set("MRB_LOCAL", "{project_config['local']}")
-        env.set("MRB_INSTALL", "{project_config['install']}")
+        env.set("MPD_PROJECT", "{name}")
+        env.set("MPD_SOURCE", "{project_config['source']}")
+        env.set("MPD_BUILDDIR", "{project_config['build']}")
+        env.set("MPD_LOCAL", "{project_config['local']}")
+        env.set("MPD_INSTALL", "{project_config['install']}")
 
     @run_after("install")
     def post_install(self):
-        mrb = spack.extensions.get_module("mrb")
-        mrb.add_project({dict(**project_config)})
+        mpd = spack.extensions.get_module("mpd")
+        mpd.add_project({dict(**project_config)})
 """
     # FIXME: Should replace the above "variants" string with something safer...like the variants actually presented at command-line
 
 
-def make_bundle_file(name, deps, project_config, mrb_project_name=None):
-    bundle_path = mrb_local_dir() / "packages" / name
+def make_bundle_file(name, deps, project_config, mpd_project_name=None):
+    bundle_path = mpd_local_dir() / "packages" / name
     bundle_path.mkdir(exist_ok=True)
     package_recipe = bundle_path / "package.py"
     with open(package_recipe.absolute(), "w") as f:
         f.write(bundle_template(name, deps))
-        if mrb_project_name:
-            f.write(mrb_envs(mrb_project_name, project_config))
+        if mpd_project_name:
+            f.write(mpd_envs(mpd_project_name, project_config))
 
 
 def make_bare_setup_file(project_config):
     setup_file = Path(project_config["local"]) / "setup.sh"
     with open(setup_file.absolute(), "w") as f:
         f.write("#!/bin/bash\n\n")
-        f.write('alias mrb="spack mrb"\n\n')
+        f.write('alias mpd="spack mpd"\n\n')
 
 
 def process(project_config):
@@ -181,7 +181,7 @@ def process(project_config):
         )
         proto_env_packages_files.append(
             make_yaml_file(
-                f"{penv_name}-packages-config", proto_env_packages_config, prefix=mrb_local_dir()
+                f"{penv_name}-packages-config", proto_env_packages_config, prefix=mpd_local_dir()
             )
         )
 
@@ -254,19 +254,19 @@ def process(project_config):
         packages_block[p.name] = dict(require=requires)
 
     # Always replace the bundle file
-    mrb_name = name + "-mrb"
-    make_bundle_file(mrb_name, deps_for_bundlefile, project_config, mrb_project_name=name)
+    mpd_name = name + "-mpd"
+    make_bundle_file(mpd_name, deps_for_bundlefile, project_config, mpd_project_name=name)
 
     concretizer = dict(unify=True, reuse=True)
     full_block = dict(
         include=proto_env_packages_files,
         definitions=[dict(compiler=[project_config["compiler"]])],
-        specs=[project_config["compiler"], mrb_name],
+        specs=[project_config["compiler"], mpd_name],
         concretizer=dict(unify=True, reuse=True),
         packages=packages_block,
     )
 
-    env_file = make_yaml_file(name, dict(spack=full_block), prefix=mrb_local_dir())
+    env_file = make_yaml_file(name, dict(spack=full_block), prefix=mpd_local_dir())
     env = ev.create(name, init_file=env_file)
     tty.info(f"Environment {name} has been created")
 
@@ -299,7 +299,7 @@ def process(project_config):
 
     tty.msg("Concretization complete\n")
 
-    msg = "Ready to install MRB project " + bold(name) + "\n"
+    msg = "Ready to install MPD project " + bold(name) + "\n"
     if absent_dependencies:
 
         def _parens_number(i):
@@ -331,7 +331,7 @@ def process(project_config):
 
     if result.returncode == 0:
         print()
-        msg = f"MRB project {bold(name)} has been installed.  To load it, invoke:\n\n  spack env activate {name}\n"
+        msg = f"MPD project {bold(name)} has been installed.  To load it, invoke:\n\n  spack env activate {name}\n"
         tty.msg(msg)
 
 
@@ -390,9 +390,9 @@ def new_project(args):
     print()
 
     name = args.name
-    if mrb_project_exists(name):
+    if mpd_project_exists(name):
         if args.force:
-            tty.warn(f"Overwriting existing MRB project {bold(name)}")
+            tty.warn(f"Overwriting existing MPD project {bold(name)}")
             env = ev.read(name)
             if env.active:
                 tty.die(f"Must deactivate environment {name} to overwrite it\n")
@@ -401,7 +401,7 @@ def new_project(args):
         else:
             indent = " " * len("==> Error: ")
             tty.die(
-                f"An MRB project with the name {bold(name)} already exists.\n"
+                f"An MPD project with the name {bold(name)} already exists.\n"
                 + f"{indent}Either choose a different name or use the '--force' option to overwrite the existing project.\n"
             )
     else:
@@ -422,8 +422,8 @@ def new_project(args):
         )
         tty.msg(
             bold("You can then clone repositories for development by invoking")
-            + f"\n\n  spack mrb g --suite <suite name>\n\n"
-            "  (or type 'spack mrb g --help' for more options)\n"
+            + f"\n\n  spack mpd g --suite <suite name>\n\n"
+            "  (or type 'spack mpd g --help' for more options)\n"
         )
 
 
@@ -436,8 +436,8 @@ def update_project(name, project_config):
     if not project_config["packages"]:
         tty.msg(
             bold("No packages to develop.  You can clone repositories for development by invoking")
-            + f"\n\n  spack mrb g --suite <suite name>\n\n"
-            "  (or type 'spack mrb g --help' for more options)\n"
+            + f"\n\n  spack mpd g --suite <suite name>\n\n"
+            "  (or type 'spack mpd g --help' for more options)\n"
         )
         return
 
