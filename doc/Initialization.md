@@ -1,4 +1,7 @@
-# Initialization (once per system)
+# Initializing MPD (once per system)
+
+> [!WARNING]
+> If you have not already [installed MPD](Installation.md), you must do that first.
 
 You must initialize MPD on the system where you intend to use it.
 This needs to be done only once per system and is achieved by typing:
