@@ -2,12 +2,8 @@ import os
 import sys
 from pathlib import Path
 
-import llnl.util.tty as tty
 import llnl.util.filesystem as fs
-
-description = "create multi-repository build area"
-section = "scripting"
-level = "long"
+import llnl.util.tty as tty
 
 from .. import clone
 from ..build import build
@@ -18,9 +14,18 @@ from ..new_project import new_project, update_project
 from ..rm_project import rm_project
 from ..util import bold
 
+description = "create multi-repository build area"
+section = "scripting"
+level = "long"
+
+_VERSION = "0.1.0"
+
 
 def setup_parser(subparser):
-    subparsers = subparser.add_subparsers(dest="mpd_subcommand")
+    subparser.add_argument(
+        "-V", "--version", action="store_true", help=f"print MPD version ({_VERSION}) and exit"
+    )
+    subparsers = subparser.add_subparsers(dest="mpd_subcommand", required=False)
     build = subparsers.add_parser(
         "build",
         description="build repositories under development",
@@ -70,11 +75,11 @@ def setup_parser(subparser):
         help="clone repositories corresponding to the given suite name",
     )
 
-    init = subparsers.add_parser(
+    subparsers.add_parser(
         "init", description="initialize MPD on this system", help="initialize MPD on this system"
     )
 
-    install = subparsers.add_parser(
+    subparsers.add_parser(
         "install",
         description="install (and build if necessary) repositories",
         aliases=["i"],
@@ -129,7 +134,7 @@ If the '--top' option is not specified, the current working directory will be us
     )
     new_project.add_argument("variants", nargs="*")
 
-    refresh = subparsers.add_parser(
+    subparsers.add_parser(
         "refresh", description="refresh project area", help="refresh project area"
     )
 
@@ -153,12 +158,13 @@ Removing a project will:
         help="remove entire directory tree starting at the top level of the project",
     )
 
-    test = subparsers.add_parser(
+    subparsers.add_parser(
         "test", description="build and run tests", aliases=["t"], help="build and run tests"
     )
     zap_parser = subparsers.add_parser(
         "zap",
-        description="delete everything in your build and/or install areas.\n\nIf no optional argument is provided, the '--build' option is assumed.",
+        description="delete everything in your build and/or install areas.\n\n"
+        "If no optional argument is provided, the '--build' option is assumed.",
         aliases=["z"],
         help="delete everything in your build and/or install areas",
     )
@@ -197,6 +203,10 @@ def _active_project_config():
 
 
 def mpd(parser, args):
+    if not args.version and not args.mpd_subcommand:
+        parser.parse_args(["mpd", "-h"])
+        return
+
     if args.mpd_subcommand in ("build", "b"):
         config = _active_project_config()
         srcs, build_area, install_area = (config["source"], config["build"], config["install"])
@@ -223,7 +233,8 @@ def mpd(parser, args):
             else:
                 print()
                 tty.die(
-                    f"At least one option required when invoking 'spack {' '.join(sys.argv[1:])}'\n"
+                    f"At least one option required when invoking 'spack {' '.join(sys.argv[1:])}'"
+                    "\n"
                 )
         return
 
@@ -259,8 +270,9 @@ def mpd(parser, args):
         if args.project == os.environ.get("MPD_PROJECT"):
             print()
             tty.die(
-                f"Cannot remove active MPD project {bold(args.project)}.  Deactivate by invoking:\n\n"
-                + f"           spack env deactivate\n"
+                f"Cannot remove active MPD project {bold(args.project)}.  Deactivate by invoking:"
+                "\n\n"
+                "           spack env deactivate\n"
             )
         rm_project(args.project, config, args.full)
         return
