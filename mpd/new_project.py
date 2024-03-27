@@ -3,7 +3,6 @@ import json
 import os
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 import llnl.util.tty as tty
@@ -24,7 +23,7 @@ def lint_spec(spec):
     spec_str = re.sub(f"@{spec.version}", "", spec_str)  # remove version
     spec_str = re.sub(f"arch={spec.architecture}", "", spec_str)  # remove arch
     spec_str = re.sub(f"%{spec.compiler.display_str}", "", spec_str)  # remove compiler
-    spec_str = re.sub(f"/[a-z0-9]+", "", spec_str)  # remove hash
+    spec_str = re.sub("/[a-z0-9]+", "", spec_str)  # remove hash
     if "patches" in spec.variants:  # remove patches if present
         spec_str = re.sub(f"{spec.variants['patches']}", "", spec_str)
     return spec_str.strip()
@@ -139,18 +138,14 @@ def mpd_envs(name, project_config):
     return f"""
 
     def setup_run_environment(self, env):
-        env.set("MPD_PROJECT", "{name}")
-        env.set("MPD_SOURCE", "{project_config['source']}")
-        env.set("MPD_BUILDDIR", "{project_config['build']}")
-        env.set("MPD_LOCAL", "{project_config['local']}")
-        env.set("MPD_INSTALL", "{project_config['install']}")
+        mpd = spack.extensions.get_module("mpd")
+        mpd.make_active("{name}")
 
     @run_after("install")
     def post_install(self):
         mpd = spack.extensions.get_module("mpd")
         mpd.add_project({dict(**project_config)})
 """
-    # FIXME: Should replace the above "variants" string with something safer...like the variants actually presented at command-line
 
 
 def make_bundle_file(name, deps, project_config, mpd_project_name=None):
@@ -161,13 +156,6 @@ def make_bundle_file(name, deps, project_config, mpd_project_name=None):
         f.write(bundle_template(name, deps))
         if mpd_project_name:
             f.write(mpd_envs(mpd_project_name, project_config))
-
-
-def make_bare_setup_file(project_config):
-    setup_file = Path(project_config["local"]) / "setup.sh"
-    with open(setup_file.absolute(), "w") as f:
-        f.write("#!/bin/bash\n\n")
-        f.write('alias mpd="spack mpd"\n\n')
 
 
 def process(project_config):
@@ -257,7 +245,6 @@ def process(project_config):
     mpd_name = name + "-mpd"
     make_bundle_file(mpd_name, deps_for_bundlefile, project_config, mpd_project_name=name)
 
-    concretizer = dict(unify=True, reuse=True)
     full_block = dict(
         include=proto_env_packages_files,
         definitions=[dict(compiler=[project_config["compiler"]])],
@@ -289,7 +276,10 @@ def process(project_config):
             missing_intermediate_deps[n.name] = missing_deps
 
     if missing_intermediate_deps:
-        error_msg = "\nThe following packages are intermediate dependencies and must also be checked out:\n\n"
+        error_msg = (
+            "\nThe following packages are intermediate dependencies and must"
+            " also be checked out:\n\n"
+        )
         for pkg_name, missing_deps in missing_intermediate_deps.items():
             missing_deps_str = ", ".join(missing_deps)
             error_msg += "      - " + bold(pkg_name)
@@ -331,7 +321,10 @@ def process(project_config):
 
     if result.returncode == 0:
         print()
-        msg = f"MPD project {bold(name)} has been installed.  To load it, invoke:\n\n  spack env activate {name}\n"
+        msg = (
+            f"MPD project {bold(name)} has been installed.  "
+            "To load it, invoke:\n\n  spack env activate {name}\n"
+        )
         tty.msg(msg)
 
 
@@ -343,7 +336,7 @@ def print_config_info(config):
     if not packages:
         return
 
-    print(f"  Will develop:")
+    print("  Will develop:")
     for p in packages:
         print(f"    - {p}")
 
@@ -393,16 +386,18 @@ def new_project(args):
     if mpd_project_exists(name):
         if args.force:
             tty.warn(f"Overwriting existing MPD project {bold(name)}")
-            env = ev.read(name)
-            if env.active:
-                tty.die(f"Must deactivate environment {name} to overwrite it\n")
-            env.destroy()
-            tty.info(f"Existing environment {name} has been removed")
+            if ev.exists(name):
+                env = ev.read(name)
+                if env.active:
+                    tty.die(f"Must deactivate environment {name} to overwrite it\n")
+                env.destroy()
+                tty.info(f"Existing environment {name} has been removed")
         else:
             indent = " " * len("==> Error: ")
             tty.die(
                 f"An MPD project with the name {bold(name)} already exists.\n"
-                + f"{indent}Either choose a different name or use the '--force' option to overwrite the existing project.\n"
+                f"{indent}Either choose a different name or use the '--force' option"
+                " to overwrite the existing project.\n"
             )
     else:
         tty.msg(f"Creating project: {name}")
@@ -411,20 +406,24 @@ def new_project(args):
 
     print_config_info(project_config)
     prepare_project(project_config)
+    declare_active(project_config["name"])
 
     if len(project_config["packages"]):
         concretize_project(project_config)
     else:
-        make_bare_setup_file(project_config)
         tty.msg(
-            bold("To setup your user environment, invoke")
-            + f"\n\n  source {project_config['local']}/setup.sh\n"
-        )
-        tty.msg(
-            bold("You can then clone repositories for development by invoking")
-            + f"\n\n  spack mpd g --suite <suite name>\n\n"
+            "You can clone repositories for development by invoking\n\n"
+            "  spack mpd g --suite <suite name>\n\n"
             "  (or type 'spack mpd g --help' for more options)\n"
         )
+
+
+def declare_active(name):
+    session_id = os.getsid(os.getpid())
+    active = Path(mpd_local_dir() / "active")
+    active.mkdir(exist_ok=True)
+    with open(active / f"{session_id}", "w") as f:
+        f.write(name + "\n")
 
 
 def update_project(name, project_config):
@@ -435,8 +434,8 @@ def update_project(name, project_config):
 
     if not project_config["packages"]:
         tty.msg(
-            bold("No packages to develop.  You can clone repositories for development by invoking")
-            + f"\n\n  spack mpd g --suite <suite name>\n\n"
+            "No packages to develop.  You can clone repositories for development by invoking\n\n"
+            "  spack mpd g --suite <suite name>\n\n"
             "  (or type 'spack mpd g --help' for more options)\n"
         )
         return

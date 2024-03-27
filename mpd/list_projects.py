@@ -20,7 +20,7 @@ def _mpd_config():
 
 
 def _no_known_projects():
-    tty.msg(f"No known MPD projects")
+    tty.msg("No known MPD projects")
 
 
 def list_projects():
@@ -38,13 +38,17 @@ def list_projects():
     name = "Project name"
     name_width = max(len(k) for k in projects.keys())
     name_width = max(len(name), name_width)
-    msg += f"  {name:<{name_width}}    Top-level directory\n"
-    msg += "  " + "-" * name_width + "    " + "-" * 30
+    msg += f"   {name:<{name_width}}    Top-level directory\n"
+    msg += "   " + "-" * name_width + "    " + "-" * 30
 
     current_project = os.environ.get("MPD_PROJECT")
     for key, value in projects.items():
-        active = "*" if current_project and key == current_project else " "
-        msg += f"\n {active}{key:<{name_width}}    {value['top']}"
+        prefix = " "
+        if not value["installed"]:
+            prefix = "!"
+        elif current_project and key == current_project:
+            prefix = "*"
+        msg += f"\n {prefix} {key:<{name_width}}    {value['top']}"
     msg += "\n"
     print()
     tty.msg(msg)

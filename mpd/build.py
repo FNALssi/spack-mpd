@@ -9,7 +9,7 @@ def build(srcs, build_area, install_area, generator, parallel, generator_options
         srcs,
         "-B",
         build_area,
-        f"-DCMAKE_INSTALL_PREFIX={install_area}"
+        f"-DCMAKE_INSTALL_PREFIX={install_area}",
     ]
     if generator:
         configure_list += ["-G", generator]

@@ -13,6 +13,7 @@ from .mpd_config import mpd_local_dir
 
 # FIXME: Probably need ability to reinit.
 
+
 # Inspired by/pilfered from https://stackoverflow.com/a/25868839/3585575
 def _is_writeable(path):
     try:

@@ -9,8 +9,8 @@ from .. import clone
 from ..build import build
 from ..init import init
 from ..list_projects import list_projects, project_details, project_path
-from ..mpd_config import project_config, refresh_mpd_config, update_mpd_config
-from ..new_project import new_project, update_project
+from ..mpd_config import mpd_local_dir, project_config, refresh_mpd_config, update_mpd_config
+from ..new_project import declare_active, new_project, update_project
 from ..rm_project import rm_project
 from ..util import bold
 
@@ -101,35 +101,32 @@ and their corresponding top-level directories."""
     )
 
     default_top = Path.cwd()
-    new_project_description = f"""create new development area
-
-If the '--top' option is not specified, the current working directory will be used:
-  {default_top}"""
     new_project = subparsers.add_parser(
         "new-project",
-        description=new_project_description,
+        description="create MPD development area",
         aliases=["n", "newDev"],
-        help="create new development area",
+        help="create MPD development area",
     )
-    new_project.add_argument("--name", required=True)
+    new_project.add_argument("--name", required=True, help="(required)")
     new_project.add_argument(
         "-T",
         "--top",
-        metavar="<dir>",
         default=default_top,
-        help="top-level directory for MPD area",
+        help="top-level directory for MPD area\n(default: %(default)s)",
     )
     new_project.add_argument(
-        "-S", "--srcs", metavar="<dir>", help="directory containing repositories to develop"
+        "-S",
+        "--srcs",
+        help="directory containing repositories to develop\n"
+        "(default: <top-level directory>/srcs)",
     )
     new_project.add_argument(
         "-f", "--force", action="store_true", help="overwrite existing project with same name"
     )
     new_project.add_argument(
         "-E",
-        "--from-env",
-        metavar="<env>",
-        help="environments from which to create project",
+        "--env",
+        help="environments from which to create project\n(multiple allowed)",
         action="append",
     )
     new_project.add_argument("variants", nargs="*")
@@ -191,10 +188,14 @@ Removing a project will:
 
 
 def _active_project():
-    name = os.environ.get("MPD_PROJECT")
-    if name is None:
+    session_id = os.getsid(os.getpid())
+    active_project = Path(mpd_local_dir() / "active" / f"{session_id}")
+    if not active_project.exists():
         print()
         tty.die(f"Active MPD project required to invoke 'spack {' '.join(sys.argv[1:])}'\n")
+
+    with open(active_project) as f:
+        name = f.read().strip()
     return name
 
 
@@ -290,5 +291,9 @@ def mpd(parser, args):
 
 
 # The following is invoked post-installation
+def make_active(name):
+    declare_active(name)
+
+
 def add_project(project_config):
-    update_mpd_config(project_config)
+    update_mpd_config(project_config, installed=True)

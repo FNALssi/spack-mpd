@@ -1,5 +1,4 @@
 import re
-import subprocess
 from pathlib import Path
 
 import ruamel
@@ -7,8 +6,6 @@ import ruamel
 import llnl.util.tty as tty
 
 import spack.util.spack_yaml as syaml
-
-from .util import bold
 
 
 def mpd_local_dir():
@@ -27,7 +24,7 @@ def _compiler(variants):
     compiler = None
     compiler_index = None
     for i, variant in enumerate(variants):
-        match = re.fullmatch("%(\w+@[\d\.]+)", variant)
+        match = re.fullmatch(r"%(\w+@[\d\.]+)", variant)
         if match:
             compiler = match[1]
             compiler_index = i
@@ -39,7 +36,7 @@ def _cxxstd(variants):
     cxx_standard = "17"  # Must be a string for CMake
     cxxstd_index = None
     for i, variant in enumerate(variants):
-        match = re.fullmatch("cxxstd={1,2}(\d{2})", variant)
+        match = re.fullmatch(r"cxxstd={1,2}(\d{2})", variant)
         if match:
             cxx_standard = match[1]
             cxxstd_index = i
@@ -59,7 +56,7 @@ def project_config_from_args(args):
     project["build"] = str((top_path / "build").absolute())
     project["local"] = str((top_path / "local").absolute())
     project["install"] = str((top_path / "local" / "install").absolute())
-    project["envs"] = args.from_env
+    project["envs"] = args.env
 
     packages_to_develop = []
     if srcs_path.exists():
@@ -103,7 +100,7 @@ def mpd_project_exists(project_name):
     return project_name in projects
 
 
-def update_mpd_config(project_config):
+def update_mpd_config(project_config, installed):
     config_file = mpd_config_file()
     config = None
     if config_file.exists():
@@ -116,6 +113,7 @@ def update_mpd_config(project_config):
 
     yaml_project_config = ruamel.yaml.comments.CommentedMap()
     yaml_project_config.update(project_config)
+    yaml_project_config.update(installed=installed)
     config["projects"][project_config["name"]] = yaml_project_config
 
     # Update .mpd file
@@ -178,7 +176,8 @@ def project_config(name, config=None):
     if name not in projects:
         print()
         tty.die(
-            f"Project '{name}' not supported by MPD configuration.  Please contact scisoft-team@fnal.gov\n"
+            f"Project '{name}' not supported by MPD configuration."
+            " Please contact scisoft-team@fnal.gov\n"
         )
 
     return projects[name]

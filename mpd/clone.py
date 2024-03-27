@@ -338,7 +338,7 @@ def _clone(repo, srcs_area):
     git = spack.util.git.git(required=True)
     git.add_default_arg("-C", srcs_area)
     local_src_dir = os.path.join(srcs_area, repo.name())
-    result = git("clone", repo.url(), fail_on_error=False, error=str)
+    result = git("clone", repo.url(), local_src_dir, fail_on_error=False, error=str)
     if "Cloning into" in result and git.returncode == 0:
         return True
 
@@ -353,7 +353,7 @@ def clone_repos(repo_specs, srcs_area, local_area):
     repos = known_repos()
     cloned_repos = []
     for repo_spec in repo_specs:
-        repo_to_try = known_repos().get(repo_spec)
+        repo_to_try = repos.get(repo_spec)
         if not repo_to_try:
             repo_to_try = SimpleGitRepo(repo_spec)
 
@@ -362,13 +362,12 @@ def clone_repos(repo_specs, srcs_area, local_area):
 
     if cloned_repos:
         print()
-        local_area_path = pathlib.Path(local_area)
         msg = bold("The following repositories have been cloned:\n")
         for repo in cloned_repos:
             msg += f"\n  - {repo}"
         tty.msg(msg + "\n")
         msg = bold("You may now invoke:")
-        msg += f"\n\n  spack mpd refresh\n"
+        msg += "\n\n  spack mpd refresh\n"
         tty.msg(msg)
 
 
