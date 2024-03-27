@@ -23,6 +23,7 @@ def test_new_project_paths(tmpdir):
     assert f"build area: {top_level_a}/build" in result.stdout
     assert f"local area: {top_level_a}/local" in result.stdout
     assert f"sources area: {top_level_a}/srcs" in result.stdout
+    mpd("rm", "a")
 
     # Specify only -T
     top_level_b = tmpdir / "b"
@@ -31,6 +32,7 @@ def test_new_project_paths(tmpdir):
     assert f"build area: {top_level_b}/build" in out
     assert f"local area: {top_level_b}/local" in out
     assert f"sources area: {top_level_b}/srcs" in out
+    mpd("rm", "b")
 
     # Specify only -S
     top_level_c = tmpdir / "c"
@@ -46,6 +48,7 @@ def test_new_project_paths(tmpdir):
     assert f"build area: {top_level_c}/build" in result.stdout
     assert f"local area: {top_level_c}/local" in result.stdout
     assert f"sources area: {srcs_c}" in result.stdout
+    mpd("rm", "c")
 
     # Specify both -T and -S
     top_level_d = tmpdir / "d"
@@ -56,3 +59,4 @@ def test_new_project_paths(tmpdir):
     assert f"build area: {top_level_d}/build" in out
     assert f"local area: {top_level_d}/local" in out
     assert f"sources area: {srcs_d}" in out
+    mpd("rm", "d")

@@ -14,7 +14,7 @@ from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
 from spack.traverse import traverse_nodes
 
-from .mpd_config import mpd_local_dir, mpd_project_exists, project_config_from_args
+from .mpd_config import mpd_local_dir, mpd_project_exists, project_config_from_args, update_mpd_config
 from .util import bold
 
 
@@ -403,6 +403,7 @@ def new_project(args):
         tty.msg(f"Creating project: {name}")
 
     project_config = project_config_from_args(args)
+    update_mpd_config(project_config, installed=False)
 
     print_config_info(project_config)
     prepare_project(project_config)
