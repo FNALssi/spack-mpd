@@ -1,22 +1,27 @@
 import os
-from pathlib import Path
 
 import llnl.util.tty as tty
 
 import spack.util.spack_yaml as syaml
 
-from .mpd_config import mpd_config_file
+from .config import user_config
 from .util import bold
 
 
-def _mpd_config():
-    config_file = mpd_config_file()
-    if not config_file.exists():
-        return None
+def setup_subparser(subparsers):
+    lst_description = """list MPD projects
 
-    with open(config_file, "r") as f:
-        return syaml.load(f)
-    return None
+When no arguments are specified, prints a list of known MPD projects
+and their corresponding top-level directories."""
+    lst = subparsers.add_parser(
+        "list", description=lst_description, aliases=["ls"], help="list MPD projects"
+    )
+    lst.add_argument(
+        "project", metavar="<project name>", nargs="*", help="print details of the MPD project"
+    )
+    lst.add_argument(
+        "-t", "--top", metavar="<project name>", help="print top-level directory for project"
+    )
 
 
 def _no_known_projects():
@@ -24,12 +29,12 @@ def _no_known_projects():
 
 
 def list_projects():
-    mpd_config = _mpd_config()
-    if not mpd_config:
+    config = user_config()
+    if not config:
         _no_known_projects()
         return
 
-    projects = mpd_config.get("projects")
+    projects = config.get("projects")
     if not projects:
         _no_known_projects()
         return
@@ -55,12 +60,12 @@ def list_projects():
 
 
 def project_path(project_name, path_kind):
-    mpd_config = _mpd_config()
-    if not mpd_config:
+    config = user_config()
+    if not config:
         _no_known_projects()
         return
 
-    projects = mpd_config.get("projects")
+    projects = config.get("projects")
     if not projects:
         _no_known_projects()
         return
@@ -72,12 +77,12 @@ def project_path(project_name, path_kind):
 
 
 def project_details(project_names):
-    mpd_config = _mpd_config()
-    if not mpd_config:
+    config = user_config()
+    if not config:
         _no_known_projects()
         return
 
-    projects = mpd_config.get("projects")
+    projects = config.get("projects")
     if not projects:
         _no_known_projects()
         return
@@ -90,3 +95,12 @@ def project_details(project_names):
 
         msg = f"Details for {bold(name)}\n\n" + syaml.dump_config(projects[name])
         tty.msg(msg)
+
+
+def process(args):
+    if args.project:
+        project_details(args.project)
+    elif args.top:
+        project_path(args.top, "top")
+    else:
+        list_projects()

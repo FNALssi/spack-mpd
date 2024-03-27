@@ -1,4 +1,6 @@
+import os
 import re
+import sys
 from pathlib import Path
 
 import ruamel
@@ -8,16 +10,26 @@ import llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
 
 
-def mpd_local_dir():
+def user_config_dir():
     return Path.home() / ".mpd"
 
 
 def mpd_packages():
-    return mpd_local_dir() / "packages"
+    return user_config_dir() / "packages"
 
 
-def mpd_config_file():
-    return mpd_local_dir() / "config"
+def user_config_file():
+    return user_config_dir() / "config"
+
+
+def user_config():
+    config_file = user_config_file()
+    if not config_file.exists():
+        return None
+
+    with open(config_file, "r") as f:
+        return syaml.load(f)
+    return None
 
 
 def _compiler(variants):
@@ -84,7 +96,7 @@ def project_config_from_args(args):
 
 
 def mpd_project_exists(project_name):
-    config_file = mpd_config_file()
+    config_file = user_config_file()
     config = None
     if config_file.exists():
         with open(config_file, "r") as f:
@@ -100,8 +112,8 @@ def mpd_project_exists(project_name):
     return project_name in projects
 
 
-def update_mpd_config(project_config, installed):
-    config_file = mpd_config_file()
+def update_config(project_config, installed):
+    config_file = user_config_file()
     config = None
     if config_file.exists():
         with open(config_file, "r") as f:
@@ -121,8 +133,8 @@ def update_mpd_config(project_config, installed):
         syaml.dump(config, stream=f)
 
 
-def refresh_mpd_config(project_name):
-    config_file = mpd_config_file()
+def refresh_config(project_name):
+    config_file = user_config_file()
     if config_file.exists():
         with open(config_file, "r") as f:
             config = syaml.load(f)
@@ -147,7 +159,7 @@ def refresh_mpd_config(project_name):
 
 
 def rm_config(project_name):
-    config_file = mpd_config_file()
+    config_file = user_config_file()
     if config_file.exists():
         with open(config_file, "r") as f:
             config = syaml.load(f)
@@ -163,7 +175,7 @@ def rm_config(project_name):
 
 def project_config(name, config=None):
     if config is None:
-        config_file = mpd_config_file()
+        config_file = user_config_file()
         if config_file.exists():
             with open(config_file, "r") as f:
                 config = syaml.load(f)
@@ -181,3 +193,19 @@ def project_config(name, config=None):
         )
 
     return projects[name]
+
+
+def active_project():
+    session_id = os.getsid(os.getpid())
+    active_project = Path(user_config_dir() / "active" / f"{session_id}")
+    if not active_project.exists():
+        print()
+        tty.die(f"Active MPD project required to invoke 'spack {' '.join(sys.argv[1:])}'\n")
+
+    with open(active_project) as f:
+        name = f.read().strip()
+    return name
+
+
+def active_project_config():
+    return project_config(active_project())

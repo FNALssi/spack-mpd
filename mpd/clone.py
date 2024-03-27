@@ -1,11 +1,38 @@
 import os.path
 import pathlib
+import sys
 
 import llnl.util.tty as tty
 
 import spack.util.git
 
+from .config import active_project_config
 from .util import bold
+
+
+def setup_subparser(subparsers):
+    git_parser = subparsers.add_parser(
+        "git-clone",
+        description="clone git repositories for development",
+        aliases=["g", "gitCheckout"],
+        help="clone git repositories",
+    )
+    git_parser.add_argument(
+        "repos",
+        metavar="<repo spec>",
+        nargs="*",
+        help="a specification of a repository to clone. The repo spec may either be:\n"
+        + "(a) any repository name listed by the --help-repos option, or\n"
+        + "(b) any URL to a Git repository.",
+    )
+    git = git_parser.add_mutually_exclusive_group()
+    git.add_argument("--help-repos", action="store_true", help="list supported repositories")
+    git.add_argument("--help-suites", action="store_true", help="list supported suites")
+    git.add_argument(
+        "--suite",
+        metavar="<suite name>",
+        help="clone repositories corresponding to the given suite name",
+    )
 
 
 class GitHubRepo:
@@ -286,7 +313,7 @@ def _known_sbn_specs():
     others = ["sbnana", "sbndata", "sbndqm", "sbndaq_artdaq_core"]
     known_specs.update({p: suite.org.repo(p) for p in others})
     # sbncode needs special instructions:
-    #   ["sbncode", { github => ["$sbn_github/sbncode", git_args => [ qw(--recurse-submodules) ]] }]
+    #  ["sbncode", { github => ["$sbn_github/sbncode", git_args => [ qw(--recurse-submodules) ]] }]
     return known_specs
 
 
@@ -383,3 +410,23 @@ def clone_suite(suite_name, srcs_area, local_area):
         bold("The " + suite_name + " suite has been cloned.  You may now invoke:")
         + f"\n\n  source {local_area_path.absolute()}/refresh.sh\n"
     )
+
+
+def process(args):
+    if args.repos:
+        config = active_project_config()
+        clone_repos(args.repos, config["source"], config["local"])
+        return
+
+    if args.suite:
+        config = active_project_config()
+        clone_suite(args.suite, config["source"], config["local"])
+    elif args.help_suites:
+        help_suites()
+    elif args.help_repos:
+        help_repos()
+    else:
+        print()
+        tty.die(
+            f"At least one option required when invoking 'spack {' '.join(sys.argv[1:])}'" "\n"
+        )

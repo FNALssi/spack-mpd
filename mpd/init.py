@@ -9,9 +9,15 @@ import spack.config
 import spack.paths
 import spack.repo
 
-from .mpd_config import mpd_local_dir
+from .config import user_config_dir
 
 # FIXME: Probably need ability to reinit.
+
+
+def setup_subparser(subparsers):
+    subparsers.add_parser(
+        "init", description="initialize MPD on this system", help="initialize MPD on this system"
+    )
 
 
 # Inspired by/pilfered from https://stackoverflow.com/a/25868839/3585575
@@ -27,7 +33,7 @@ def _is_writeable(path):
     return True
 
 
-def init():
+def process(args):
     spack_root = spack.paths.prefix
     tty.msg(f"Using Spack instance at {spack_root}")
     if not _is_writeable(spack_root):
@@ -41,7 +47,7 @@ def init():
             + "Please contact scisoft-team@fnal.gov for guidance."
         )
 
-    local_dir = mpd_local_dir()
+    local_dir = user_config_dir()
     local_dir.mkdir(exist_ok=True)
 
     # Create home repo if it doesn't exist

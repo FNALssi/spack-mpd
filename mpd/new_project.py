@@ -14,8 +14,41 @@ from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
 from spack.traverse import traverse_nodes
 
-from .mpd_config import mpd_local_dir, mpd_project_exists, project_config_from_args, update_mpd_config
+from .config import user_config_dir, mpd_project_exists, project_config_from_args, update_config
 from .util import bold
+
+
+def setup_subparser(subparsers):
+    default_top = Path.cwd()
+    new_project = subparsers.add_parser(
+        "new-project",
+        description="create MPD development area",
+        aliases=["n", "newDev"],
+        help="create MPD development area",
+    )
+    new_project.add_argument("--name", required=True, help="(required)")
+    new_project.add_argument(
+        "-T",
+        "--top",
+        default=default_top,
+        help="top-level directory for MPD area\n(default: %(default)s)",
+    )
+    new_project.add_argument(
+        "-S",
+        "--srcs",
+        help="directory containing repositories to develop\n"
+        "(default: <top-level directory>/srcs)",
+    )
+    new_project.add_argument(
+        "-f", "--force", action="store_true", help="overwrite existing project with same name"
+    )
+    new_project.add_argument(
+        "-E",
+        "--env",
+        help="environments from which to create project\n(multiple allowed)",
+        action="append",
+    )
+    new_project.add_argument("variants", nargs="*")
 
 
 def lint_spec(spec):
@@ -149,7 +182,7 @@ def mpd_envs(name, project_config):
 
 
 def make_bundle_file(name, deps, project_config, mpd_project_name=None):
-    bundle_path = mpd_local_dir() / "packages" / name
+    bundle_path = user_config_dir() / "packages" / name
     bundle_path.mkdir(exist_ok=True)
     package_recipe = bundle_path / "package.py"
     with open(package_recipe.absolute(), "w") as f:
@@ -158,7 +191,7 @@ def make_bundle_file(name, deps, project_config, mpd_project_name=None):
             f.write(mpd_envs(mpd_project_name, project_config))
 
 
-def process(project_config):
+def process_config(project_config):
     proto_env_packages_files = []
     proto_envs = []
     for penv_name in project_config["envs"]:
@@ -169,7 +202,7 @@ def process(project_config):
         )
         proto_env_packages_files.append(
             make_yaml_file(
-                f"{penv_name}-packages-config", proto_env_packages_config, prefix=mpd_local_dir()
+                f"{penv_name}-packages-config", proto_env_packages_config, prefix=user_config_dir()
             )
         )
 
@@ -253,7 +286,7 @@ def process(project_config):
         packages=packages_block,
     )
 
-    env_file = make_yaml_file(name, dict(spack=full_block), prefix=mpd_local_dir())
+    env_file = make_yaml_file(name, dict(spack=full_block), prefix=user_config_dir())
     env = ev.create(name, init_file=env_file)
     tty.info(f"Environment {name} has been created")
 
@@ -376,10 +409,35 @@ def concretize_project(project_config):
 
     make_bundle_file(project_config["name"] + "-bootstrap", packages_at_develop, project_config)
 
-    process(project_config)
+    process_config(project_config)
 
 
-def new_project(args):
+def declare_active(name):
+    session_id = os.getsid(os.getpid())
+    active = Path(user_config_dir() / "active")
+    active.mkdir(exist_ok=True)
+    with open(active / f"{session_id}", "w") as f:
+        f.write(name + "\n")
+
+
+def update_project(name, project_config):
+    print()
+
+    tty.msg(f"Updating project: {name}")
+    print_config_info(project_config)
+
+    if not project_config["packages"]:
+        tty.msg(
+            "No packages to develop.  You can clone repositories for development by invoking\n\n"
+            "  spack mpd g --suite <suite name>\n\n"
+            "  (or type 'spack mpd g --help' for more options)\n"
+        )
+        return
+
+    concretize_project(name, project_config)
+
+
+def process(args):
     print()
 
     name = args.name
@@ -403,7 +461,7 @@ def new_project(args):
         tty.msg(f"Creating project: {name}")
 
     project_config = project_config_from_args(args)
-    update_mpd_config(project_config, installed=False)
+    update_config(project_config, installed=False)
 
     print_config_info(project_config)
     prepare_project(project_config)
@@ -417,28 +475,3 @@ def new_project(args):
             "  spack mpd g --suite <suite name>\n\n"
             "  (or type 'spack mpd g --help' for more options)\n"
         )
-
-
-def declare_active(name):
-    session_id = os.getsid(os.getpid())
-    active = Path(mpd_local_dir() / "active")
-    active.mkdir(exist_ok=True)
-    with open(active / f"{session_id}", "w") as f:
-        f.write(name + "\n")
-
-
-def update_project(name, project_config):
-    print()
-
-    tty.msg(f"Updating project: {name}")
-    print_config_info(project_config)
-
-    if not project_config["packages"]:
-        tty.msg(
-            "No packages to develop.  You can clone repositories for development by invoking\n\n"
-            "  spack mpd g --suite <suite name>\n\n"
-            "  (or type 'spack mpd g --help' for more options)\n"
-        )
-        return
-
-    concretize_project(name, project_config)
