@@ -1,1 +1,0 @@
-# Activating an existing project

@@ -1,6 +1,6 @@
 import llnl.util.tty as tty
 
-from .config import active_project, project_config, refresh_config
+from .config import selected_project, project_config, refresh_config
 from .new_project import update_project
 
 
@@ -11,7 +11,7 @@ def setup_subparser(subparsers):
 
 
 def process(args):
-    name = active_project()
+    name = selected_project()
     current_config = project_config(name)
     new_config = refresh_config(name)
     if current_config == new_config:

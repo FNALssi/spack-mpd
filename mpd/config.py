@@ -7,7 +7,13 @@ import ruamel
 
 import llnl.util.tty as tty
 
+import spack.environment as ev
 import spack.util.spack_yaml as syaml
+
+
+def selected_project_token():
+    session_id = os.getsid(os.getpid())
+    return Path(user_config_dir() / "active" / f"{session_id}")
 
 
 def user_config_dir():
@@ -112,7 +118,7 @@ def mpd_project_exists(project_name):
     return project_name in projects
 
 
-def update_config(project_config, installed):
+def update(project_config, status):
     config_file = user_config_file()
     config = None
     if config_file.exists():
@@ -125,10 +131,10 @@ def update_config(project_config, installed):
 
     yaml_project_config = ruamel.yaml.comments.CommentedMap()
     yaml_project_config.update(project_config)
-    yaml_project_config.update(installed=installed)
+    yaml_project_config.update(status=status)
     config["projects"][project_config["name"]] = yaml_project_config
 
-    # Update .mpd file
+    # Update config file
     with open(config_file, "w") as f:
         syaml.dump(config, stream=f)
 
@@ -195,17 +201,34 @@ def project_config(name, config=None):
     return projects[name]
 
 
-def active_project():
-    session_id = os.getsid(os.getpid())
-    active_project = Path(user_config_dir() / "active" / f"{session_id}")
-    if not active_project.exists():
-        print()
-        tty.die(f"Active MPD project required to invoke 'spack {' '.join(sys.argv[1:])}'\n")
+def update_cached_configs():
+    config = user_config()
+    if not config:
+        return
 
-    with open(active_project) as f:
-        name = f.read().strip()
-    return name
+    projects = config.get("projects")
+    if not projects:
+        return
+
+    for name, proj_config in projects.items():
+        if not ev.exists(name):
+            proj_config["status"] = "(none)"
+
+    with open(user_config_file(), "w") as f:
+        syaml.dump(config, stream=f)
 
 
-def active_project_config():
-    return project_config(active_project())
+def selected_project(missing_ok=True):
+    token = selected_project_token()
+    if token.exists():
+        return token.read_text()
+
+    if missing_ok:
+        return None
+
+    print()
+    tty.die(f"Active MPD project required to invoke 'spack {' '.join(sys.argv[1:])}'\n")
+
+
+def selected_project_config():
+    return project_config(selected_project(missing_ok=False))

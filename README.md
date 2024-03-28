@@ -13,7 +13,7 @@ MPD (for <b><i>m</i></b>ulti-<b><i>p</i></b>ackage <b><i>d</i></b>evelopment) is
 
 0. [Installation](doc/Installation.md) (do this first)
 1. [Initialization](doc/Initialization.md) (do this second)
-2. Activating an existing project
+2. Project selection and environment activation
 3. Creating a project
 4. Building a project
 5. Cleaning/zapping a project

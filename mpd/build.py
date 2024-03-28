@@ -2,7 +2,7 @@ import subprocess
 
 import llnl.util.filesystem as fs
 
-from .config import active_project_config
+from .config import selected_project_config
 
 
 def setup_subparser(subparsers):
@@ -57,7 +57,7 @@ def build(srcs, build_area, install_area, generator, parallel, generator_options
 
 
 def process(args):
-    config = active_project_config()
+    config = selected_project_config()
     srcs, build_area, install_area = (config["source"], config["build"], config["install"])
     if args.clean:
         fs.remove_directory_contents(build_area)

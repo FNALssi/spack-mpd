@@ -1,6 +1,6 @@
 import llnl.util.filesystem as fs
 
-from .config import active_project_config
+from .config import selected_project_config
 
 
 def setup_subparser(subparsers):
@@ -34,7 +34,7 @@ def setup_subparser(subparsers):
 
 
 def process(args):
-    config = active_project_config()
+    config = selected_project_config()
     if args.zap_install:
         fs.remove_directory_contents(config["install"])
     if args.zap_all:

@@ -1,3 +1,4 @@
+from .. import clear
 from .. import clone
 from .. import build
 from .. import init
@@ -7,6 +8,7 @@ from .. import config
 from .. import new_project
 from .. import refresh
 from .. import rm_project
+from .. import select
 from .. import test
 from .. import zap_build
 
@@ -24,6 +26,7 @@ def setup_parser(subparser):
 
     subparsers = subparser.add_subparsers(dest="mpd_subcommand", required=False)
     build.setup_subparser(subparsers)
+    clear.setup_subparser(subparsers)
     clone.setup_subparser(subparsers)
     init.setup_subparser(subparsers)
     install.setup_subparser(subparsers)
@@ -31,6 +34,7 @@ def setup_parser(subparser):
     new_project.setup_subparser(subparsers)
     refresh.setup_subparser(subparsers)
     rm_project.setup_subparser(subparsers)
+    select.setup_subparser(subparsers)
     test.setup_subparser(subparsers)
     zap_build.setup_subparser(subparsers)
 
@@ -42,6 +46,10 @@ def mpd(parser, args):
 
     if args.mpd_subcommand in ("build", "b"):
         build.process(args)
+        return
+
+    if args.mpd_subcommand == "clear":
+        clear.process(args)
         return
 
     if args.mpd_subcommand in ("git-clone", "g", "gitCheckout"):
@@ -68,15 +76,21 @@ def mpd(parser, args):
         rm_project.process(args)
         return
 
+    if args.mpd_subcommand == "select":
+        select.process(args)
+        return
+
     if args.mpd_subcommand in ("zap", "z"):
         zap_build.process(args)
         return
 
 
 # The following is invoked post-installation
-def make_active(name):
-    new_project.declare_active(name)
+def update(project_config):
+    config.update(project_config, status="installed")
 
 
-def add_project(project_config):
-    config.update_config(project_config, installed=True)
+# The following is invoked pre-uninstallation
+def nullify_status(name):
+    prj_config = config.project_config(name)
+    config.update(prj_config, status="(none)")

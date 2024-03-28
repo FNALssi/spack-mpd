@@ -6,7 +6,7 @@ import llnl.util.tty as tty
 
 import spack.util.git
 
-from .config import active_project_config
+from .config import selected_project_config
 from .util import bold
 
 
@@ -414,12 +414,12 @@ def clone_suite(suite_name, srcs_area, local_area):
 
 def process(args):
     if args.repos:
-        config = active_project_config()
+        config = selected_project_config()
         clone_repos(args.repos, config["source"], config["local"])
         return
 
     if args.suite:
-        config = active_project_config()
+        config = selected_project_config()
         clone_suite(args.suite, config["source"], config["local"])
     elif args.help_suites:
         help_suites()

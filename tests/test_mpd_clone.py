@@ -21,4 +21,5 @@ def test_new_project_clone(tmpdir):
     )
     mpd("g", "cetlib")
     assert (top_level_clone / "srcs" / "cetlib").exists()
+    mpd("clear")
     mpd("rm", "test-clone")

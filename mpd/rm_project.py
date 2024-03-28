@@ -1,11 +1,12 @@
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import llnl.util.tty as tty
 
-from .config import mpd_packages, rm_config, project_config
+import spack.environment as ev
+
+from .config import mpd_packages, rm_config, project_config, selected_project
 from .util import bold
 
 
@@ -41,12 +42,10 @@ def _rm_packages(name):
         return
 
     shutil.rmtree(packages_path / f"{name}-bootstrap", ignore_errors=True)
-    shutil.rmtree(packages_path / f"{name}-mpd", ignore_errors=True)
 
 
 def rm_project(name, config, full_removal):
     _run_no_output("spack", "env", "rm", "-y", name)
-    _run_no_output("spack", "uninstall", "-y", f"{name}-mpd")
     _rm_packages(name)
     shutil.rmtree(config["build"], ignore_errors=True)
     shutil.rmtree(config["local"], ignore_errors=True)
@@ -56,12 +55,18 @@ def rm_project(name, config, full_removal):
 
 
 def process(args):
-    config = project_config(args.project)
-    if args.project == os.environ.get("MPD_PROJECT"):
+    preamble = (
+        f"Cannot remove selected MPD project {bold(args.project)}.  Deselect by invoking:\n\n"
+    )
+    msg = ""
+    if ev.active(args.project):
+        msg = "  spack env deactivate\n"
+    if args.project == selected_project():
+        msg = "  spack mpd clear\n"
+
+    if msg:
         print()
-        tty.die(
-            f"Cannot remove active MPD project {bold(args.project)}.  Deactivate by invoking:"
-            "\n\n"
-            "           spack env deactivate\n"
-        )
+        tty.die(preamble + msg)
+
+    config = project_config(args.project)
     rm_project(args.project, config, args.full)

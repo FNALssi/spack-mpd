@@ -14,7 +14,7 @@ from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
 from spack.traverse import traverse_nodes
 
-from .config import user_config_dir, mpd_project_exists, project_config_from_args, update_config
+from .config import user_config_dir, mpd_project_exists, project_config_from_args, update
 from .util import bold
 
 
@@ -167,28 +167,11 @@ def make_yaml_file(package, spec, prefix=None):
     return str(filepath)
 
 
-def mpd_envs(name, project_config):
-    return f"""
-
-    def setup_run_environment(self, env):
-        mpd = spack.extensions.get_module("mpd")
-        mpd.make_active("{name}")
-
-    @run_after("install")
-    def post_install(self):
-        mpd = spack.extensions.get_module("mpd")
-        mpd.add_project({dict(**project_config)})
-"""
-
-
-def make_bundle_file(name, deps, project_config, mpd_project_name=None):
+def make_bundle_file(name, deps, project_config):
     bundle_path = user_config_dir() / "packages" / name
     bundle_path.mkdir(exist_ok=True)
     package_recipe = bundle_path / "package.py"
-    with open(package_recipe.absolute(), "w") as f:
-        f.write(bundle_template(name, deps))
-        if mpd_project_name:
-            f.write(mpd_envs(mpd_project_name, project_config))
+    package_recipe.write_text(bundle_template(name, deps))
 
 
 def process_config(project_config):
@@ -248,13 +231,13 @@ def process_config(project_config):
     for pname in package_names:
         del packages[pname]
 
-    deps_for_bundlefile = []
+    user_specs = []
     packages_block = {}
     for p in concretized_spec.traverse():
         if p.name not in packages:
             continue
 
-        deps_for_bundlefile.append(p.name)
+        user_specs.append(p.name)
 
         if any(penv.matching_spec(p) for penv in proto_envs):
             continue
@@ -274,14 +257,12 @@ def process_config(project_config):
 
         packages_block[p.name] = dict(require=requires)
 
-    # Always replace the bundle file
-    mpd_name = name + "-mpd"
-    make_bundle_file(mpd_name, deps_for_bundlefile, project_config, mpd_project_name=name)
-
+    # Prepend compiler
+    user_specs.insert(0, project_config["compiler"])
     full_block = dict(
         include=proto_env_packages_files,
         definitions=[dict(compiler=[project_config["compiler"]])],
-        specs=[project_config["compiler"], mpd_name],
+        specs=user_specs,
         concretizer=dict(unify=True, reuse=True),
         packages=packages_block,
     )
@@ -289,6 +270,7 @@ def process_config(project_config):
     env_file = make_yaml_file(name, dict(spack=full_block), prefix=user_config_dir())
     env = ev.create(name, init_file=env_file)
     tty.info(f"Environment {name} has been created")
+    update(project_config, status="created")
 
     concretized_specs = None
     with env.write_transaction():
@@ -321,6 +303,7 @@ def process_config(project_config):
         tty.die(error_msg)
 
     tty.msg("Concretization complete\n")
+    update(project_config, status="concretized")
 
     msg = "Ready to install MPD project " + bold(name) + "\n"
     if absent_dependencies:
@@ -354,9 +337,10 @@ def process_config(project_config):
 
     if result.returncode == 0:
         print()
+        update(project_config, status="installed")
         msg = (
             f"MPD project {bold(name)} has been installed.  "
-            "To load it, invoke:\n\n  spack env activate {name}\n"
+            f"To load it, invoke:\n\n  spack env activate {name}\n"
         )
         tty.msg(msg)
 
@@ -416,8 +400,7 @@ def declare_active(name):
     session_id = os.getsid(os.getpid())
     active = Path(user_config_dir() / "active")
     active.mkdir(exist_ok=True)
-    with open(active / f"{session_id}", "w") as f:
-        f.write(name + "\n")
+    (active / f"{session_id}").write_text(name)
 
 
 def update_project(name, project_config):
@@ -461,7 +444,7 @@ def process(args):
         tty.msg(f"Creating project: {name}")
 
     project_config = project_config_from_args(args)
-    update_config(project_config, installed=False)
+    update(project_config, status="(none)")
 
     print_config_info(project_config)
     prepare_project(project_config)
