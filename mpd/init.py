@@ -33,9 +33,20 @@ def _is_writeable(path):
     return True
 
 
+def initialized():
+    local_dir = config.user_config_dir()
+    return local_dir.exists() and str(local_dir) in spack.config.get("repos", scope="user")
+
+
 def process(args):
     spack_root = spack.paths.prefix
     tty.msg(f"Using Spack instance at {spack_root}")
+    local_dir = config.user_config_dir()
+    if initialized():
+        assert local_dir.exists()
+        tty.warn(f"MPD already initialized on this system ({local_dir})")
+        return
+
     if not _is_writeable(spack_root):
         indent = " " * len("==> Error: ")
         print()
@@ -53,12 +64,8 @@ def process(args):
     config.selected_projects_dir().mkdir(exist_ok=True)
 
     # Create home repo if it doesn't exist
-    local_dir_abs = str(local_dir.absolute())
-    if local_dir_abs not in spack.config.get("repos", scope="user"):
-        full_path, _ = spack.repo.create_repo(
-            local_dir_abs, "local-mpd", spack.repo.packages_dir_name
-        )
-        AddArgs = namedtuple("args", ["path", "scope"])
-        spack.cmd.repo.repo_add(AddArgs(path=full_path, scope="user"))
-    else:
-        tty.warn(f"MPD already initialized on this system ({local_dir_abs})")
+    full_path, _ = spack.repo.create_repo(
+        str(local_dir), "local-mpd", spack.repo.packages_dir_name
+    )
+    AddArgs = namedtuple("args", ["path", "scope"])
+    spack.cmd.repo.repo_add(AddArgs(path=full_path, scope="user"))

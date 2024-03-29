@@ -42,7 +42,7 @@ def selected_project_token():
 
 
 def user_config_dir():
-    return Path.home() / ".mpd"
+    return (Path.home() / ".mpd").resolve()
 
 
 def mpd_packages():

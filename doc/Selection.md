@@ -84,13 +84,10 @@ $ spack mpd ls
 
    Project name    Environment status
    ------------    ------------------
-   nu-devel        (none)              
+   nu-devel        (none)
  ▶ art-devel       installed           Warning: used by more than one shell
 ```
 
 ## Activating a Spack environment
 
 To build, install, or test any of the packages under development, the Spack environment corresponding to the project must be active.  This is achieved by invoking `spack env activate <project>`.
-
-
-
