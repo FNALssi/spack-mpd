@@ -108,8 +108,8 @@ def project_path(project_name, path_kind):
 
 
 def project_details(project_names):
-    config = user_config()
-    if not config:
+    cfg = config.user_config()
+    if not cfg:
         _no_known_projects()
         return
 

@@ -1,6 +1,5 @@
 import os
 import re
-import sys
 from pathlib import Path
 
 import ruamel
@@ -9,6 +8,8 @@ import llnl.util.tty as tty
 
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
+
+from . import util
 
 
 # Pilfered from https://stackoverflow.com/a/568285/3585575
@@ -267,7 +268,7 @@ def selected_project(missing_ok=True):
         return None
 
     print()
-    tty.die(f"Active MPD project required to invoke 'spack {' '.join(sys.argv[1:])}'\n")
+    tty.die(f"Active MPD project required to invoke '{util.spack_cmd_line()}'\n")
 
 
 def selected_project_config():

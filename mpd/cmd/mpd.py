@@ -1,3 +1,6 @@
+import llnl.util.tty as tty
+import spack.environment as ev
+
 from .. import clear
 from .. import clone
 from .. import build
@@ -9,6 +12,7 @@ from .. import new_project
 from .. import refresh
 from .. import rm_project
 from .. import select
+from .. import util
 from .. import test
 from .. import zap_build
 
@@ -52,40 +56,64 @@ def mpd(parser, args):
     # configuration or the cached selected project (if it exists).
     config.update_cache()
 
-    if args.mpd_subcommand in ("build", "b"):
-        build.process(args)
-        return
-
-    if args.mpd_subcommand == "clear":
-        clear.process(args)
-        return
-
-    if args.mpd_subcommand in ("git-clone", "g", "gitCheckout"):
-        clone.process(args)
-        return
-
     if args.mpd_subcommand in ("list", "ls"):
         list_projects.process(args)
         return
 
+    # Each command below requires MPD to be initialized on the system.
+    if not init.initialized():
+        print()
+        tty.die("MPD not initialized on this system.  Invoke\n\n" "  spack mpd init\n")
+
+    # new-project requires no active environment (checks occurs inside
+    # new_project.process)
     if args.mpd_subcommand in ("new-project", "n", "newDev"):
         new_project.process(args)
+        return
+
+    # select requires no active environment (checks occurs inside
+    # select.process)
+    if args.mpd_subcommand == "select":
+        select.process(args)
+        return
+
+    # clear requires no active environment (checks occurs inside
+    # clear.process)
+    if args.mpd_subcommand == "clear":
+        clear.process(args)
+        return
+
+    # rm-project requires a deselected project and no active
+    # environment (checks occur inside rm_project.process)
+    if args.mpd_subcommand in ("rm-project", "rm"):
+        rm_project.process(args)
+        return
+
+    # Each command below requires a selected project.
+    project_name = config.selected_project(missing_ok=False)
+
+    if args.mpd_subcommand in ("git-clone", "g", "gitCheckout"):
+        clone.process(args)
         return
 
     if args.mpd_subcommand == "refresh":
         refresh.process(args)
         return
 
-    if args.mpd_subcommand in ("rm-project", "rm"):
-        rm_project.process(args)
-        return
-
-    if args.mpd_subcommand == "select":
-        select.process(args)
-        return
-
     if args.mpd_subcommand in ("zap", "z"):
         zap_build.process(args)
+        return
+
+    # Each command below requires an active environment
+    if not ev.active(project_name):
+        print()
+        tty.die(
+            f"Active environment required to invoke '{util.spack_cmd_line()}'.  Invoke\n\n"
+            f"  spack env activate {project_name}\n"
+        )
+
+    if args.mpd_subcommand in ("build", "b"):
+        build.process(args)
         return
 
 

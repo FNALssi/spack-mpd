@@ -423,15 +423,19 @@ def update_project(name, project_config):
 def process(args):
     print()
 
+    env_active = ev.active_environment()
+    if env_active:
+        tty.die(
+            f"Must deactivate environment {bold(env_active.name)} before creating new project:\n\n"
+            "  spack env deactivate\n"
+        )
+
     name = args.name
     if mpd_project_exists(name):
         if args.force:
             tty.warn(f"Overwriting existing MPD project {bold(name)}")
             if ev.exists(name):
-                env = ev.read(name)
-                if env.active:
-                    tty.die(f"Must deactivate environment {name} to overwrite it\n")
-                env.destroy()
+                ev.read(name).destroy()
                 tty.info(f"Existing environment {name} has been removed")
         else:
             indent = " " * len("==> Error: ")

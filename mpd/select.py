@@ -1,5 +1,7 @@
 import llnl.util.tty as tty
 
+import spack.environment as ev
+
 from . import config
 from .util import bold
 
@@ -26,6 +28,14 @@ def process(args):
             msg += f"\n {i + 1}) {key}"
         print()
         tty.error(msg + "\n")
+
+    env_active = ev.active_environment()
+    if env_active:
+        print()
+        tty.die(
+            f"Must deactivate environment {bold(env_active.name)} before selecting project:\n\n"
+            "  spack env deactivate\n"
+        )
 
     if args.project in config.selected_projects():
         tty.warn(f"Project {bold(args.project)} selected in another shell.  Use with caution.")
