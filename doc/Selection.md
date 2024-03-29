@@ -32,7 +32,7 @@ The following actions will select a project
 3. Explicitly invoking `spack mpd select <project>` will select the
    specified project, assuming it is exists.
 
-You can tell which project is selected by invoking `spack mpd list`---the selected project is indicated with a right arrow `→`.
+You can tell which project is selected by invoking `spack mpd list`---the selected project is indicated with a right-pointing triangle `▶`.
 
 ```console
 $ spack mpd ls
@@ -42,13 +42,13 @@ $ spack mpd ls
    Project name    Environment status
    ------------    ------------------------------
    nu-devel        (none)
- → art-devel       installed
+ ▶ art-devel       installed
 
 ```
 
 ## Clearing (deselecting) a project
 
-To deselect a project, the user invokes `spack mpd clear`.  You can verify the project has been cleared by invoking `spack mpd list`---you should no longer see any right arrow `→` indicator.
+To deselect a project, the user invokes `spack mpd clear`.  You can verify the project has been cleared by invoking `spack mpd list`---you should no longer see any right arrow `▶` indicator.
 
 ```console
 $ spack mpd ls
@@ -65,6 +65,28 @@ $ spack mpd ls
 > Deactivating a Spack environment does **not** clear the project.  This makes it
 > possible to continue to interacting with the project (e.g. invoking
 > `spack mpd git-clone`) when an active environment is no longer needed or desired.
+
+## Selecting a project in use by another shell
+
+It is possible for more than one shell to select the same project.  However, a warning will be printed to the screen whenever this happens:
+
+```console
+$ spack mpd select art-devel
+==> Warning: Project art-devel selected in another shell.  Use with caution.
+```
+
+The project list will also reflect if more than one shell have selected the same project:
+
+```console
+$ spack mpd ls
+
+==> Existing MPD projects:
+
+   Project name    Environment status
+   ------------    ------------------
+   nu-devel        (none)              
+ ▶ art-devel       installed           Warning: used by more than one shell
+```
 
 ## Activating a Spack environment
 
