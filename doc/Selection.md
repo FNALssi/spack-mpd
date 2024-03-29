@@ -2,8 +2,8 @@
 
 Each MPD project (see [Creating a project](doc/Creation.md)) has an associated Spack environment with the same name as the project name.  Depending on which `spack mpd` command is invoked, there are varying requirements on whether an MPD project must be selected and a Spack environment activated.  The following chart summarizes these requirements:
 
-- The white check mark :white_check_mark: indicates what must be satisfied to invoke the command (i.e. `spack mpd build` requires MPD to be initialized, a selected project, and an active environment).
-- The :x: symbol indicates what must **not** be satisfied to invoke the command (i.e. `spack mpd rm-project` requires MPD to be initialized, a project to **not** be selected, and an environment to **not** be active).
+- The white check mark :white_check_mark: indicates what is required to invoke the command (i.e. `spack mpd build` requires MPD to be initialized, a selected project, and an active environment).
+- The :x: symbol indicates what is forbidden in order to invoke the command (i.e. `spack mpd rm-project` requires MPD to be initialized, forbids that a project is selected, and forbids that an environment is active).
 - Table cells with no symbol indicate that the command can be invoked irrespective of whether the requirement is satisfied or not.
 
 | Command | MPD initialized | Selected project | Active environment |
