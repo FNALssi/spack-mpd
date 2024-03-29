@@ -1,10 +1,19 @@
+from enum import Enum
+
 import llnl.util.tty as tty
 
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
 
-from .config import user_config, selected_project
+from . import config
 from .util import bold, maybe_with_color
+
+
+class SelectionStatus(Enum):
+    NotSelected = 1
+    OnlyThisProcess = 2
+    OnlyOtherProcess = 3
+    SharedAmongProcesses = 4
 
 
 def setup_subparser(subparsers):
@@ -23,14 +32,34 @@ and their corresponding top-level directories."""
     )
 
 
-def format_fields(name, status, selected):
-    if selected != name:
-        return " ", "", status
+def format_fields(name, selected):
+    # Conventions
+    #
+    # - No color or indicator: not selected for any process
+    # - Green, with "▶": selected on only the current process
+    # - Cyan, with "◀": selected on other process
+    # - Cyan, with "↔": selected on more than one other process
+    # - Yellow, with "↔": selected on this process and at least one more other process
 
-    if ev.active(name):
-        return "→", "G", "active"
+    indicator = " "
+    color = ""
+    warning = ""
+    match = selected.get(name)
+    if not match:
+        return indicator, color, warning
 
-    return "→", "Y", status
+    match_length = len(match)
+    assert match_length > 0
+    if config.session_id() in match:
+        indicator = "▶"
+        color = "G" if match_length == 1 else "Y"
+    else:
+        indicator = "◀"
+        color = "c"
+
+    warning = "Warning: used by more than one shell" if match_length > 1 else ""
+
+    return indicator, color, warning
 
 
 def _no_known_projects():
@@ -38,12 +67,12 @@ def _no_known_projects():
 
 
 def list_projects():
-    config = user_config()
-    if not config:
+    cfg = config.user_config()
+    if not cfg:
         _no_known_projects()
         return
 
-    projects = config.get("projects")
+    projects = cfg.get("projects")
     if not projects:
         _no_known_projects()
         return
@@ -52,25 +81,31 @@ def list_projects():
     name = "Project name"
     name_width = max(len(k) for k in projects.keys())
     name_width = max(len(name), name_width)
-    msg += f"   {name:<{name_width}}    Environment status\n"
-    msg += "   " + "-" * name_width + "    " + "-" * 30
+    status = "Environment status"
+    status_width = len(status)
+    msg += f"   {name:<{name_width}}    {status}\n"
+    msg += "   " + "-" * name_width + "    " + "-" * status_width
 
-    selected = selected_project()
+    selected = config.selected_projects()
     for key, value in projects.items():
-        indicator, color_code, status = format_fields(key, value["status"], selected)
-        msg += maybe_with_color(color_code, f"\n {indicator} {key:<{name_width}}    {status}")
+        status = "active" if ev.active(key) else value["status"]
+        indicator, color_code, warning = format_fields(key, selected)
+        msg += maybe_with_color(
+            color_code,
+            f"\n {indicator} {key:<{name_width}}    {status:<{status_width}}  {warning}",
+        )
     msg += "\n"
     print()
     tty.msg(msg)
 
 
 def project_path(project_name, path_kind):
-    config = user_config()
-    if not config:
+    cfg = config.user_config()
+    if not cfg:
         _no_known_projects()
         return
 
-    projects = config.get("projects")
+    projects = cfg.get("projects")
     if not projects:
         _no_known_projects()
         return
@@ -87,7 +122,7 @@ def project_details(project_names):
         _no_known_projects()
         return
 
-    projects = config.get("projects")
+    projects = cfg.get("projects")
     if not projects:
         _no_known_projects()
         return

@@ -11,9 +11,24 @@ import spack.environment as ev
 import spack.util.spack_yaml as syaml
 
 
+def selected_projects_dir():
+    return user_config_dir() / "active"
+
+
+def selected_projects():
+    projects = {}
+    for sp in selected_projects_dir().iterdir():
+        project_name = sp.read_text()
+        projects.setdefault(project_name, []).append(sp.name)
+    return projects
+
+
+def session_id():
+    return f"{os.getsid(os.getpid())}"
+
+
 def selected_project_token():
-    session_id = os.getsid(os.getpid())
-    return Path(user_config_dir() / "active" / f"{session_id}")
+    return selected_projects_dir() / session_id()
 
 
 def user_config_dir():

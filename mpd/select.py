@@ -1,6 +1,6 @@
 import llnl.util.tty as tty
 
-from .config import selected_project_token, user_config
+from . import config
 from .util import bold
 
 
@@ -12,11 +12,11 @@ def setup_subparser(subparsers):
 
 
 def process(args):
-    config = user_config()
-    if not config:
+    cfg = config.user_config()
+    if not cfg:
         tty.error(f"No existing MPD projects--cannot select {args.project}.")
 
-    projects = config.get("projects")
+    projects = cfg.get("projects")
     if not projects:
         tty.error(f"No existing MPD projects--cannot select {args.project}.")
 
@@ -27,4 +27,7 @@ def process(args):
         print()
         tty.error(msg + "\n")
 
-    selected_project_token().write_text(args.project)
+    if args.project in config.selected_projects():
+        tty.warn(f"Project {bold(args.project)} selected in another shell.  Use with caution.")
+
+    config.selected_project_token().write_text(args.project)

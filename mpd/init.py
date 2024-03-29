@@ -9,7 +9,7 @@ import spack.config
 import spack.paths
 import spack.repo
 
-from .config import user_config_dir
+from . import config
 
 # FIXME: Probably need ability to reinit.
 
@@ -47,8 +47,10 @@ def process(args):
             + "Please contact scisoft-team@fnal.gov for guidance."
         )
 
-    local_dir = user_config_dir()
+    local_dir = config.user_config_dir()
     local_dir.mkdir(exist_ok=True)
+
+    config.selected_projects_dir().mkdir(exist_ok=True)
 
     # Create home repo if it doesn't exist
     local_dir_abs = str(local_dir.absolute())
