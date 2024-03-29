@@ -1,5 +1,3 @@
-from enum import Enum
-
 import llnl.util.tty as tty
 
 import spack.environment as ev
@@ -7,13 +5,6 @@ import spack.util.spack_yaml as syaml
 
 from . import config
 from .util import bold, maybe_with_color
-
-
-class SelectionStatus(Enum):
-    NotSelected = 1
-    OnlyThisProcess = 2
-    OnlyOtherProcess = 3
-    SharedAmongProcesses = 4
 
 
 def setup_subparser(subparsers):
