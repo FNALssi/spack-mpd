@@ -11,6 +11,16 @@ import spack.environment as ev
 import spack.util.spack_yaml as syaml
 
 
+# Pilfered from https://stackoverflow.com/a/568285/3585575
+def _process_exists(pid):
+    """Check For the existence of a unix pid."""
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
 def selected_projects_dir():
     return user_config_dir() / "active"
 
@@ -237,6 +247,9 @@ def update_cache():
             syaml.dump(config, stream=f)
 
     # Remove stale selected project tokens
+    for sp in selected_projects_dir().iterdir():
+        if not _process_exists(int(sp.name)):
+            sp.unlink()
 
     # Implicitly select project if environment is active
     active_env = ev.active_environment()
