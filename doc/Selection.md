@@ -2,24 +2,24 @@
 
 Each MPD project (see [Creating a project](doc/Creation.md)) has an associated Spack environment with the same name as the project name.  Depending on which `spack mpd` command is invoked, there are varying requirements on whether an MPD project must be selected and a Spack environment activated.  The following chart summarizes these requirements:
 
-- The white check mark :white_check_mark: indicates what must be satisfied to invoke the command (i.e. `spack mpd build` requires both a selected project and an active environment).
-- The :x: symbol indicates what must **not** be satisfied to invoke the command (i.e. `spack mpd rm-project` requires that no project is selected and no environment is active).
+- The white check mark :white_check_mark: indicates what must be satisfied to invoke the command (i.e. `spack mpd build` requires MPD to be initialized, a selected project, and an active environment).
+- The :x: symbol indicates what must **not** be satisfied to invoke the command (i.e. `spack mpd rm-project` requires MPD to be initialized, a project to **not** be selected, and an environment to **not** be active).
 - Table cells with no symbol indicate that the command can be invoked irrespective of whether the requirement is satisfied or not.
 
-| Command | Selected project | Active environment |
-| --- | :---: | :---: |
-| `spack mpd clear` | | |
-| `spack mpd init` | | |
-| `spack mpd list` | | |
-| `spack mpd new-project` | | |
-| `spack mpd select` | | |
-| `spack mpd git-clone` | :white_check_mark: | |
-| `spack mpd refresh` | :white_check_mark: | |
-| `spack mpd zap` | :white_check_mark: | |
-| `spack mpd build` | :white_check_mark: | :white_check_mark: |
-| `spack mpd install` | :white_check_mark: | :white_check_mark: |
-| `spack mpd test` | :white_check_mark: | :white_check_mark: |
-| `spack mpd rm-project` | :x: | :x: |
+| Command | MPD initialized | Selected project | Active environment |
+| --- | :---: | :---: | :---: |
+| `spack mpd init` | | | |
+| `spack mpd list` | | | |
+| `spack mpd clear` | :white_check_mark: | | |
+| `spack mpd new-project` | :white_check_mark: | | |
+| `spack mpd select` | :white_check_mark: | | |
+| `spack mpd git-clone` | :white_check_mark: | :white_check_mark: | |
+| `spack mpd refresh` | :white_check_mark: | :white_check_mark: | |
+| `spack mpd zap` | :white_check_mark: | :white_check_mark: | |
+| `spack mpd build` | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| `spack mpd install` | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| `spack mpd test` | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| `spack mpd rm-project` | :white_check_mark: | :x: | :x: |
 
 ## Selecting a project
 
