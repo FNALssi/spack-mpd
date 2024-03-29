@@ -1,6 +1,6 @@
 import llnl.util.tty as tty
 
-from .config import selected_project_token, update_cached_configs, user_config
+from .config import selected_project_token, user_config
 from .util import bold
 
 
@@ -12,8 +12,6 @@ def setup_subparser(subparsers):
 
 
 def process(args):
-    update_cached_configs()
-
     config = user_config()
     if not config:
         tty.error(f"No existing MPD projects--cannot select {args.project}.")

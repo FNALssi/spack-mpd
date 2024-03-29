@@ -44,6 +44,14 @@ def mpd(parser, args):
         parser.parse_args(["mpd", "-h"])
         return
 
+    if args.mpd_subcommand == "init":
+        init.process(args)
+        return
+
+    # Each command below either relies on the cached information in the user
+    # configuration or the cached selected project (if it exists).
+    config.update_cache()
+
     if args.mpd_subcommand in ("build", "b"):
         build.process(args)
         return
@@ -54,10 +62,6 @@ def mpd(parser, args):
 
     if args.mpd_subcommand in ("git-clone", "g", "gitCheckout"):
         clone.process(args)
-        return
-
-    if args.mpd_subcommand == "init":
-        init.process(args)
         return
 
     if args.mpd_subcommand in ("list", "ls"):

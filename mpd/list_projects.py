@@ -3,7 +3,7 @@ import llnl.util.tty as tty
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
 
-from .config import user_config, selected_project, update_cached_configs
+from .config import user_config, selected_project
 from .util import bold, maybe_with_color
 
 
@@ -38,8 +38,6 @@ def _no_known_projects():
 
 
 def list_projects():
-    update_cached_configs()
-
     config = user_config()
     if not config:
         _no_known_projects()
@@ -50,7 +48,7 @@ def list_projects():
         _no_known_projects()
         return
 
-    msg = "Known MPD projects:\n\n"
+    msg = "Existing MPD projects:\n\n"
     name = "Project name"
     name_width = max(len(k) for k in projects.keys())
     name_width = max(len(name), name_width)
@@ -84,8 +82,6 @@ def project_path(project_name, path_kind):
 
 
 def project_details(project_names):
-    update_cached_configs()
-
     config = user_config()
     if not config:
         _no_known_projects()

@@ -201,7 +201,8 @@ def project_config(name, config=None):
     return projects[name]
 
 
-def update_cached_configs():
+def update_cache():
+    # Update environment status in user configuration
     config = user_config()
     if not config:
         return
@@ -210,12 +211,23 @@ def update_cached_configs():
     if not projects:
         return
 
+    adjusted = False
     for name, proj_config in projects.items():
         if not ev.exists(name):
             proj_config["status"] = "(none)"
+            adjusted = True
 
-    with open(user_config_file(), "w") as f:
-        syaml.dump(config, stream=f)
+    if adjusted:
+        with open(user_config_file(), "w") as f:
+            syaml.dump(config, stream=f)
+
+    # Remove stale selected project tokens
+
+    # Implicitly select project if environment is active
+    active_env = ev.active_environment()
+    if active_env:
+        if active_env.name in projects:
+            selected_project_token().write_text(active_env.name)
 
 
 def selected_project(missing_ok=True):
