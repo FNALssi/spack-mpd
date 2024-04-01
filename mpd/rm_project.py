@@ -7,7 +7,6 @@ import llnl.util.tty as tty
 import spack.environment as ev
 
 from .config import mpd_packages, rm_config, project_config, selected_project
-from .util import bold
 
 
 def setup_subparser(subparsers):
@@ -26,9 +25,10 @@ Removing a project will:
     )
     rm_proj.add_argument("project", metavar="<project name>", help="MPD project to remove")
     rm_proj.add_argument(
-        "--full",
+        "-f",
+        "--force",
         action="store_true",
-        help="remove entire directory tree starting at the top level of the project",
+        help="remove project even if it is selected (environment must be deactivated)",
     )
 
 
@@ -44,29 +44,30 @@ def _rm_packages(name):
     shutil.rmtree(packages_path / f"{name}-bootstrap", ignore_errors=True)
 
 
-def rm_project(name, config, full_removal):
+def rm_project(name, config):
     _run_no_output("spack", "env", "rm", "-y", name)
     _rm_packages(name)
     shutil.rmtree(config["build"], ignore_errors=True)
     shutil.rmtree(config["local"], ignore_errors=True)
-    if full_removal:
-        shutil.rmtree(config["top"], ignore_errors=True)
     rm_config(name)
 
 
 def process(args):
-    preamble = (
-        f"Cannot remove selected MPD project {bold(args.project)}.  Deselect by invoking:\n\n"
-    )
     msg = ""
     if ev.active(args.project):
-        msg = "  spack env deactivate\n"
-    if args.project == selected_project():
-        msg = "  spack mpd clear\n"
+        msg = (
+            "Must deactivate environment before removing MPD project:\n\n"
+            "  spack env deactivate\n"
+        )
+    if args.project == selected_project() and not args.force:
+        msg = (
+            "Must deselect MPD project before removing it:\n\n"
+            "  spack mpd clear\n\nOr use the --force option.\n"
+        )
 
     if msg:
         print()
-        tty.die(preamble + msg)
+        tty.die(msg)
 
     config = project_config(args.project)
-    rm_project(args.project, config, args.full)
+    rm_project(args.project, config)

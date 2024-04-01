@@ -174,8 +174,8 @@ def refresh_config(project_name):
     # Update packages field
     assert config is not None
     assert project_name is not None
-    config = project_config(project_name, config)
-    sp = Path(config["source"])
+    project_cfg = project_config(project_name, config)
+    sp = Path(project_cfg["source"])
     assert sp.exists()
     packages_to_develop = sorted(
         f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()

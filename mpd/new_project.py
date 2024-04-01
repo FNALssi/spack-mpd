@@ -1,7 +1,6 @@
 import copy
 import json
 import os
-import re
 import subprocess
 from pathlib import Path
 
@@ -45,21 +44,11 @@ def setup_subparser(subparsers):
     new_project.add_argument(
         "-E",
         "--env",
+        default=[],
         help="environments from which to create project\n(multiple allowed)",
         action="append",
     )
     new_project.add_argument("variants", nargs="*")
-
-
-def lint_spec(spec):
-    spec_str = spec.short_spec
-    spec_str = re.sub(f"@{spec.version}", "", spec_str)  # remove version
-    spec_str = re.sub(f"arch={spec.architecture}", "", spec_str)  # remove arch
-    spec_str = re.sub(f"%{spec.compiler.display_str}", "", spec_str)  # remove compiler
-    spec_str = re.sub("/[a-z0-9]+", "", spec_str)  # remove hash
-    if "patches" in spec.variants:  # remove patches if present
-        spec_str = re.sub(f"{spec.variants['patches']}", "", spec_str)
-    return spec_str.strip()
 
 
 def entry(package_list, package_name):
@@ -286,21 +275,21 @@ def process_config(project_config):
         if n.install_status() == InstallStatus.absent:
             absent_dependencies.append(n.cshort_spec)
 
-        missing_deps = [p.name for p in n.dependencies() if p.name in packages_to_develop]
-        if missing_deps:
-            missing_intermediate_deps[n.name] = missing_deps
+        checked_out_deps = [p.name for p in n.dependencies() if p.name in packages_to_develop]
+        if checked_out_deps:
+            missing_intermediate_deps[n.name] = checked_out_deps
 
     if missing_intermediate_deps:
         error_msg = (
-            "\nThe following packages are intermediate dependencies and must"
-            " also be checked out:\n\n"
+            "The following packages are intermediate dependencies of the\n"
+            "currently cloned packages and must also be cloned:\n"
         )
-        for pkg_name, missing_deps in missing_intermediate_deps.items():
-            missing_deps_str = ", ".join(missing_deps)
-            error_msg += "      - " + bold(pkg_name)
-            error_msg += f" (depends on {missing_deps_str})\n"
-        error_msg += "\n"
-        tty.die(error_msg)
+        for pkg_name, checked_out_deps in missing_intermediate_deps.items():
+            checked_out_deps_str = ", ".join(checked_out_deps)
+            error_msg += "\n - " + bold(pkg_name)
+            error_msg += f" (depends on {checked_out_deps_str})"
+        print()
+        tty.die(error_msg + "\n")
 
     tty.msg("Concretization complete\n")
     update(project_config, status="concretized")
@@ -403,7 +392,7 @@ def declare_active(name):
     (active / f"{session_id}").write_text(name)
 
 
-def update_project(name, project_config):
+def refresh_project(name, project_config):
     print()
 
     tty.msg(f"Updating project: {name}")
@@ -417,7 +406,9 @@ def update_project(name, project_config):
         )
         return
 
-    concretize_project(name, project_config)
+    if ev.exists(name):
+        ev.read(name).destroy()
+    concretize_project(project_config)
 
 
 def process(args):
