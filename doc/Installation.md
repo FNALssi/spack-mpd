@@ -35,6 +35,7 @@ develop multiple packages using Spack for external software
 positional arguments:
   SUBCOMMAND
     build (b)           build repositories
+    clear               clear selected MPD project
     git-clone (g, gitCheckout)
                         clone git repositories
     init                initialize MPD on this system
@@ -44,6 +45,7 @@ positional arguments:
                         create MPD development area
     refresh             refresh project area
     rm-project (rm)     remove MPD project
+    select              select MPD project
     test (t)            build and run tests
     zap (z)             delete everything in your build and/or install areas
 
