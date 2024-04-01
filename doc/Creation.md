@@ -78,6 +78,11 @@ Using sources area: /scratch/knoepfel/test-devel/srcs
     - hep-concurrency
 
 ==> Concretizing project (this may take a few minutes)
+```
+
+The concretization step searches for a valid combination of all dependencies required for developing the specified packages.  The dependencies are specified in each package's Spack recipe, which Spack consults *along with* the dependencies already specified in the provided environment (`gcc-13-2-0` in this example).  Assuming concretization is successful, you will see something like:
+
+```console
 ==> Environment test has been created
 ==> Updating view at /scratch/knoepfel/spack/var/spack/environments/test/.spack-env/view
 ==> Warning: Skipping external package: cmake@3.28.3%gcc@13.2.0~doc+ncurses+ownlibs build_system=generic build_type=Release arch=linux-almalinux9-cascadelake/gykagno
@@ -85,9 +90,18 @@ Using sources area: /scratch/knoepfel/test-devel/srcs
 ==> Concretization complete
 
 ==> Ready to install MPD project test
+```
 
+At this point, you will be asked if you wish to install the packages (default is "yes", so pressing `return` is sufficient).  Assuming you answered "yes" to installing the packages, you will be asked how many cores to use (default is half of the total number of cores as specified by the command `nproc`):
+
+```
 ==> Would you like to continue with installation? [Y/n] 
-==> Specify number of cores to use (default is 12) 
+==> Specify number of cores to use (default is 12)
+```
+
+The installation step involves installing the required dependencies as well as the Spack environment **of the same name** as the MPD project (`test` in this example).
+
+```console
 ==> Installing test
 ==> All of the packages are already installed
 
@@ -97,10 +111,12 @@ Using sources area: /scratch/knoepfel/test-devel/srcs
 
 ```
 
+Activating the Spack environment will update your user environment so that you can invoke `spack mpd build`, `spack mpd test`, and `spack mpd install`.
+
 ## From an empty set of repositories
 
 ```console
-$ ls
+$ ls srcs/
 (empty)
 $ spack mpd n --name test cxxstd=20 %gcc@13.2.0
 
@@ -128,6 +144,8 @@ $ spack mpd g cetlib cetlib-except hep-concurrency
 
   spack mpd refresh
 ```
+
+Upon invoking `refresh` you will then see printout that is very similar to what is [mentioned above when developing from an existing set of repositories](#from-an-existing-set-of-repositories) .
 
 ## Concretization
 
