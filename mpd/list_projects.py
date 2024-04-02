@@ -18,8 +18,15 @@ and their corresponding top-level directories."""
     lst.add_argument(
         "project", metavar="<project name>", nargs="*", help="print details of the MPD project"
     )
-    lst.add_argument(
+    lst_path = lst.add_mutually_exclusive_group()
+    lst_path.add_argument(
         "-t", "--top", metavar="<project name>", help="print top-level directory for project"
+    )
+    lst_path.add_argument(
+        "-b", "--build", metavar="<project name>", help="print build-level directory for project"
+    )
+    lst_path.add_argument(
+        "-s", "--source", metavar="<project name>", help="print source-level directory for project"
     )
 
 
@@ -133,5 +140,9 @@ def process(args):
         project_details(args.project)
     elif args.top:
         project_path(args.top, "top")
+    elif args.build:
+        project_path(args.build, "build")
+    elif args.source:
+        project_path(args.source, "source")
     else:
         list_projects()
