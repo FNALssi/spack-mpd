@@ -58,14 +58,13 @@ def process(args):
             + "Please contact scisoft-team@fnal.gov for guidance."
         )
 
+    # Create home repo if it doesn't exist
     local_dir = config.user_config_dir()
     local_dir.mkdir(exist_ok=True)
-
-    config.selected_projects_dir().mkdir(exist_ok=True)
-
-    # Create home repo if it doesn't exist
     full_path, _ = spack.repo.create_repo(
         str(local_dir), "local-mpd", spack.repo.packages_dir_name
     )
     AddArgs = namedtuple("args", ["path", "scope"])
     spack.cmd.repo.repo_add(AddArgs(path=full_path, scope="user"))
+
+    config.selected_projects_dir().mkdir(exist_ok=True)
