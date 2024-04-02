@@ -30,8 +30,8 @@ developers.
 5. [Zapping a project](doc/Zapping.md)
 6. [Removing a project](doc/Removing.md)
 7. Helper commands
-   1. Cloning repositories to develop
-   2. Listing projects
+   1. [Cloning repositories to develop](doc/Helpers.md#cloning-repositories-to-develop)
+   2. [Listing projects](doc/Helpers.md#listing-available-projects)
 
 ## Limitations
 

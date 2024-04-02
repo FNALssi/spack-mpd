@@ -11,7 +11,7 @@ def setup_subparser(subparsers):
     lst_description = """list MPD projects
 
 When no arguments are specified, prints a list of existing MPD projects
-and their corresponding top-level directories."""
+and the status of their corresponding Spack environments."""
     lst = subparsers.add_parser(
         "list", description=lst_description, aliases=["ls"], help="list MPD projects"
     )
