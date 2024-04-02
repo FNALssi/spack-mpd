@@ -28,7 +28,7 @@ developers.
 3. [Creating a project](doc/Creation.md)
 4. [Building a project](doc/Building.md)
 5. [Zapping a project](doc/Zapping.md)
-6. Removing a project
+6. [Removing a project](doc/Removing.md)
 7. Helper commands
    1. Cloning repositories to develop
    2. Listing projects

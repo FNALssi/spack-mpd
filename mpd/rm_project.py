@@ -16,10 +16,7 @@ Removing a project will:
 
   * Remove the project entry from the list printed by 'spack mpd list'
   * Delete the 'build' and 'local' directories
-  * If '--full' specified, delete the entire 'top' level directory tree of the
-    project (including the specified sources directory if it resides
-    within the top-level directory).
-  * Uninstall the project's package/environment"""
+  * Uninstall the project's environment"""
     rm_proj = subparsers.add_parser(
         "rm-project", description=rm_proj_description, aliases=["rm"], help="remove MPD project"
     )
