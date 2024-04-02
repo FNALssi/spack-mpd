@@ -16,9 +16,10 @@ developers.
 ## Prerequisites
 
 1. You must be able to write to the Spack installation that you set up.
-    - _You are encouraged to [chain upstream Spack installations](https://spack.readthedocs.io/en/latest/chain.html) to your own installation to avoid unnecessary building, installation, and wasted disk space._
-2. Each package to be developed must have a [Spack recipe](https://spack.readthedocs.io/en/latest/packaging_guide.html).
-3. Install `spack-mpd`.
+   1. For developers of packages that depend on SciSoft software, you should clone the Fermilab fork of Spack `git clone https://github.com/FNALssi/spack.git`.
+   2. _You are encouraged to [chain upstream Spack installations](https://spack.readthedocs.io/en/latest/chain.html) to your own installation to avoid unnecessary building, installation, and wasted disk space._
+3. Each package to be developed must have a [Spack recipe](https://spack.readthedocs.io/en/latest/packaging_guide.html).
+4. Install `spack-mpd`.
 
 ## Using MPD
 
