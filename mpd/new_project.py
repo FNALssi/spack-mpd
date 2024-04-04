@@ -48,7 +48,7 @@ def setup_subparser(subparsers):
         help="environments from which to create project\n(multiple allowed)",
         action="append",
     )
-    new_project.add_argument("variants", nargs="*")
+    new_project.add_argument("variants", nargs="*", help="variants to apply to developed packages")
 
 
 def entry(package_list, package_name):
@@ -147,10 +147,12 @@ def make_cmake_file(package, dependencies, project_config):
         cmake_presets(source_path, dependencies, project_config["cxxstd"], f)
 
 
-def make_yaml_file(package, spec, prefix=None):
+def make_yaml_file(package, spec, prefix=None, overwrite=False):
     filepath = Path(f"{package}.yaml")
     if prefix:
         filepath = prefix / filepath
+    if filepath.exists() and not overwrite:
+        return str(filepath)
     with open(filepath, "w") as f:
         syaml.dump(spec, stream=f, default_flow_style=False)
     return str(filepath)
@@ -163,20 +165,21 @@ def make_bundle_file(name, deps, project_config):
     package_recipe.write_text(bundle_template(name, deps))
 
 
-def process_config(project_config):
-    proto_env_packages_files = []
-    proto_envs = []
-    for penv_name in project_config["envs"]:
-        proto_env = ev.read(penv_name)
-        proto_envs.append(proto_env)
-        proto_env_packages_config = dict(
-            packages=proto_env.manifest.configuration.get("packages", {})
-        )
-        proto_env_packages_files.append(
+def ensure_proto_env_package_files(proto_envs):
+    filenames = []
+    for penv in proto_envs:
+        penv_packages_config = dict(packages=penv.manifest.configuration.get("packages", {}))
+        filenames.append(
             make_yaml_file(
-                f"{penv_name}-packages-config", proto_env_packages_config, prefix=user_config_dir()
+                f"{penv.name}-packages-config", penv_packages_config, prefix=user_config_dir()
             )
         )
+    return filenames
+
+
+def process_config(project_config):
+    proto_envs = [ev.read(name) for name in project_config["envs"]]
+    proto_env_packages_files = ensure_proto_env_package_files(proto_envs)
 
     print()
     tty.msg("Concretizing project (this may take a few minutes)")
@@ -256,7 +259,9 @@ def process_config(project_config):
         packages=packages_block,
     )
 
-    env_file = make_yaml_file(name, dict(spack=full_block), prefix=user_config_dir())
+    env_file = make_yaml_file(
+        name, dict(spack=full_block), prefix=user_config_dir(), overwrite=True
+    )
     env = ev.create(name, init_file=env_file)
     tty.info(f"Environment {name} has been created")
     update(project_config, status="created")
@@ -395,7 +400,7 @@ def declare_active(name):
 def refresh_project(name, project_config):
     print()
 
-    tty.msg(f"Updating project: {name}")
+    tty.msg(f"Refreshing project: {bold(name)}")
     print_config_info(project_config)
 
     if not project_config["packages"]:
@@ -407,6 +412,8 @@ def refresh_project(name, project_config):
         return
 
     if ev.exists(name):
+        proto_envs = [ev.read(name) for name in project_config["envs"]]
+        ensure_proto_env_package_files(proto_envs)
         ev.read(name).destroy()
     concretize_project(project_config)
 

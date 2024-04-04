@@ -12,6 +12,9 @@ import spack.util.spack_yaml as syaml
 from . import util
 
 
+_DEFAULT_CXXSTD = "17"  # Must be a string for CMake
+
+
 # Pilfered from https://stackoverflow.com/a/568285/3585575
 def _process_exists(pid):
     """Check For the existence of a unix pid."""
@@ -77,7 +80,7 @@ def _compiler(variants):
 
 
 def _cxxstd(variants):
-    cxx_standard = "17"  # Must be a string for CMake
+    cxx_standard = _DEFAULT_CXXSTD
     cxxstd_index = None
     for i, variant in enumerate(variants):
         match = re.fullmatch(r"cxxstd={1,2}(\d{2})", variant)
@@ -165,7 +168,7 @@ def update(project_config, status):
         syaml.dump(config, stream=f)
 
 
-def refresh_config(project_name):
+def refresh(project_name, new_variants):
     config_file = user_config_file()
     if config_file.exists():
         with open(config_file, "r") as f:
@@ -183,6 +186,22 @@ def refresh_config(project_name):
 
     # Update .mpd file
     config["projects"][project_name]["packages"] = packages_to_develop
+
+    # Select and remove compiler
+    compiler, compiler_index = _compiler(new_variants)
+    if compiler_index is not None:
+        del new_variants[compiler_index]
+
+    # Select and remove cxxstd
+    cxxstd, cxxstd_index = _cxxstd(new_variants)
+    if cxxstd_index is not None:
+        del new_variants[cxxstd_index]
+
+    if compiler:
+        config["projects"][project_name]["compiler"] = compiler
+
+    config["projects"][project_name]["cxxstd"] = cxxstd
+    config["projects"][project_name]["variants"] = " ".join(new_variants)
     with open(config_file, "w") as f:
         syaml.dump(config, stream=f)
 

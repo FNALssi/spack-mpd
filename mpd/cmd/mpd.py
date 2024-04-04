@@ -115,14 +115,3 @@ def mpd(parser, args):
     if args.mpd_subcommand in ("build", "b"):
         build.process(args)
         return
-
-
-# The following is invoked post-installation
-def update(project_config):
-    config.update(project_config, status="installed")
-
-
-# The following is invoked pre-uninstallation
-def nullify_status(name):
-    prj_config = config.project_config(name)
-    config.update(prj_config, status="(none)")
