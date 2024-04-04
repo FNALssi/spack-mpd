@@ -191,17 +191,17 @@ def refresh(project_name, new_variants):
     compiler, compiler_index = _compiler(new_variants)
     if compiler_index is not None:
         del new_variants[compiler_index]
+        config["projects"][project_name]["compiler"] = compiler
 
     # Select and remove cxxstd
     cxxstd, cxxstd_index = _cxxstd(new_variants)
     if cxxstd_index is not None:
         del new_variants[cxxstd_index]
+        config["projects"][project_name]["cxxstd"] = cxxstd
 
-    if compiler:
-        config["projects"][project_name]["compiler"] = compiler
-
-    config["projects"][project_name]["cxxstd"] = cxxstd
+    # Rest of variants
     config["projects"][project_name]["variants"] = " ".join(new_variants)
+
     with open(config_file, "w") as f:
         syaml.dump(config, stream=f)
 
