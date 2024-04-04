@@ -8,7 +8,7 @@ import pytest
 import subprocess
 
 from spack.main import SpackCommand, SpackCommandError
-
+import spack.paths
 from spack.extensions.mpd import config
 
 mpd = SpackCommand("mpd")
@@ -27,4 +27,15 @@ def test_mpd_init(monkeypatch, tmpdir):
     path = Path(tmpdir)
     with monkeypatch.context() as m, cleanup_repo(path):
         m.setattr(Path, "home", lambda: path)
-        mpd("init")
+        out = mpd("init")
+        assert f"Using Spack instance at {spack.paths.prefix}" in out
+        assert "Added repo with namespace 'local-mpd'" in out
+
+        out = mpd("init")
+        assert f"Using Spack instance at {spack.paths.prefix}" in out
+        assert "Warning: MPD already initialized on this system" in out
+
+        out = mpd("init", "-f", "-y")
+        assert "Warning: Reinitializing MPD on this system will remove all MPD projects" in out
+        assert f"Using Spack instance at {spack.paths.prefix}" in out
+        assert "Added repo with namespace 'local-mpd'" in out

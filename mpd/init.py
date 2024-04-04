@@ -17,11 +17,12 @@ def setup_subparser(subparsers):
     init = subparsers.add_parser(
         "init", description="initialize MPD on this system", help="initialize MPD on this system"
     )
+    init.add_argument("-f", "--force", action="store_true", help="allow reinitialization")
     init.add_argument(
-        "-f",
-        "--force",
+        "-y",
+        "--yes",
         action="store_true",
-        help="force initialization (will replace existing initialization)",
+        help='assume "yes" is the answer to confirmation request for reinitialization',
     )
 
 
@@ -51,10 +52,13 @@ def process(args):
         )
 
     if local_dir.exists() and args.force:
-        tty.warn(f"Reinitializating MPD on this system will remove all MPD projects")
-        should_reinitialize = tty.get_yes_or_no(
-            "Would you like to proceed with reinitialization?", default=False
-        )
+        tty.warn(f"Reinitializing MPD on this system will remove all MPD projects")
+        if args.yes:
+            should_reinitialize = True
+        else:
+            should_reinitialize = tty.get_yes_or_no(
+                "Would you like to proceed with reinitialization?", default=False
+            )
         if not should_reinitialize:
             return tty.info("No changes made")
 
