@@ -18,7 +18,6 @@ from .util import bold
 
 
 def setup_subparser(subparsers):
-    default_top = Path.cwd()
     new_project = subparsers.add_parser(
         "new-project",
         description="create MPD development area",
@@ -29,7 +28,7 @@ def setup_subparser(subparsers):
     new_project.add_argument(
         "-T",
         "--top",
-        default=default_top,
+        default=Path.cwd(),
         help="top-level directory for MPD area\n(default: %(default)s)",
     )
     new_project.add_argument(
@@ -353,20 +352,8 @@ def print_config_info(config):
 
 
 def prepare_project(project_config):
-    build_dir = project_config["build"]
-    bp = Path(build_dir)
-    bp.mkdir(exist_ok=True)
-
-    local_dir = project_config["local"]
-    lp = Path(local_dir)
-    lp.mkdir(exist_ok=True)
-
-    local_install_path = Path(project_config["install"])
-    local_install_path.mkdir(exist_ok=True)
-
-    source_dir = project_config["source"]
-    sp = Path(source_dir)
-    sp.mkdir(exist_ok=True)
+    for d in ("top", "build", "local", "install", "source"):
+        Path(project_config[d]).mkdir(exist_ok=True)
 
 
 def concretize_project(project_config):

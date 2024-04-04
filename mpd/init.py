@@ -10,7 +10,6 @@ import spack.paths
 import spack.repo
 
 from . import config
-from .util import bold
 
 
 def setup_subparser(subparsers):
@@ -52,7 +51,7 @@ def process(args):
         )
 
     if local_dir.exists() and args.force:
-        tty.warn(f"Reinitializing MPD on this system will remove all MPD projects")
+        tty.warn("Reinitializing MPD on this system will remove all MPD projects")
         if args.yes:
             should_reinitialize = True
         else:

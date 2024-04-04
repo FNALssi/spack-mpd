@@ -5,7 +5,6 @@
 from contextlib import contextmanager
 from pathlib import Path
 import pytest
-import subprocess
 
 from spack.main import SpackCommand, SpackCommandError
 import spack.paths
