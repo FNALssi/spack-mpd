@@ -1,7 +1,7 @@
-import errno
-import tempfile
+import shutil
 from collections import namedtuple
 
+import llnl.util.filesystem as fs
 import llnl.util.tty as tty
 
 import spack.cmd.repo
@@ -10,27 +10,19 @@ import spack.paths
 import spack.repo
 
 from . import config
-
-# FIXME: Probably need ability to reinit.
+from .util import bold
 
 
 def setup_subparser(subparsers):
-    subparsers.add_parser(
+    init = subparsers.add_parser(
         "init", description="initialize MPD on this system", help="initialize MPD on this system"
     )
-
-
-# Inspired by/pilfered from https://stackoverflow.com/a/25868839/3585575
-def _is_writeable(path):
-    try:
-        testfile = tempfile.TemporaryFile(dir=path)
-        testfile.close()
-    except OSError as e:
-        if e.errno in (errno.EACCES, errno.EEXIST):  # 13, # 17
-            return False
-        e.filename = path
-        raise
-    return True
+    init.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="force initialization (will replace existing initialization)",
+    )
 
 
 def initialized():
@@ -40,14 +32,14 @@ def initialized():
 
 def process(args):
     spack_root = spack.paths.prefix
-    tty.msg(f"Using Spack instance at {spack_root}")
     local_dir = config.user_config_dir()
-    if initialized():
+    if initialized() and not args.force:
         assert local_dir.exists()
+        tty.msg(f"Using Spack instance at {spack_root}")
         tty.warn(f"MPD already initialized on this system ({local_dir})")
         return
 
-    if not _is_writeable(spack_root):
+    if not fs.can_access(spack_root):
         indent = " " * len("==> Error: ")
         print()
         tty.die(
@@ -58,12 +50,23 @@ def process(args):
             + "Please contact scisoft-team@fnal.gov for guidance."
         )
 
-    # Create home repo if it doesn't exist
-    local_dir = config.user_config_dir()
-    local_dir.mkdir(exist_ok=True)
+    if local_dir.exists() and args.force:
+        tty.warn(f"Reinitializating MPD on this system will remove all MPD projects")
+        should_reinitialize = tty.get_yes_or_no(
+            "Would you like to proceed with reinitialization?", default=False
+        )
+        if not should_reinitialize:
+            return tty.info("No changes made")
+
+        if str(local_dir) in spack.config.get("repos", scope="user"):
+            RemoveArgs = namedtuple("args", ["namespace_or_path", "scope"])
+            spack.cmd.repo.repo_remove(RemoveArgs(namespace_or_path=str(local_dir), scope="user"))
+        shutil.rmtree(local_dir, ignore_errors=True)
+
     full_path, _ = spack.repo.create_repo(
         str(local_dir), "local-mpd", spack.repo.packages_dir_name
     )
+    tty.msg(f"Using Spack instance at {spack_root}")
     AddArgs = namedtuple("args", ["path", "scope"])
     spack.cmd.repo.repo_add(AddArgs(path=full_path, scope="user"))
 
