@@ -12,6 +12,7 @@ from .. import new_project
 from .. import refresh
 from .. import rm_project
 from .. import select
+from .. import status
 from .. import util
 from .. import test
 from .. import zap_build
@@ -39,6 +40,7 @@ def setup_parser(subparser):
     refresh.setup_subparser(subparsers)
     rm_project.setup_subparser(subparsers)
     select.setup_subparser(subparsers)
+    status.setup_subparser(subparsers)
     test.setup_subparser(subparsers)
     zap_build.setup_subparser(subparsers)
 
@@ -58,6 +60,10 @@ def mpd(parser, args):
 
     if args.mpd_subcommand in ("list", "ls"):
         list_projects.process(args)
+        return
+
+    if args.mpd_subcommand == "status":
+        status.process(args)
         return
 
     # Each command below requires MPD to be initialized on the system.
