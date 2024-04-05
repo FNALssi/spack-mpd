@@ -7,9 +7,12 @@ from . import config
 from .util import bold
 
 
+SUBCOMMAND = "status"
+
+
 def setup_subparser(subparsers):
     subparsers.add_parser(
-        "status", description="current MPD status on this system", help="current MPD status"
+        SUBCOMMAND, description="current MPD status on this system", help="current MPD status"
     )
 
 

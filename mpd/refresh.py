@@ -2,11 +2,14 @@ import llnl.util.tty as tty
 
 from . import config
 from .new_project import refresh_project
+from .preconditions import preconditions, State
+
+SUBCOMMAND = "refresh"
 
 
 def setup_subparser(subparsers):
     refresh = subparsers.add_parser(
-        "refresh",
+        SUBCOMMAND,
         description="refresh project using current source directory and specified variants",
         help="refresh project",
     )
@@ -20,6 +23,8 @@ def setup_subparser(subparsers):
 
 
 def process(args):
+    preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
+
     name = config.selected_project()
     current_config = config.project_config(name)
     new_config = config.refresh(name, args.variants)

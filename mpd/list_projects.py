@@ -7,13 +7,17 @@ from . import config
 from .util import bold, maybe_with_color
 
 
+SUBCOMMAND = "list"
+ALIASES = ["ls"]
+
+
 def setup_subparser(subparsers):
     lst_description = """list MPD projects
 
 When no arguments are specified, prints a list of existing MPD projects
 and the status of their corresponding Spack environments."""
     lst = subparsers.add_parser(
-        "list", description=lst_description, aliases=["ls"], help="list MPD projects"
+        SUBCOMMAND, description=lst_description, aliases=ALIASES, help="list MPD projects"
     )
     lst.add_argument(
         "project", metavar="<project name>", nargs="*", help="print details of the MPD project"

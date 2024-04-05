@@ -1,7 +1,11 @@
+SUBCOMMAND = "install"
+ALIASES = ["i"]
+
+
 def setup_subparser(subparsers):
     subparsers.add_parser(
-        "install",
+        SUBCOMMAND,
         description="install (and build if necessary) repositories",
-        aliases=["i"],
+        aliases=ALIASES,
         help="install built repositories",
     )

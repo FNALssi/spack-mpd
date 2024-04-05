@@ -2,11 +2,12 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import llnl.util.tty as tty
+from .config import mpd_packages, rm_config, project_config
+from .preconditions import preconditions, State
 
-import spack.environment as ev
 
-from .config import mpd_packages, rm_config, project_config, selected_project
+SUBCOMMAND = "rm-project"
+ALIASES = ["rm"]
 
 
 def setup_subparser(subparsers):
@@ -18,7 +19,7 @@ Removing a project will:
   * Delete the 'build' and 'local' directories
   * Uninstall the project's environment"""
     rm_proj = subparsers.add_parser(
-        "rm-project", description=rm_proj_description, aliases=["rm"], help="remove MPD project"
+        SUBCOMMAND, description=rm_proj_description, aliases=ALIASES, help="remove MPD project"
     )
     rm_proj.add_argument("project", metavar="<project name>", help="MPD project to remove")
     rm_proj.add_argument(
@@ -50,21 +51,10 @@ def rm_project(name, config):
 
 
 def process(args):
-    msg = ""
-    if ev.active(args.project):
-        msg = (
-            "Must deactivate environment before removing MPD project:\n\n"
-            "  spack env deactivate\n"
-        )
-    if args.project == selected_project() and not args.force:
-        msg = (
-            "Must deselect MPD project before removing it:\n\n"
-            "  spack mpd clear\n\nOr use the --force option.\n"
-        )
-
-    if msg:
-        print()
-        tty.die(msg)
+    if args.force:
+        preconditions(State.INITIALIZED, ~State.ACTIVE_ENVIRONMENT)
+    else:
+        preconditions(State.INITIALIZED, ~State.SELECTED_PROJECT, ~State.ACTIVE_ENVIRONMENT)
 
     config = project_config(args.project)
     rm_project(args.project, config)

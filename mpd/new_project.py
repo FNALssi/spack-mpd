@@ -14,14 +14,19 @@ from spack.spec import InstallStatus, Spec
 from spack.traverse import traverse_nodes
 
 from .config import user_config_dir, mpd_project_exists, project_config_from_args, update
+from .preconditions import preconditions, State
 from .util import bold
+
+
+SUBCOMMAND = "new-project"
+ALIASES = ["n", "newDev"]
 
 
 def setup_subparser(subparsers):
     new_project = subparsers.add_parser(
-        "new-project",
+        SUBCOMMAND,
         description="create MPD development area",
-        aliases=["n", "newDev"],
+        aliases=ALIASES,
         help="create MPD development area",
     )
     new_project.add_argument("--name", required=True, help="(required)")
@@ -406,14 +411,9 @@ def refresh_project(name, project_config):
 
 
 def process(args):
-    print()
+    preconditions(State.INITIALIZED, ~State.ACTIVE_ENVIRONMENT)
 
-    env_active = ev.active_environment()
-    if env_active:
-        tty.die(
-            f"Must deactivate environment {bold(env_active.name)} before creating new project:\n\n"
-            "  spack env deactivate\n"
-        )
+    print()
 
     name = args.name
     if mpd_project_exists(name):

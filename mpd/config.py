@@ -270,6 +270,9 @@ def update_cache():
     for sp in selected_projects_dir().iterdir():
         if not _process_exists(int(sp.name)):
             sp.unlink()
+        selected_prj = sp.read_text()
+        if selected_prj not in projects:
+            sp.unlink()
 
     # Implicitly select project if environment is active
     active_env = ev.active_environment()

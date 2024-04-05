@@ -7,14 +7,18 @@ import llnl.util.tty as tty
 import spack.util.git
 
 from .config import selected_project_config
+from .preconditions import preconditions, State
 from .util import bold
+
+SUBCOMMAND = "git-clone"
+ALIASES = ["g", "gitCheckout"]
 
 
 def setup_subparser(subparsers):
     git_parser = subparsers.add_parser(
-        "git-clone",
+        SUBCOMMAND,
         description="clone git repositories for development",
-        aliases=["g", "gitCheckout"],
+        aliases=ALIASES,
         help="clone git repositories",
     )
     git_parser.add_argument(
@@ -413,6 +417,8 @@ def clone_suite(suite_name, srcs_area, local_area):
 
 
 def process(args):
+    preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
+
     if args.repos:
         config = selected_project_config()
         clone_repos(args.repos, config["source"], config["local"])

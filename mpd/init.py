@@ -12,9 +12,14 @@ import spack.repo
 from . import config
 
 
+SUBCOMMAND = "init"
+
+
 def setup_subparser(subparsers):
     init = subparsers.add_parser(
-        "init", description="initialize MPD on this system", help="initialize MPD on this system"
+        SUBCOMMAND,
+        description="initialize MPD on this system",
+        help="initialize MPD on this system",
     )
     init.add_argument("-f", "--force", action="store_true", help="allow reinitialization")
     init.add_argument(

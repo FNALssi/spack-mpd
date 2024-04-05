@@ -3,13 +3,17 @@ import subprocess
 import llnl.util.filesystem as fs
 
 from .config import selected_project_config
+from .preconditions import preconditions, State
+
+SUBCOMMAND = "build"
+ALIASES = ["b"]
 
 
 def setup_subparser(subparsers):
     build = subparsers.add_parser(
-        "build",
+        SUBCOMMAND,
         description="build repositories under development",
-        aliases=["b"],
+        aliases=ALIASES,
         help="build repositories",
     )
     build.add_argument(
@@ -57,6 +61,8 @@ def build(srcs, build_area, install_area, generator, parallel, generator_options
 
 
 def process(args):
+    preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.ACTIVE_ENVIRONMENT)
+
     config = selected_project_config()
     srcs, build_area, install_area = (config["source"], config["build"], config["install"])
     if args.clean:
