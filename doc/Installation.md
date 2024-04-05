@@ -55,3 +55,37 @@ optional arguments:
 ```
 
 Now that MPD has been installed, you can [initialize your system to use MPD](Initialization.md).
+
+### Running MPD's unit tests
+
+MPD has several unit tests that should run successfully for any system on which it is installed.  If you wish to run the unit tests, invoke:
+
+```console
+$ spack unit-test --extension=mpd
+================================================== test session starts ===================================================
+platform linux -- Python 3.9.18, pytest-7.3.2, pluggy-1.0.0
+rootdir: /home/knoepfel/spack-mpd
+configfile: pytest.ini
+testpaths: tests
+collected 4 items
+
+tests/test_mpd_clone.py .                                                                                          [ 25%]
+tests/test_mpd_init.py .                                                                                           [ 50%]
+tests/test_mpd_new_project.py ..                                                                                   [100%]
+
+================================================== slowest 30 durations ==================================================
+1.49s call     tests/test_mpd_new_project.py::test_new_project_paths
+0.81s call     tests/test_mpd_clone.py::test_new_project_clone
+0.42s call     tests/test_mpd_new_project.py::test_mpd_refresh
+0.04s call     tests/test_mpd_init.py::test_mpd_init
+0.02s setup    tests/test_mpd_clone.py::test_new_project_clone
+0.02s setup    tests/test_mpd_new_project.py::test_new_project_paths
+0.01s teardown tests/test_mpd_init.py::test_mpd_init
+0.01s teardown tests/test_mpd_new_project.py::test_mpd_refresh
+0.01s teardown tests/test_mpd_clone.py::test_new_project_clone
+
+(3 durations < 0.005s hidden.  Use -vv to show these durations.)
+=================================================== 4 passed in 2.85s ====================================================
+```
+
+If you encounter any failures, please [report an issue](https://github.com/knoepfel/spack-mpd/issues).
