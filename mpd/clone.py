@@ -412,7 +412,7 @@ def clone_suite(suite_name, srcs_area, local_area):
     local_area_path = pathlib.Path(local_area)
     tty.msg(
         bold("The " + suite_name + " suite has been cloned.  You may now invoke:")
-        + f"\n\n  source {local_area_path.absolute()}/refresh.sh\n"
+        + f"\n\n  spack mpd refresh\n"
     )
 
 

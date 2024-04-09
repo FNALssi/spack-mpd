@@ -398,8 +398,8 @@ def refresh_project(name, project_config):
     if not project_config["packages"]:
         tty.msg(
             "No packages to develop.  You can clone repositories for development by invoking\n\n"
-            "  spack mpd g --suite <suite name>\n\n"
-            "  (or type 'spack mpd g --help' for more options)\n"
+            "  spack mpd git-clone --suite <suite name>\n\n"
+            "  (or type 'spack mpd git-clone --help' for more options)\n"
         )
         return
 
@@ -444,6 +444,6 @@ def process(args):
     else:
         tty.msg(
             "You can clone repositories for development by invoking\n\n"
-            "  spack mpd g --suite <suite name>\n\n"
-            "  (or type 'spack mpd g --help' for more options)\n"
+            "  spack mpd git-clone --suite <suite name>\n\n"
+            "  (or type 'spack mpd git-clone --help' for more options)\n"
         )

@@ -7,7 +7,7 @@ project's source directory.  The help message for the `spack mpd
 git-clone` command is:
 
 ```console
-$ spack mpd g -h
+$ spack mpd git-clone -h
 usage: spack mpd git-clone [-h] [--help-repos | --help-suites | --suite <suite name>] [<repo spec> ...]
 
 clone git repositories for development
@@ -30,11 +30,11 @@ A `repo spec` can be:
 - any URL to a Git repository.
 
 > [!WARNING]
-> 1. When using `spack mpd g <repository name>`, the cloned repository
+> 1. When using `spack mpd git-clone <repository name>`, the cloned repository
 >    will be read-only (i.e. no pushes allowed to the remote
 >    repository).  Users who would like to clone repositories with
 >    write permissions should use the corresponding repository URL
->    (e.g. `spack mpd g git@github.com/Org/RepoName.git`).
+>    (e.g. `spack mpd git-clone git@github.com/Org/RepoName.git`).
 > 2. `spack mpd g` does not yet support forking of GitHub
 >    repositories.  If this is desired, users should use the [GitHub
 >    CLI](https://cli.github.com) directly.  A feature request could
@@ -49,7 +49,7 @@ will recreate the Spack environment to reflect the changes.
 You can list the existing MPD projects by invoking `spack mpd list`:
 
 ```console
-$ spack mpd ls -h
+$ spack mpd list -h
 usage: spack mpd list [-h] [-t <project name> | -b <project name> | -s <project name>] [<project name> ...]
 
 list MPD projects
@@ -75,7 +75,7 @@ prints a table of existing projects with the status of their
 corresponding environments:
 
 ```console
-$ spack mpd ls
+$ spack mpd list
 
 ==> Existing MPD projects:
 
@@ -91,7 +91,7 @@ shell session.  Projects with a preceding left-pointing triangle `◀`
 indicate projects that are active in other shell sessions:
 
 ```console
-$ spack mpd ls
+$ spack mpd list
 
 ==> Existing MPD projects:
 
@@ -111,7 +111,7 @@ overwriting another.
 If two or more shells have selected the same MPD project, a warning will be printed to the screen:
 
 ```console
-$ spack mpd ls
+$ spack mpd list
 
 ==> Existing MPD projects:
 
@@ -129,7 +129,7 @@ Destroying (or invoking `spack mpd clear`) on all but one of those shells will r
 Details of a specific project will be printed to the screen if the project name is provided as a positional argument:
 
 ```console
-$ spack mpd ls test
+$ spack mpd list test
 
 ==> Details for test
 
@@ -158,7 +158,7 @@ Sometimes it is helpful for just the path of one of the project's
 directories to be printed:
 
 ```console
-$ spack mpd ls --source test
+$ spack mpd list --source test
 /scratch/knoepfel/test-devel/srcs
 $ cd $(spack mpd ls --source test)
 (Now in test source directory)
@@ -170,7 +170,7 @@ wanting to begin development immediately:
 ```console
 $ spack env activate test
 (Spack environment test now active; MPD project test now selected)
-$ cd $(spack mpd ls --build test)
+$ cd $(spack mpd list --build test)
 (Now in test build directory)
 $ ninja
 ```

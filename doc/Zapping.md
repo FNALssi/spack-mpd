@@ -5,7 +5,7 @@ build and installation directories.  This is achieved by using the
 `spack mpd zap` command on a selected MPD project:
 
 ```console
-$ spack mpd z -h
+$ spack mpd zap -h
 usage: spack mpd zap [-h] [--all | --build | --install]
 
 delete everything in your build and/or install areas.

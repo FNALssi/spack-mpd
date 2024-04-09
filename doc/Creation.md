@@ -18,7 +18,7 @@ There are two different ways to create an MPD project:
 Both approaches are supported through the `spack mpd new-project` command:
 
 ```console
-$ spack mpd n --help
+$ spack mpd new-project --help
 usage: spack mpd new-project [-hf] --name NAME [-T TOP] [-S SRCS] [-E ENV] [variants ...]
 
 create MPD development area
@@ -65,7 +65,7 @@ The entries in `srcs` are the repositories I wish to develop.  I then
 create an MPD project in the `test-devel` directory by invoking:
 
 ```console
-$ spack mpd n --name test -E gcc-13-2-0 cxxstd=20 %gcc@13.2.0
+$ spack mpd new-project --name test -E gcc-13-2-0 cxxstd=20 %gcc@13.2.0
 
 ==> Creating project: test
 
@@ -132,7 +132,7 @@ mpd install`.
 ```console
 $ ls srcs/
 (empty)
-$ spack mpd n --name test cxxstd=20 %gcc@13.2.0
+$ spack mpd new-project --name test cxxstd=20 %gcc@13.2.0
 
 ==> Creating project: test
 
@@ -142,11 +142,11 @@ Using sources area: /scratch/knoepfel/test-devel/srcs
 
 ==> You can clone repositories for development by invoking
 
-  spack mpd g --suite <suite name>
+  spack mpd git-clone --suite <suite name>
 
-  (or type 'spack mpd g --help' for more options)
+  (or type 'spack mpd git-clone --help' for more options)
 
-$ spack mpd g cetlib cetlib-except hep-concurrency
+$ spack mpd git-clone cetlib cetlib-except hep-concurrency
 
 ==> The following repositories have been cloned:
 
@@ -184,7 +184,7 @@ development list, you would see the following upon invoking
 `new-project` (or `refresh`):
 
 ```console
-$ spack mpd g cetlib cetlib-except
+$ spack mpd git-clone cetlib cetlib-except
 
 ==> The following repositories have been cloned:
 

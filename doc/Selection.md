@@ -48,7 +48,7 @@ list`---the selected project is indicated with a right-pointing
 triangle `▶`.
 
 ```console
-$ spack mpd ls
+$ spack mpd list
 
 ==> Existing MPD projects:
 
@@ -66,7 +66,7 @@ verify the project has been cleared by invoking `spack mpd list`---you
 should no longer see any right arrow `▶` indicator.
 
 ```console
-$ spack mpd ls
+$ spack mpd list
 
 ==> Existing MPD projects:
 
@@ -97,7 +97,7 @@ The project list will also reflect if more than one shell have
 selected the same project:
 
 ```console
-$ spack mpd ls
+$ spack mpd list
 
 ==> Existing MPD projects:
 

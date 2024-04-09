@@ -17,12 +17,12 @@ following commands:
 ```console
 $ spack env deactivate
 $ spack mpd clear
-$ spack mpd rm <project name>
+$ spack mpd rm-project <project name>
 ```
 
 The last two commands can be combined so that the following is equivalent:
 
 ```console
 $ spack env deactivate
-$ spack mpd rm -f <project name>
+$ spack mpd rm-project -f <project name>
 ```
