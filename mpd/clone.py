@@ -406,7 +406,7 @@ def clone_suite(suite_name, srcs_area, local_area):
     suite = suite_for(suite_name)
     print()
     for name, repo in suite.repositories().items():
-        _clone(name, repo, srcs_area)
+        _clone(repo, srcs_area)
 
     print()
     local_area_path = pathlib.Path(local_area)
