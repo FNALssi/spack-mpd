@@ -165,14 +165,14 @@ _supported_suites = {
         "gallery",
         gh_org_name="art-framework-suite",
         repos=[
-            "cetlib_except",
+            "cetlib-except",
             "cetlib",
             "hep-concurrency",
             "fhicl-cpp",
             "fhicl-py",
             "messagefacility",
             "canvas",
-            "canvas_root_io",
+            "canvas-root-io",
             "gallery",
         ],
     ),
@@ -277,7 +277,7 @@ def help_suites():
     print(f"  {title:<{suite_width}}  Repositories")
     print("  " + "-" * 100)
     for suite in sorted(_supported_suites, key=lambda s: s.name):
-        repo_string = " ".join(suite.repos)
+        repo_string = " ".join(sorted(suite.repos))
         print(f"  {suite.name:<{suite_width}}  {repo_string}")
     print()
 
@@ -417,17 +417,21 @@ def clone_suite(suite_name, srcs_area, local_area):
 
 
 def process(args):
-    preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
-
     if args.repos:
+        preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
         config = selected_project_config()
         clone_repos(args.repos, config["source"], config["local"])
         return
 
     if args.suite:
+        preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
         config = selected_project_config()
         clone_suite(args.suite, config["source"], config["local"])
-    elif args.help_suites:
+        return
+
+    preconditions(State.INITIALIZED)
+
+    if args.help_suites:
         help_suites()
     elif args.help_repos:
         help_repos()
