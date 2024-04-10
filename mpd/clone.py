@@ -7,7 +7,7 @@ import spack.util.git
 
 from .config import selected_project_config
 from .preconditions import preconditions, State
-from .util import bold
+from .util import bold, maybe_with_color
 
 SUBCOMMAND = "git-clone"
 ALIASES = ["g", "gitCheckout"]
@@ -28,14 +28,16 @@ def setup_subparser(subparsers):
         + "(a) any repository name listed by the --help-repos option, or\n"
         + "(b) any URL to a Git repository.",
     )
+    git_parser.add_argument(
+        "--suites",
+        metavar="<suite name>",
+        help="clone repositories corresponding to the given suite name (multiple allowed)",
+        action="extend",
+        nargs="+",
+    )
     git = git_parser.add_mutually_exclusive_group()
     git.add_argument("--help-repos", action="store_true", help="list supported repositories")
     git.add_argument("--help-suites", action="store_true", help="list supported suites")
-    git.add_argument(
-        "--suite",
-        metavar="<suite name>",
-        help="clone repositories corresponding to the given suite name",
-    )
 
 
 class GitHubRepo:
@@ -372,13 +374,9 @@ def _clone(repo, srcs_area):
     local_src_dir = os.path.join(srcs_area, repo.name())
     result = git("clone", repo.url(), local_src_dir, fail_on_error=False, error=str)
     if "Cloning into" in result and git.returncode == 0:
-        return True
+        return
 
-    if "already exists" in result:
-        tty.warn(result.rstrip())
-    else:
-        tty.error(result.rstrip())
-    return False
+    return result.rstrip()
 
 
 def clone_repos(repo_specs, srcs_area, local_area):
@@ -389,8 +387,13 @@ def clone_repos(repo_specs, srcs_area, local_area):
         if not repo_to_try:
             repo_to_try = SimpleGitRepo(repo_spec)
 
-        if _clone(repo_to_try, srcs_area):
+        result = _clone(repo_to_try, srcs_area)
+        if result is None:
             cloned_repos.append(repo_spec)
+        elif "already exists" in result:
+            tty.warn(result)
+        else:
+            tty.error(result)
 
     if cloned_repos:
         print()
@@ -404,16 +407,31 @@ def clone_repos(repo_specs, srcs_area, local_area):
 
 
 def clone_suite(suite_name, srcs_area, local_area):
+    print()
+    tty.msg(f"Cloning suite {bold(suite_name)}:\n")
     suite = suite_for(suite_name)
-    print()
+    name_width = max(len(n) + 1 for n in suite.repositories().keys())
+    name_width = max(name_width, 20)
     for name, repo in suite.repositories().items():
-        _clone(repo, srcs_area)
+        result = _clone(repo, srcs_area)
+        status = None
+        color = None
+        annotation = None
+        if result is None:
+            status = "done"
+        elif "already exists" in result:
+            status = "skipped"
+            color = "Y"
+            annotation = "already exists"
+        else:
+            status = "error"
+            color = "R"
+            annotation = result
 
-    print()
-    tty.msg(
-        bold(f"The {suite_name} suite has been cloned.  You may now invoke:")
-        + "\n\n  spack mpd refresh\n"
-    )
+        line = maybe_with_color(color, f"  {name + ' ':.<{name_width}}..... {status}")
+        if annotation:
+            line += f" ({annotation})"
+        print(line)
 
 
 def process(args):
@@ -423,10 +441,18 @@ def process(args):
         clone_repos(args.repos, config["source"], config["local"])
         return
 
-    if args.suite:
+    if args.suites:
         preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
         config = selected_project_config()
-        clone_suite(args.suite, config["source"], config["local"])
+        for s in args.suites:
+            clone_suite(s, config["source"], config["local"])
+        noun_verb = "suite has" if len(args.suites) == 1 else "suites have"
+        suites_str = bold(", ".join(args.suites))
+        print()
+        tty.msg(
+            f"The {suites_str} {noun_verb} been cloned.  You may now invoke:"
+            + "\n\n  spack mpd refresh\n"
+        )
         return
 
     preconditions(State.INITIALIZED)

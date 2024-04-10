@@ -1,6 +1,7 @@
 import subprocess
 
 import llnl.util.filesystem as fs
+import spack
 
 from .config import selected_project_config
 from .preconditions import preconditions, State
@@ -37,15 +38,19 @@ def setup_subparser(subparsers):
     )
 
 
-def build(srcs, build_area, install_area, generator, parallel, generator_options):
+def build(project_config, generator, parallel, generator_options):
+    build_area = project_config["build"]
+    compilers = spack.compilers.compilers_for_spec(project_config["compiler"])
+    assert len(compilers) == 1
     configure_list = [
         "cmake",
         "--preset",
         "default",
-        srcs,
+        project_config["source"],
         "-B",
         build_area,
-        f"-DCMAKE_INSTALL_PREFIX={install_area}",
+        f"-DCMAKE_CXX_COMPILER={compilers[0].cxx}",
+        f"-DCMAKE_INSTALL_PREFIX={project_config['install']}",
     ]
     if generator:
         configure_list += ["-G", generator]
@@ -64,8 +69,7 @@ def process(args):
     preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.ACTIVE_ENVIRONMENT)
 
     config = selected_project_config()
-    srcs, build_area, install_area = (config["source"], config["build"], config["install"])
     if args.clean:
-        fs.remove_directory_contents(build_area)
+        fs.remove_directory_contents(config["build"])
 
-    build(srcs, build_area, install_area, args.generator, args.parallel, args.generator_options)
+    build(config, args.generator, args.parallel, args.generator_options)

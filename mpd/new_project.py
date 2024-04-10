@@ -189,9 +189,7 @@ def process_config(project_config):
     tty.msg("Concretizing project (this may take a few minutes)")
 
     name = project_config["name"]
-    spec_like = (
-        f"{name}-bootstrap@develop %{project_config['compiler']} {project_config['variants']}"
-    )
+    spec_like = f"{name}-bootstrap@develop {project_config['variants']}"
     spec = Spec(spec_like)
 
     bootstrap_name = spec.name
@@ -372,7 +370,7 @@ def concretize_project(project_config):
         spec = Spec(p)
         pkg_cls = PATH.get_pkg_class(spec.name)
         pkg = pkg_cls(spec)
-        base_spec = f"{p}@develop"
+        base_spec = f"{p}@develop %{project_config['compiler']}"
         if "cxxstd" in pkg.variants:
             base_spec += f" cxxstd={cxxstd}"
         packages_at_develop.append(base_spec)
