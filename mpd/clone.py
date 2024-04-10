@@ -1,5 +1,4 @@
 import os.path
-import pathlib
 import sys
 
 import llnl.util.tty as tty
@@ -411,10 +410,9 @@ def clone_suite(suite_name, srcs_area, local_area):
         _clone(repo, srcs_area)
 
     print()
-    local_area_path = pathlib.Path(local_area)
     tty.msg(
-        bold("The " + suite_name + " suite has been cloned.  You may now invoke:")
-        + f"\n\n  spack mpd refresh\n"
+        bold(f"The {suite_name} suite has been cloned.  You may now invoke:")
+        + "\n\n  spack mpd refresh\n"
     )
 
 

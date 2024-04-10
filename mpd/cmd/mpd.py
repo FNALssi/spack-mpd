@@ -1,17 +1,6 @@
-from .. import clear
-from .. import clone
-from .. import build
-from .. import init
-from .. import install
-from .. import list_projects
+import importlib
+
 from .. import config
-from .. import new_project
-from .. import refresh
-from .. import rm_project
-from .. import select
-from .. import status
-from .. import test
-from .. import zap_build
 
 description = "develop multiple packages using Spack for external software"
 section = "scripting"
@@ -34,6 +23,10 @@ subcommands = [
     "test",
     "zap_build",
 ]
+subcommand_modules = {
+    scmd: importlib.import_module(f"..{scmd}", f"spack.extensions.mpd.{scmd}")
+    for scmd in subcommands
+}
 
 
 def setup_parser(subparser):
@@ -42,13 +35,12 @@ def setup_parser(subparser):
     )
 
     subparsers = subparser.add_subparsers(dest="mpd_subcommand", required=False)
-    for name in subcommands:
-        globals()[name].setup_subparser(subparsers)
+    for m in subcommand_modules.values():
+        m.setup_subparser(subparsers)
 
 
 def mpd(parser, args):
-    for name in subcommands:
-        m = globals()[name]
+    for m in subcommand_modules.values():
         scmds = [m.SUBCOMMAND] + getattr(m, "ALIASES", [])
         if args.mpd_subcommand not in scmds:
             continue
