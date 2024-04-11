@@ -2,9 +2,11 @@ import copy
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import llnl.util.tty as tty
+import ruamel.yaml
 
 import spack.environment as ev
 import spack.hash_types as ht
@@ -20,6 +22,37 @@ from .util import bold
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n", "newDev"]
+
+
+def get_number(prompt, **kwargs):
+    default = kwargs.get("default", None)
+    abort = kwargs.get("abort", None)
+
+    if default is not None and abort is not None:
+        prompt += " (default is %s, %s to abort) " % (default, abort)
+    elif default is not None:
+        prompt += " (default is %s) " % default
+    elif abort is not None:
+        prompt += " (%s to abort) " % abort
+
+    number = None
+    while number is None:
+        tty.msg(prompt, newline=False)
+        ans = input()
+        if ans == str(abort):
+            return None
+
+        if ans:
+            try:
+                number = int(ans)
+                if number < 1:
+                    tty.msg("Please enter a valid number.")
+                    number = None
+            except ValueError:
+                tty.msg("Please enter a valid number.")
+        elif default is not None:
+            number = default
+    return number
 
 
 def setup_subparser(subparsers):
@@ -158,6 +191,9 @@ def make_yaml_file(package, spec, prefix=None, overwrite=False):
     if filepath.exists() and not overwrite:
         return str(filepath)
     with open(filepath, "w") as f:
+        # yaml = ruamel.yaml.YAML()
+        # yaml.preserve_quotes = True
+        # ruamel.yaml.dump(spec, f)
         syaml.dump(spec, stream=f, default_flow_style=False)
     return str(filepath)
 
@@ -218,7 +254,7 @@ def process_config(project_config):
         i, p = entry_with_index(nodes, pname)
         assert p
 
-        pdeps = {pdep["name"]: pdep for pdep in p["dependencies"]}
+        pdeps = {pdep["name"]: pdep for pdep in p.get("dependencies", [])}
         packages.update(pdeps)
         del nodes[i]
 
@@ -245,7 +281,7 @@ def process_config(project_config):
             variants = copy.deepcopy(p.variants)
             if "patches" in variants:
                 del variants["patches"]
-            requires.extend(str(variants).split())
+            requires.extend(ruamel.yaml.scalarstring.SingleQuotedScalarString(s) for s in str(variants).split())
         if compiler_flags := str(p.compiler_flags):
             requires.append(compiler_flags)
 
@@ -264,18 +300,16 @@ def process_config(project_config):
     env_file = make_yaml_file(
         name, dict(spack=full_block), prefix=user_config_dir(), overwrite=True
     )
-    env = ev.create(name, init_file=env_file)
+
+    ev.create(name, init_file=env_file)
     tty.info(f"Environment {name} has been created")
     update(project_config, status="created")
 
-    concretized_specs = None
-    with env.write_transaction():
-        concretized_specs = env.concretize()
-        env.write()
+    subprocess.run(["spack", "-e", name, "concretize"])
 
     absent_dependencies = []
     missing_intermediate_deps = {}
-    for n in traverse_nodes([p[1] for p in concretized_specs], order="post"):
+    for n in ev.read(name).all_specs():
         if n.name == bootstrap_name:
             continue
 
@@ -302,7 +336,14 @@ def process_config(project_config):
     update(project_config, status="concretized")
 
     msg = "Ready to install MPD project " + bold(name) + "\n"
+
     if absent_dependencies:
+        # Remove duplicates, preserving order
+        unique_absent_dependencies = []
+        for dep in absent_dependencies:
+            if dep not in unique_absent_dependencies:
+                unique_absent_dependencies.append(dep)
+        absent_dependencies = unique_absent_dependencies
 
         def _parens_number(i):
             return f"({i})"
@@ -326,7 +367,7 @@ def process_config(project_config):
         )
         return
 
-    ncores = tty.get_number("Specify number of cores to use", default=os.cpu_count() // 2)
+    ncores = get_number("Specify number of cores to use", default=os.cpu_count() // 2)
 
     tty.msg(f"Installing {name}")
     result = subprocess.run(["spack", "-e", name, "install", f"-j{ncores}"])

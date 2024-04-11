@@ -71,7 +71,7 @@ def _compiler(variants):
     compiler = None
     compiler_index = None
     for i, variant in enumerate(variants):
-        match = re.fullmatch(r"%(\w+@[\d\.]+)", variant)
+        match = re.fullmatch(r"%(\w+(@[\d\.]+|/\w+))", variant)
         if match:
             compiler = match[1]
             compiler_index = i
@@ -270,6 +270,7 @@ def update_cache():
     for sp in selected_projects_dir().iterdir():
         if not _process_exists(int(sp.name)):
             sp.unlink()
+            continue
         selected_prj = sp.read_text()
         if selected_prj not in projects:
             sp.unlink()

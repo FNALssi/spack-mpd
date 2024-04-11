@@ -23,7 +23,7 @@ def setup_subparser(subparsers):
 
 
 def process(args):
-    preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
+    preconditions(State.INITIALIZED, State.SELECTED_PROJECT, ~State.ACTIVE_ENVIRONMENT)
 
     name = config.selected_project()
     current_config = config.project_config(name)

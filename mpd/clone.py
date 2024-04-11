@@ -1,16 +1,41 @@
+import os
 import os.path
+import re
+import select
+import subprocess
 import sys
+import urllib
 
 import llnl.util.tty as tty
+import llnl.util.filesystem as fs
 
 import spack.util.git
+from spack.util import executable
+from enum import Enum, auto
 
 from .config import selected_project_config
 from .preconditions import preconditions, State
 from .util import bold, maybe_with_color
 
 SUBCOMMAND = "git-clone"
-ALIASES = ["g", "gitCheckout"]
+ALIASES = ["g", "clone"]
+
+gh = executable.which("gh")
+# Stolen from https://stackoverflow.com/a/14693789/3585575
+ansi_escape = re.compile(
+    r"""
+    \x1B  # ESC
+    (?:   # 7-bit C1 Fe (except CSI)
+        [@-Z\\-_]
+    |     # or [ for CSI, followed by a control sequence
+        \[
+        [0-?]*  # Parameter bytes
+        [ -/]*  # Intermediate bytes
+        [@-~]   # Final byte
+    )
+""",
+    re.VERBOSE,
+)
 
 
 def setup_subparser(subparsers):
@@ -36,8 +61,72 @@ def setup_subparser(subparsers):
         nargs="+",
     )
     git = git_parser.add_mutually_exclusive_group()
+    help_msg = "fork GitHub repository or set origin to already forked repository"
+    if not gh:
+        help_msg += maybe_with_color(
+            "y", "\n(not supported on this system - requires gh, which cannot be found)"
+        )
+    git.add_argument("--fork", action="store_true", help=help_msg)
     git.add_argument("--help-repos", action="store_true", help="list supported repositories")
     git.add_argument("--help-suites", action="store_true", help="list supported suites")
+
+
+class CloneState(Enum):
+    UNSET = auto()
+    DONE = auto()
+    SKIPPED = auto()
+    ERROR = auto()
+
+
+class RepoStatus:
+    def __init__(self):
+        self._cloneState = CloneState.UNSET
+        self._cloneMsg = ""
+        self._forkMsg = ""
+
+    def okay(self):
+        return self._cloneState in (CloneState.DONE, CloneState.SKIPPED)
+
+    def value(self):
+        return self._cloneState
+
+    def name(self):
+        return self.value().name.lower()
+
+    def annotation(self):
+        if self._forkMsg:
+            msg = self._forkMsg
+            if self._cloneMsg:
+                msg = self._cloneMsg + ", " + msg
+            return msg
+        if self._cloneMsg:
+            return self._cloneMsg
+        return ""
+
+    def update(self, new_state, clone_msg="", fork_msg=""):
+        assert new_state != CloneState.UNSET
+
+        # ERROR is never overwritten
+        if self._cloneState == CloneState.ERROR:
+            return
+
+        if self._cloneState in (CloneState.UNSET, CloneState.SKIPPED):
+            self._cloneState = new_state
+            if not self._cloneMsg and clone_msg:
+                self._cloneMsg = clone_msg
+            if not self._forkMsg and fork_msg:
+                self._forkMsg = fork_msg
+            return
+
+        assert self._cloneState == CloneState.DONE
+        # Only ERROR overwrites DONE
+        if new_state == CloneState.ERROR:
+            self._cloneState = CloneState.ERROR
+
+        # If we're already in DONE state, we may still need to update
+        # the fork message.
+        if not self._forkMsg and fork_msg:
+            self._forkMsg = fork_msg
 
 
 class GitHubRepo:
@@ -65,10 +154,12 @@ class RedmineRepo:
 
 class SimpleGitRepo:
     def __init__(self, url):
+        path = urllib.parse.urlparse(url).path
+        self._name = os.path.basename(path).replace(".git", "")
         self._url = url
 
     def name(self):
-        return self._url
+        return self._name
 
     def url(self):
         return self._url
@@ -374,85 +465,163 @@ def _clone(repo, srcs_area):
     local_src_dir = os.path.join(srcs_area, repo.name())
     result = git("clone", repo.url(), local_src_dir, fail_on_error=False, error=str)
     if "Cloning into" in result and git.returncode == 0:
-        return
-
+        return None
     return result.rstrip()
 
 
-def clone_repos(repo_specs, srcs_area, local_area):
-    repos = known_repos()
-    cloned_repos = []
-    for repo_spec in repo_specs:
-        repo_to_try = repos.get(repo_spec)
-        if not repo_to_try:
-            repo_to_try = SimpleGitRepo(repo_spec)
-
-        result = _clone(repo_to_try, srcs_area)
-        if result is None:
-            cloned_repos.append(repo_spec)
-        elif "already exists" in result:
-            tty.warn(result)
-        else:
-            tty.error(result)
-
-    if cloned_repos:
-        print()
-        msg = bold("The following repositories have been cloned:\n")
-        for repo in cloned_repos:
-            msg += f"\n  - {repo}"
-        tty.msg(msg + "\n")
-        msg = bold("You may now invoke:")
-        msg += "\n\n  spack mpd refresh\n"
-        tty.msg(msg)
+def _color_from(status):
+    if status.value() == CloneState.ERROR:
+        return "R"
+    if status.value() == CloneState.SKIPPED:
+        return "y"
+    if status.value() == CloneState.DONE:
+        return "g"
+    return None
 
 
-def clone_suite(suite_name, srcs_area, local_area):
-    print()
-    tty.msg(f"Cloning suite {bold(suite_name)}:\n")
-    suite = suite_for(suite_name)
-    name_width = max(len(n) + 1 for n in suite.repositories().keys())
+# Stolen from https://stackoverflow.com/a/52954716/3585575
+def _fork_repository():
+    # The relevant message when forking is buried in a message that is
+    # only printed to a TTY...so we have to fake out the system
+    master_fd, tty_fd = os.openpty()
+    p = subprocess.Popen(
+        ["gh", "repo", "fork", "--remote"],
+        bufsize=1,
+        stdout=tty_fd,
+        stderr=subprocess.STDOUT,
+        close_fds=True,
+    )
+
+    result = b""
+    timeout = 0.04  # seconds
+    while True:
+        ready, _, _ = select.select([master_fd], [], [], timeout)
+        if ready:
+            for fd in ready:
+                data = os.read(fd, 512)
+                if not data:
+                    break
+                result += data
+        elif p.poll() is not None:  # select timed-out
+            break  # p exited
+    for fd in (master_fd, tty_fd):
+        os.close(fd)  # can't do it sooner: it leads to errno.EIO error
+
+    p.wait()
+    if p.returncode != 0:
+        return "cannot fork"
+    result = result.decode().strip()
+    return ansi_escape.sub("", result)
+
+
+def clone_repos(repos, should_fork, srcs_area, local_area):
+    name_width = max(len(n) + 1 for n in repos.keys())
     name_width = max(name_width, 20)
-    for name, repo in suite.repositories().items():
+    changed_srcs_dir = False
+    for name, repo in repos.items():
         result = _clone(repo, srcs_area)
-        status = None
-        color = None
-        annotation = None
+        status = RepoStatus()
         if result is None:
-            status = "done"
+            status.update(CloneState.DONE, clone_msg="cloned")
+            changed_srcs_dir = True
         elif "already exists" in result:
-            status = "skipped"
-            color = "Y"
-            annotation = "already exists"
+            status.update(CloneState.SKIPPED, clone_msg="already cloned")
         else:
-            status = "error"
-            color = "R"
-            annotation = result
+            status.update(CloneState.ERROR, clone_msg=result)
 
-        line = maybe_with_color(color, f"  {name + ' ':.<{name_width}}..... {status}")
-        if annotation:
-            line += f" ({annotation})"
+        if status.okay() and should_fork:
+            with fs.working_dir(os.path.join(srcs_area, name)):
+                result = gh("repo", "set-default", repo.url(), output=str, error=str)
+                if gh.returncode != 0:
+                    status.update(
+                        CloneState.ERROR, fork_msg="could not set default URL for forking"
+                    )
+                if status.okay():
+                    result = _fork_repository()
+                    if result == "cannot fork":
+                        status.update(CloneState.ERROR, fork_msg="could not fork")
+                    elif "Created fork" in result:
+                        m = re.search(r"Created fork (\S+)", result, re.DOTALL)
+                        status.update(CloneState.DONE, fork_msg="created fork " + m.group(1))
+                    elif "already exists" in result and "Added remote" in result:
+                        m = re.search(r"(\S+) already exists", result, re.DOTALL)
+                        status.update(CloneState.SKIPPED, fork_msg="added fork " + m.group(1))
+                    elif "already exists" in result and "Using existing remote" in result:
+                        m = re.search(r"(\S+) already exists", result, re.DOTALL)
+                        status.update(CloneState.SKIPPED, fork_msg="using fork " + m.group(1))
+                    else:
+                        status.update(CloneState.ERROR, fork_msg=result)
+
+        line = maybe_with_color(
+            _color_from(status), f"  {name + ' ':.<{name_width}}..... {status.name():<7}"
+        )
+        if status.annotation():
+            line += f" ({status.annotation()})"
         print(line)
+
+    return changed_srcs_dir
 
 
 def process(args):
+    if args.fork:
+        if not gh:
+            tty.die(
+                f"Forking has been disabled (the {bold('gh')} executable cannot be found).\n"
+                "           You can still clone repositories."
+            )
+        # FIXME: Should have a check for successful gh auth status command
+
+    should_fork = args.fork and gh
     if args.repos:
         preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
+        print()
+        preamble = "Cloning"
+        if should_fork:
+            preamble += " and forking"
+        tty.msg(f"{preamble}:\n")
         config = selected_project_config()
-        clone_repos(args.repos, config["source"], config["local"])
+        repos = known_repos()
+        repos_to_clone = {}
+        for repo_spec in args.repos:
+            repo = repos.get(repo_spec, SimpleGitRepo(repo_spec))
+            repos_to_clone[repo.name()] = repo
+        changed_srcs_dir = clone_repos(
+            repos_to_clone, should_fork, config["source"], config["local"]
+        )
+        print()
+        if changed_srcs_dir:
+            tty.msg("You may now invoke:\n\n  spack mpd refresh\n")
+        else:
+            tty.msg("No repositories added\n")
         return
 
     if args.suites:
         preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
         config = selected_project_config()
+
+        changed_srcs_dir = False
         for s in args.suites:
-            clone_suite(s, config["source"], config["local"])
-        noun_verb = "suite has" if len(args.suites) == 1 else "suites have"
-        suites_str = bold(", ".join(args.suites))
+            suite = None
+            try:
+                suite = suite_for(s)
+            except StopIteration:
+                print()
+                tty.warn(f"Skipping unknown suite {bold(s)}")
+                continue
+
+            print()
+            preamble = "Cloning"
+            if should_fork:
+                preamble += " and forking"
+            tty.msg(f"{preamble} suite {bold(s)}:\n")
+            if clone_repos(suite.repositories(), should_fork, config["source"], config["local"]):
+                changed_srcs_dir = True
+
         print()
-        tty.msg(
-            f"The {suites_str} {noun_verb} been cloned.  You may now invoke:"
-            + "\n\n  spack mpd refresh\n"
-        )
+        if changed_srcs_dir:
+            tty.msg("You may now invoke:\n\n  spack mpd refresh\n")
+        else:
+            tty.msg("No repositories added\n")
         return
 
     preconditions(State.INITIALIZED)
