@@ -18,15 +18,23 @@ developers.
 1. You must be able to write to the Spack installation that you set up.
    1. For developers of packages that depend on SciSoft software, you should clone the Fermilab fork of Spack `git clone https://github.com/FNALssi/spack.git`.
    2. _You are encouraged to [chain upstream Spack installations](https://spack.readthedocs.io/en/latest/chain.html) to your own installation to avoid unnecessary building, installation, and wasted disk space._
-3. Each package to be developed must have a [Spack recipe](https://spack.readthedocs.io/en/latest/packaging_guide.html).
-4. Invoke `source <your spack installation>/share/spack/setup-env.sh`.
+2. Invoke `source <your spack installation>/share/spack/setup-env.sh`.
+3. Each package to be developed must have:
+   1.  An accessible [Spack recipe](https://spack.readthedocs.io/en/latest/packaging_guide.html).  To verify this, you should see the package listed when typing `spack list <package name>`.
+   2.  A `develop` version (assumes an accessible Spack recipe).  To verify this, you should see `develop` listed as a supported version when typing `spack info <package name>`.
+4. Developers of SciSoft-provided software (`art`, `larreco`, `nusimdata`, etc.) should make sure they clone the Fermilab-managed Spack recipes:
+    ```console
+    $ cd <some dir>
+    $ git clone https://github.com/FNALssi/fnal_art.git
+    $ spack repo add fnal_art
+    ```
 
 ## Using MPD
 
 0. [Installation](doc/Installation.md) (do this first)
 1. [Initialization](doc/Initialization.md) (do this second)
-2. [Project selection and environment activation](doc/Selection.md)
-3. [Creating a project](doc/Creation.md)
+2. [Creating a project](doc/Creation.md) (skip if you do not need a new project)
+3. [Project selection and environment activation](doc/Selection.md)
 4. [Building a project](doc/Building.md)
 5. [Zapping a project](doc/Zapping.md)
 6. [Removing a project](doc/Removing.md)
