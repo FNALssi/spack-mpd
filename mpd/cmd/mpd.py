@@ -1,5 +1,8 @@
 import importlib
 
+import llnl.util.tty as tty
+import spack
+
 from .. import config
 
 description = "develop multiple packages using Spack for external software"
@@ -40,6 +43,9 @@ def setup_parser(subparser):
 
 
 def mpd(parser, args):
+    if spack.spack_version_info < (0, 22):
+        tty.die(f"MPD requires Spack 0.22 or newer (using {spack.spack_version})")
+
     for m in subcommand_modules.values():
         scmds = [m.SUBCOMMAND] + getattr(m, "ALIASES", [])
         if args.mpd_subcommand not in scmds:

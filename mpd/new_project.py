@@ -191,9 +191,6 @@ def make_yaml_file(package, spec, prefix=None, overwrite=False):
     if filepath.exists() and not overwrite:
         return str(filepath)
     with open(filepath, "w") as f:
-        # yaml = ruamel.yaml.YAML()
-        # yaml.preserve_quotes = True
-        # ruamel.yaml.dump(spec, f)
         syaml.dump(spec, stream=f, default_flow_style=False)
     return str(filepath)
 
@@ -205,22 +202,8 @@ def make_bundle_file(name, deps, project_config):
     package_recipe.write_text(bundle_template(name, deps))
 
 
-def ensure_proto_env_package_files(proto_envs):
-    filenames = []
-    for penv in proto_envs:
-        penv_packages_config = dict(packages=penv.manifest.configuration.get("packages", {}))
-        filenames.append(
-            make_yaml_file(
-                f"{penv.name}-packages-config", penv_packages_config, prefix=user_config_dir()
-            )
-        )
-    return filenames
-
-
 def process_config(project_config):
     proto_envs = [ev.read(name) for name in project_config["envs"]]
-    proto_env_packages_files = ensure_proto_env_package_files(proto_envs)
-
     print()
     tty.msg("Concretizing project (this may take a few minutes)")
 
@@ -290,7 +273,7 @@ def process_config(project_config):
     # Prepend compiler
     user_specs.insert(0, project_config["compiler"])
     full_block = dict(
-        include=proto_env_packages_files,
+        include_concrete=[penv.path for penv in proto_envs],
         definitions=[dict(compiler=[project_config["compiler"]])],
         specs=user_specs,
         concretizer=dict(unify=True, reuse=True),
@@ -443,8 +426,6 @@ def refresh_project(name, project_config):
         return
 
     if ev.exists(name):
-        proto_envs = [ev.read(name) for name in project_config["envs"]]
-        ensure_proto_env_package_files(proto_envs)
         ev.read(name).destroy()
     concretize_project(project_config)
 
