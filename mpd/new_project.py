@@ -13,7 +13,6 @@ import spack.hash_types as ht
 import spack.util.spack_yaml as syaml
 from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
-from spack.traverse import traverse_nodes
 
 from .config import user_config_dir, mpd_project_exists, project_config_from_args, update
 from .preconditions import preconditions, State
@@ -264,7 +263,9 @@ def process_config(project_config):
             variants = copy.deepcopy(p.variants)
             if "patches" in variants:
                 del variants["patches"]
-            requires.extend(ruamel.yaml.scalarstring.SingleQuotedScalarString(s) for s in str(variants).split())
+            requires.extend(
+                ruamel.yaml.scalarstring.SingleQuotedScalarString(s) for s in str(variants).split()
+            )
         if compiler_flags := str(p.compiler_flags):
             requires.append(compiler_flags)
 
@@ -284,15 +285,17 @@ def process_config(project_config):
         name, dict(spack=full_block), prefix=user_config_dir(), overwrite=True
     )
 
-    ev.create(name, init_file=env_file)
+    env = ev.create(name, init_file=env_file)
     tty.info(f"Environment {name} has been created")
     update(project_config, status="created")
 
-    subprocess.run(["spack", "-e", name, "concretize"])
+    with env, env.write_transaction():
+        env.concretize()
+        env.write()
 
     absent_dependencies = []
     missing_intermediate_deps = {}
-    for n in ev.read(name).all_specs():
+    for n in env.all_specs():
         if n.name == bootstrap_name:
             continue
 
