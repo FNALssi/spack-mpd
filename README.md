@@ -26,7 +26,11 @@ developers.
     ```console
     $ cd <some dir>
     $ git clone https://github.com/FNALssi/fnal_art.git
+    $ git clone https://github.com/NuSoftHEP/nusofthep-spack-recipes.git
+    $ git clone https://github.com/LArSoft/larsoft-spack-recipes.git
     $ spack repo add fnal_art
+    $ spack repo add nusofthep-spack-packages
+    $ spack repo add larsoft-spack-packages
     ```
 
 ## Using MPD
