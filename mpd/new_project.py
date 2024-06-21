@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import llnl.util.tty as tty
@@ -103,12 +104,11 @@ def entry_with_index(package_list, package_name):
 
 
 def cmake_lists_preamble(package):
+    date = time.strftime("%Y-%m-%d")
     return f"""cmake_minimum_required (VERSION 3.18.2 FATAL_ERROR)
-project({package}-devel LANGUAGES NONE)
+enable_testing()
 
-find_package(cetmodules REQUIRED)
-include(CetCMakeEnv)
-
+project({package}-{date} LANGUAGES NONE)
 """
 
 
@@ -177,8 +177,7 @@ def make_cmake_file(package, dependencies, project_config):
     with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
         f.write(cmake_lists_preamble(package))
         for d in dependencies:
-            f.write(f"add_subdirectory({d})\n")
-        f.write("\nenable_testing()")
+            f.write(f"\nadd_subdirectory({d})")
 
     with open((source_path / "CMakePresets.json").absolute(), "w") as f:
         cmake_presets(source_path, dependencies, project_config["cxxstd"], f)
