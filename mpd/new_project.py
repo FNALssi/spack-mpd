@@ -8,6 +8,7 @@ from pathlib import Path
 import llnl.util.tty as tty
 import ruamel.yaml
 
+import spack.deptypes as dt
 import spack.environment as ev
 import spack.hash_types as ht
 import spack.util.spack_yaml as syaml
@@ -240,16 +241,18 @@ def process_config(project_config):
         packages.update(pdeps)
         del nodes[i]
 
-    for pname in package_names:
+    for pname in packages_to_develop:
         del packages[pname]
 
-    user_specs = []
+    user_specs = set()
     packages_block = {}
-    for p in concretized_spec.traverse():
+    for p in concretized_spec.traverse(deptype=dt.BUILD | dt.RUN):
         if p.name not in packages:
             continue
 
-        user_specs.append(p.name)
+        # External packages cannot be specs
+        if p.install_status() != InstallStatus.external:
+            user_specs.add(p.name)
 
         if any(penv.matching_spec(p) for penv in proto_envs):
             continue
@@ -272,11 +275,10 @@ def process_config(project_config):
         packages_block[p.name] = dict(require=requires)
 
     # Prepend compiler
-    user_specs.insert(0, project_config["compiler"])
     full_block = dict(
         include_concrete=[penv.path for penv in proto_envs],
         definitions=[dict(compiler=[project_config["compiler"]])],
-        specs=user_specs,
+        specs=[project_config["compiler"]] + list(user_specs),
         concretizer=dict(unify=True, reuse=True),
         packages=packages_block,
     )
@@ -401,6 +403,12 @@ def concretize_project(project_config):
         if "cxxstd" in pkg.variants:
             base_spec += f" cxxstd={cxxstd}"
         packages_at_develop.append(base_spec)
+
+    dependencies_to_add = project_config["variants"].split("^")
+    # Always erase the first entry...it either applies to the top-level package, or is emtpy.
+    dependencies_to_add.pop(0)
+
+    packages_at_develop.extend(dependencies_to_add)
 
     make_bundle_file(project_config["name"] + "-bootstrap", packages_at_develop, project_config)
 

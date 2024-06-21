@@ -83,6 +83,10 @@ def _cxxstd(variants):
     cxx_standard = _DEFAULT_CXXSTD
     cxxstd_index = None
     for i, variant in enumerate(variants):
+        # We want to pick out the cxxstd variant for the top-level spec, not any dependencies.
+        if variant.startswith("^"):
+            break
+
         match = re.fullmatch(r"cxxstd={1,2}(\d{2})", variant)
         if match:
             cxx_standard = match[1]
@@ -187,20 +191,21 @@ def refresh(project_name, new_variants):
     # Update .mpd file
     config["projects"][project_name]["packages"] = packages_to_develop
 
-    # Select and remove compiler
-    compiler, compiler_index = _compiler(new_variants)
-    if compiler_index is not None:
-        del new_variants[compiler_index]
-        config["projects"][project_name]["compiler"] = compiler
+    if new_variants:
+        # Select and remove compiler
+        compiler, compiler_index = _compiler(new_variants)
+        if compiler_index is not None:
+            del new_variants[compiler_index]
+            config["projects"][project_name]["compiler"] = compiler
 
-    # Select and remove cxxstd
-    cxxstd, cxxstd_index = _cxxstd(new_variants)
-    if cxxstd_index is not None:
-        del new_variants[cxxstd_index]
-        config["projects"][project_name]["cxxstd"] = cxxstd
+        # Select and remove cxxstd
+        cxxstd, cxxstd_index = _cxxstd(new_variants)
+        if cxxstd_index is not None:
+            del new_variants[cxxstd_index]
+            config["projects"][project_name]["cxxstd"] = cxxstd
 
-    # Rest of variants
-    config["projects"][project_name]["variants"] = " ".join(new_variants)
+        # Rest of variants
+        config["projects"][project_name]["variants"] = " ".join(new_variants)
 
     with open(config_file, "w") as f:
         syaml.dump(config, stream=f)
