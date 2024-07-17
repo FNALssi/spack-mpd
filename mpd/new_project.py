@@ -6,8 +6,9 @@ import sys
 import time
 from pathlib import Path
 
-import llnl.util.tty as tty
 import ruamel.yaml
+
+import llnl.util.tty as tty
 
 import spack.deptypes as dt
 import spack.environment as ev
@@ -16,10 +17,9 @@ import spack.util.spack_yaml as syaml
 from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
 
-from .config import user_config_dir, mpd_project_exists, project_config_from_args, update
-from .preconditions import preconditions, State
+from .config import mpd_project_exists, project_config_from_args, update, user_config_dir
+from .preconditions import State, preconditions
 from .util import bold
-
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n", "newDev"]
@@ -190,9 +190,6 @@ def make_yaml_file(package, spec, prefix=None, overwrite=False):
     if filepath.exists() and not overwrite:
         return str(filepath)
     with open(filepath, "w") as f:
-        # yaml = ruamel.yaml.YAML()
-        # yaml.preserve_quotes = True
-        # ruamel.yaml.dump(spec, f)
         syaml.dump(spec, stream=f, default_flow_style=False)
     return str(filepath)
 
@@ -204,15 +201,28 @@ def make_bundle_file(name, deps, project_config):
     package_recipe.write_text(bundle_template(name, deps))
 
 
+def external_config_for_spec(spec):
+    external_config = {"spec": spec.short_spec, "prefix": str(spec.prefix), "buildable": False}
+    return {"externals": [external_config]}
+
+
 def ensure_proto_env_package_files(proto_envs):
     filenames = []
     for penv in proto_envs:
-        penv_packages_config = dict(packages=penv.manifest.configuration.get("packages", {}))
+        package_list = {pkg.name: external_config_for_spec(pkg) for pkg in penv.all_specs()}
+
+        # Don't forget the 'all' stanza
+        all_config = penv.manifest.configuration.get("packages", {}).get("all", {})
+        if all_config:
+            package_list["all"] = all_config
+
+        penv_packages_config = dict(packages=package_list)
         filenames.append(
             make_yaml_file(
                 f"{penv.name}-packages-config", penv_packages_config, prefix=user_config_dir()
             )
         )
+
     return filenames
 
 

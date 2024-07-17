@@ -1,10 +1,13 @@
 import subprocess
 
 import llnl.util.filesystem as fs
+import llnl.util.tty as tty
+
 import spack
 
 from .config import selected_project_config
-from .preconditions import preconditions, State
+from .preconditions import State, preconditions
+from .util import maybe_with_color
 
 SUBCOMMAND = "build"
 ALIASES = ["b"]
@@ -54,15 +57,28 @@ def build(project_config, generator, parallel, generator_options):
     ]
     if generator:
         configure_list += ["-G", generator]
+
+    configure_list_str = " ".join(configure_list)
+    print()
+    tty.msg("Configuring with command:\n\n" + maybe_with_color("c", configure_list_str) + "\n")
+
     subprocess.run(configure_list)
 
-    generator_list = ["--"]
+    generator_list = []
     if parallel:
         generator_list.append(f"-j{parallel}")
     if generator_options:
         generator_list += generator_options
 
-    subprocess.run(["cmake", "--build", build_area] + generator_list)
+    if generator_list:
+        generator_list.insert(0, "--")
+
+    all_arguments = ["cmake", "--build", build_area] + generator_list
+    all_arguments_str = " ".join(all_arguments)
+    print()
+    tty.msg("Building with command:\n\n" + maybe_with_color("c", all_arguments_str) + "\n")
+
+    subprocess.run(all_arguments)
 
 
 def process(args):
