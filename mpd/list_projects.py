@@ -6,7 +6,6 @@ import spack.util.spack_yaml as syaml
 from . import config
 from .util import bold, maybe_with_color
 
-
 SUBCOMMAND = "list"
 ALIASES = ["ls"]
 
@@ -83,18 +82,21 @@ def list_projects():
     name = "Project name"
     name_width = max(len(k) for k in projects.keys())
     name_width = max(len(name), name_width)
-    status = "Environment status"
+    status = "Environment"
     status_width = len(status)
-    msg += f"   {name:<{name_width}}    {status}\n"
-    msg += "   " + "-" * name_width + "    " + "-" * status_width
+    deployed = "Deployed environment"
+    deployed_width = len(deployed)
+    msg += f"   {name:<{name_width}}    {status}    {deployed}\n"
+    msg += "   " + "-" * name_width + "    " + "-" * status_width + "    " + "-" * deployed_width
 
     selected = config.selected_projects()
     for key, value in projects.items():
         status = "active" if ev.active(key) else value["status"]
+        deployed = value.get("deployed", "(none)")
         indicator, color_code, warning = format_fields(key, selected)
         msg += maybe_with_color(
             color_code,
-            f"\n {indicator} {key:<{name_width}}    {status:<{status_width}}  {warning}",
+            f"\n {indicator} {key:<{name_width}}    {status:<{status_width}}    {deployed:<{deployed_width}} {warning}",
         )
     msg += "\n"
     print()

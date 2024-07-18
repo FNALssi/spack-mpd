@@ -13,47 +13,15 @@ import llnl.util.tty as tty
 import spack.deptypes as dt
 import spack.environment as ev
 import spack.hash_types as ht
-import spack.util.spack_yaml as syaml
 from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
 
 from .config import mpd_project_exists, project_config_from_args, update, user_config_dir
 from .preconditions import State, preconditions
-from .util import bold
+from .util import bold, get_number, make_yaml_file
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n", "newDev"]
-
-
-def get_number(prompt, **kwargs):
-    default = kwargs.get("default", None)
-    abort = kwargs.get("abort", None)
-
-    if default is not None and abort is not None:
-        prompt += " (default is %s, %s to abort) " % (default, abort)
-    elif default is not None:
-        prompt += " (default is %s) " % default
-    elif abort is not None:
-        prompt += " (%s to abort) " % abort
-
-    number = None
-    while number is None:
-        tty.msg(prompt, newline=False)
-        ans = input()
-        if ans == str(abort):
-            return None
-
-        if ans:
-            try:
-                number = int(ans)
-                if number < 1:
-                    tty.msg("Please enter a valid number.")
-                    number = None
-            except ValueError:
-                tty.msg("Please enter a valid number.")
-        elif default is not None:
-            number = default
-    return number
 
 
 def setup_subparser(subparsers):
@@ -181,17 +149,6 @@ def make_cmake_file(package, dependencies, project_config):
 
     with open((source_path / "CMakePresets.json").absolute(), "w") as f:
         cmake_presets(source_path, dependencies, project_config["cxxstd"], f)
-
-
-def make_yaml_file(package, spec, prefix=None, overwrite=False):
-    filepath = Path(f"{package}.yaml")
-    if prefix:
-        filepath = prefix / filepath
-    if filepath.exists() and not overwrite:
-        return str(filepath)
-    with open(filepath, "w") as f:
-        syaml.dump(spec, stream=f, default_flow_style=False)
-    return str(filepath)
 
 
 def make_bundle_file(name, deps, project_config):
