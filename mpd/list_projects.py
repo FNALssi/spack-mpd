@@ -90,7 +90,7 @@ def list_projects():
     msg += "   " + "-" * name_width + "    " + "-" * status_width + "    " + "-" * deployed_width
 
     selected = config.selected_projects()
-    for key, value in projects.items():
+    for key, value in sorted(projects.items()):
         status = "active" if ev.active(key) else value["status"]
         deployed = value.get("deployed", "(none)")
         indicator, color_code, warning = format_fields(key, selected)
