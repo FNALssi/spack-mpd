@@ -71,7 +71,7 @@ def _compiler(variants):
     compiler = None
     compiler_index = None
     for i, variant in enumerate(variants):
-        match = re.fullmatch(r"%(\w+(@[\d\.]+|/\w+))", variant)
+        match = re.fullmatch(r"%([\w-]+(@[\d\.]+|/\w+)?)", variant)
         if match:
             compiler = match[1]
             compiler_index = i

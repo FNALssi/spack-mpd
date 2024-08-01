@@ -10,6 +10,7 @@ import ruamel.yaml
 
 import llnl.util.tty as tty
 
+import spack.compilers as compilers
 import spack.deptypes as dt
 import spack.environment as ev
 import spack.hash_types as ht
@@ -257,11 +258,20 @@ def process_config(project_config):
 
         packages_block[p.name] = dict(require=requires)
 
-    # Prepend compiler
+    # If the compiler has been installed via Spack, in can be included as a spec in the
+    # environment configuration.  This makes it possible to use (e.g.) g++ directly within
+    # the environment without having to specify the full path to CMake.
+    compiler = compilers.find(project_config["compiler"])[0]
+    compiler_str = [ruamel.yaml.scalarstring.SingleQuotedScalarString(compiler)]
+    cpspec = compilers.pkg_spec_for_compiler(compiler)
+    maybe_include_compiler = []
+    if cpspec.install_status() == InstallStatus.installed:
+        maybe_include_compiler = compiler_str
+
     full_block = dict(
         include=proto_env_packages_files,
-        definitions=[dict(compiler=[project_config["compiler"]])],
-        specs=[project_config["compiler"]] + list(user_specs),
+        definitions=[dict(compiler=compiler_str)],
+        specs= maybe_include_compiler + list(user_specs),
         concretizer=dict(unify=True, reuse=True),
         packages=packages_block,
     )
