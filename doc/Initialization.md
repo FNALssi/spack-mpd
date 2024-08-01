@@ -30,12 +30,17 @@ have already initialized, you will see something like:
 ==> Warning: MPD already initialized on this system (/home/knoepfel/.mpd)
 ```
 
-If you wish to "start from scratch" you may remove the directory that
-is reported above (e.g. `/home/knoepfel/.mpd`), but you must
-additionally invoke `spack repo rm local-mpd`.  It is also recommended
-that _before_ you remove the above directory, you uninstall any
-packages or environments whose recipe files or environment
-specifications are located in the that directory.
+If you wish to "start from scratch" you may force a reinitialization, which will remove
+all existing projects:
+
+```console
+$ spack mpd init -f
+==> Warning: Reinitializing MPD on this system will remove all MPD projects
+==> Would you like to proceed with reinitialization? [y/N] y
+==> Removed repository /home/knoepfel/.mpd
+==> Using Spack instance at /scratch/knoepfel/spack
+==> Added repo with namespace 'local-mpd'.
+```
 
 ### A writeable Spack instance
 
@@ -51,5 +56,4 @@ when invoking `spack mpd init` you will see an error like:
 ```
 
 At this point, MPD does not yet support the creation of writeable
-Spack instances as part of the initialization process, but we expect
-this limitation to be addressed soon.
+Spack instances as part of the initialization process.

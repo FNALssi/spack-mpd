@@ -75,6 +75,10 @@ def process(args):
         str(local_dir), "local-mpd", spack.repo.packages_dir_name
     )
     tty.msg(f"Using Spack instance at {spack_root}")
+
+    # The on-disk configuration is adjusted in this process, so we must clear the caches
+    # to force repo_add to reread the configuration files.
+    spack.config.CONFIG.clear_caches()
     AddArgs = namedtuple("args", ["path", "scope"])
     spack.cmd.repo.repo_add(AddArgs(path=full_path, scope="user"))
 
