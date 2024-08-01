@@ -27,7 +27,7 @@ scripting:
 and furthermore, if you type `spack mpd --help` you should see something like:
 
 ```console
-$ spack mpd --help
+$ spack mpd -h
 usage: spack mpd [-hV] SUBCOMMAND ...
 
 develop multiple packages using Spack for external software
@@ -36,20 +36,22 @@ positional arguments:
   SUBCOMMAND
     build (b)           build repositories
     clear               clear selected MPD project
-    git-clone (g, gitCheckout)
+    git-clone (g, clone)
                         clone git repositories
+    deploy (d)          deploy developed packages
     init                initialize MPD on this system
     install (i)         install built repositories
     list (ls)           list MPD projects
     new-project (n, newDev)
                         create MPD development area
-    refresh             refresh project area
+    refresh             refresh project
     rm-project (rm)     remove MPD project
     select              select MPD project
+    status              current MPD status
     test (t)            build and run tests
     zap (z)             delete everything in your build and/or install areas
 
-optional arguments:
+options:
   -V, --version         print MPD version (0.1.0) and exit
   -h, --help            show this help message and exit
 ```
