@@ -47,7 +47,8 @@ def selected_project_token():
 
 
 def user_config_dir():
-    dir_from_config = spack.config.get('config:mpd_config_dir')
+    dir_from_config = spack.config.get('config:mpd_user_dir')
+    tty.debug(f"Directory from config is {dir_from_config}")
     if dir_from_config is not None and Path(dir_from_config).exists():
       return Path(dir_from_config).resolve()
     return (Path.home() / ".mpd").resolve()

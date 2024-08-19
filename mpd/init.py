@@ -35,7 +35,9 @@ def setup_subparser(subparsers):
 
 def initialized():
     local_dir = config.user_config_dir()
-    return local_dir.exists() and str(local_dir) in spack.config.get("repos") #, scope="user"
+    repos = spack.config.get("repos")
+    tty.debug(f"Checking that local user dir {str(local_dir)} exists and that it is in the list {repos}")
+    return local_dir.exists() and str(local_dir) in repos #, scope="user"
 
 
 def process(args):
