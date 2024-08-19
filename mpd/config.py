@@ -134,6 +134,9 @@ def project_config_from_args(args):
 
     if compiler:
         project["compiler"] = compiler
+    else:
+        tty.warn(f"No compiler spec specified in the variants list, using {_NONE_STR}")
+        project["compiler"] = _NONE_STR
 
     project["cxxstd"] = cxxstd
     project["variants"] = " ".join(args.variants)
