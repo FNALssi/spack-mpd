@@ -7,6 +7,7 @@ import ruamel
 import llnl.util.tty as tty
 
 import spack.environment as ev
+import spack.config
 import spack.util.spack_yaml as syaml
 
 from . import util
@@ -46,6 +47,9 @@ def selected_project_token():
 
 
 def user_config_dir():
+    dir_from_config = spack.config.get('config:mpd_config_dir')
+    if dir_from_config is not None and Path.exists(dir_from_config):
+      return Path(dir_from_config).resolve()
     return (Path.home() / ".mpd").resolve()
 
 
