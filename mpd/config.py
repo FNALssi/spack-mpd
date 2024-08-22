@@ -7,6 +7,7 @@ import ruamel
 import llnl.util.tty as tty
 
 import spack.environment as ev
+import spack.config
 import spack.util.spack_yaml as syaml
 
 from . import util
@@ -46,7 +47,7 @@ def selected_project_token():
 
 
 def user_config_dir():
-    return (Path.home() / ".mpd").resolve()
+    return spack.config.get('config:mpd_user_dir')
 
 
 def mpd_packages():
@@ -129,6 +130,9 @@ def project_config_from_args(args):
 
     if compiler:
         project["compiler"] = compiler
+    else:
+        tty.warn(f"No compiler spec specified in the variants list, using {_NONE_STR}")
+        project["compiler"] = _NONE_STR
 
     project["cxxstd"] = cxxstd
     project["variants"] = " ".join(args.variants)

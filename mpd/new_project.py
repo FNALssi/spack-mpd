@@ -55,6 +55,7 @@ def setup_subparser(subparsers):
         help="environments from which to create project\n(multiple allowed)",
         action="append",
     )
+    new_project.add_argument("-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts")
     new_project.add_argument("variants", nargs="*", help="variants to apply to developed packages")
 
 
@@ -184,7 +185,7 @@ def ensure_proto_env_package_files(proto_envs):
     return filenames
 
 
-def process_config(project_config):
+def process_config(project_config, yes_to_all):
     proto_envs = [ev.read(name) for name in project_config["envs"]]
     proto_env_packages_files = ensure_proto_env_package_files(proto_envs)
 
@@ -337,9 +338,12 @@ def process_config(project_config):
         msg += "\n\nPlease ensure you have adequate space for these installations.\n"
     tty.msg(msg)
 
-    should_install = tty.get_yes_or_no(
-        "Would you like to continue with installation?", default=True
-    )
+    if not yes_to_all:
+        should_install = tty.get_yes_or_no(
+            "Would you like to continue with installation?", default=True
+        )
+    else:
+        should_install = True
 
     if should_install is False:
         print()
@@ -348,7 +352,10 @@ def process_config(project_config):
         )
         return
 
-    ncores = get_number("Specify number of cores to use", default=os.cpu_count() // 2)
+    if not yes_to_all:
+        ncores = get_number("Specify number of cores to use", default=os.cpu_count() // 2)
+    else:
+        ncores = os.cpu_count() // 2
 
     tty.msg(f"Installing {name}")
     result = subprocess.run(["spack", "-e", name, "install", f"-j{ncores}"])
@@ -381,7 +388,7 @@ def prepare_project(project_config):
         Path(project_config[d]).mkdir(exist_ok=True)
 
 
-def concretize_project(project_config):
+def concretize_project(project_config, yes_to_all):
     packages_to_develop = project_config["packages"]
 
     # Always replace the bootstrap bundle file
@@ -405,7 +412,7 @@ def concretize_project(project_config):
 
     make_bundle_file(project_config["name"] + "-bootstrap", packages_at_develop, project_config)
 
-    process_config(project_config)
+    process_config(project_config, yes_to_all)
 
 
 def declare_active(name):
@@ -415,7 +422,7 @@ def declare_active(name):
     (active / f"{session_id}").write_text(name)
 
 
-def refresh_project(name, project_config):
+def refresh_project(name, project_config, yes_to_all):
     print()
 
     tty.msg(f"Refreshing project: {bold(name)}")
@@ -433,7 +440,7 @@ def refresh_project(name, project_config):
         proto_envs = [ev.read(name) for name in project_config["envs"]]
         ensure_proto_env_package_files(proto_envs)
         ev.read(name).destroy()
-    concretize_project(project_config)
+    concretize_project(project_config, yes_to_all)
 
 
 def process(args):
@@ -466,7 +473,7 @@ def process(args):
     declare_active(project_config["name"])
 
     if len(project_config["packages"]):
-        concretize_project(project_config)
+        concretize_project(project_config, args.yes_to_all)
     else:
         tty.msg(
             "You can clone repositories for development by invoking\n\n"
