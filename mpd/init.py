@@ -46,11 +46,8 @@ def initialized():
 def process(args):
     spack_root = spack.paths.prefix
 
-    if args.user_dir is not None:
-        local_dir = Path(args.user_dir).resolve()
-        spack.config.set('config:mpd_user_dir', str(local_dir))
-    else:
-        local_dir = config.user_config_dir()
+    local_dir = Path(args.user_dir).resolve()
+    spack.config.set('config:mpd_user_dir', str(local_dir))
 
     if initialized() and not args.force:
         assert local_dir.exists()
