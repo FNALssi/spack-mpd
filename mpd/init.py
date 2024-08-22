@@ -29,7 +29,10 @@ def setup_subparser(subparsers):
         action="store_true",
         help='assume "yes" is the answer to confirmation request for reinitialization',
     )
-    init.add_argument("-u", "--user-dir", action="store", help="Set MPD configuration directory (default ~/.mpd)")
+    init.add_argument("-u", "--user-dir", 
+                      action="store", 
+                      help="Set MPD configuration directory (default ~/.mpd)",
+                      default=(Path.home() / ".mpd").resolve())
     init.add_argument("-r", "--repo-scope", action="store", help="Set Spack configuration scope to use (default: user)", default="user")
 
 
