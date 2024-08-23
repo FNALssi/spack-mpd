@@ -47,7 +47,7 @@ def selected_project_token():
 
 
 def user_config_dir():
-    return spack.config.get('config:mpd_user_dir')
+    return Path(spack.config.get('config:mpd_user_dir')).resolve()
 
 
 def mpd_packages():
