@@ -6,8 +6,8 @@ import ruamel
 
 import llnl.util.tty as tty
 
-import spack.environment as ev
 import spack.config
+import spack.environment as ev
 import spack.util.spack_yaml as syaml
 
 from . import util
@@ -27,7 +27,7 @@ def _process_exists(pid):
 
 
 def selected_projects_dir():
-    return user_config_dir() / "active"
+    return mpd_config_dir() / "selected"
 
 
 def selected_projects():
@@ -46,20 +46,20 @@ def selected_project_token():
     return selected_projects_dir() / session_id()
 
 
-def user_config_dir():
-    return Path(spack.config.get('config:mpd_user_dir')).resolve()
+def mpd_config_dir():
+    return Path(spack.config.get("config:mpd_dir")).resolve()
 
 
 def mpd_packages():
-    return user_config_dir() / "packages"
+    return mpd_config_dir() / "packages"
 
 
-def user_config_file():
-    return user_config_dir() / "config"
+def mpd_config_file():
+    return mpd_config_dir() / "config"
 
 
-def user_config():
-    config_file = user_config_file()
+def mpd_config():
+    config_file = mpd_config_file()
     if not config_file.exists():
         return None
 
@@ -140,7 +140,7 @@ def project_config_from_args(args):
 
 
 def mpd_project_exists(project_name):
-    config_file = user_config_file()
+    config_file = mpd_config_file()
     config = None
     if config_file.exists():
         with open(config_file, "r") as f:
@@ -157,7 +157,7 @@ def mpd_project_exists(project_name):
 
 
 def update(project_config, status=None, deployed_env=None):
-    config_file = user_config_file()
+    config_file = mpd_config_file()
     config = None
     if config_file.exists():
         with open(config_file, "r") as f:
@@ -181,7 +181,7 @@ def update(project_config, status=None, deployed_env=None):
 
 
 def refresh(project_name, new_variants):
-    config_file = user_config_file()
+    config_file = mpd_config_file()
     if config_file.exists():
         with open(config_file, "r") as f:
             config = syaml.load(f)
@@ -223,7 +223,7 @@ def refresh(project_name, new_variants):
 
 
 def rm_config(project_name):
-    config_file = user_config_file()
+    config_file = mpd_config_file()
     if config_file.exists():
         with open(config_file, "r") as f:
             config = syaml.load(f)
@@ -239,7 +239,7 @@ def rm_config(project_name):
 
 def project_config(name, config=None):
     if config is None:
-        config_file = user_config_file()
+        config_file = mpd_config_file()
         if config_file.exists():
             with open(config_file, "r") as f:
                 config = syaml.load(f)
@@ -261,7 +261,7 @@ def project_config(name, config=None):
 
 def update_cache():
     # Update environment status in user configuration
-    config = user_config()
+    config = mpd_config()
     if not config:
         return
 
@@ -280,7 +280,7 @@ def update_cache():
             adjusted = True
 
     if adjusted:
-        with open(user_config_file(), "w") as f:
+        with open(mpd_config_file(), "w") as f:
             syaml.dump(config, stream=f)
 
     # Remove stale selected project tokens

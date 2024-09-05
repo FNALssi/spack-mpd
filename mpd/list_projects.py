@@ -68,7 +68,7 @@ def _no_known_projects():
 
 
 def list_projects():
-    cfg = config.user_config()
+    cfg = config.mpd_config()
     if not cfg:
         _no_known_projects()
         return
@@ -96,7 +96,8 @@ def list_projects():
         indicator, color_code, warning = format_fields(key, selected)
         msg += maybe_with_color(
             color_code,
-            f"\n {indicator} {key:<{name_width}}    {status:<{status_width}}    {deployed:<{deployed_width}} {warning}",
+            f"\n {indicator} {key:<{name_width}}    {status:<{status_width}}"
+            f"    {deployed:<{deployed_width}} {warning}",
         )
     msg += "\n"
     print()
@@ -104,7 +105,7 @@ def list_projects():
 
 
 def project_path(project_name, path_kind):
-    cfg = config.user_config()
+    cfg = config.mpd_config()
     if not cfg:
         _no_known_projects()
         return
@@ -121,7 +122,7 @@ def project_path(project_name, path_kind):
 
 
 def project_details(project_names):
-    cfg = config.user_config()
+    cfg = config.mpd_config()
     if not cfg:
         _no_known_projects()
         return

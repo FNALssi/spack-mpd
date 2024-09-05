@@ -2,7 +2,6 @@ import copy
 import json
 import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -17,7 +16,13 @@ import spack.hash_types as ht
 from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
 
-from .config import mpd_project_exists, project_config_from_args, update, user_config_dir
+from .config import (
+    mpd_config_dir,
+    mpd_project_exists,
+    project_config_from_args,
+    selected_projects_dir,
+    update,
+)
 from .preconditions import State, preconditions
 from .util import bold, get_number, make_yaml_file
 
@@ -55,7 +60,9 @@ def setup_subparser(subparsers):
         help="environments from which to create project\n(multiple allowed)",
         action="append",
     )
-    new_project.add_argument("-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts")
+    new_project.add_argument(
+        "-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts"
+    )
     new_project.add_argument("variants", nargs="*", help="variants to apply to developed packages")
 
 
@@ -154,7 +161,7 @@ def make_cmake_file(package, dependencies, project_config):
 
 
 def make_bundle_file(name, deps, project_config):
-    bundle_path = user_config_dir() / "packages" / name
+    bundle_path = mpd_config_dir() / "packages" / name
     bundle_path.mkdir(exist_ok=True)
     package_recipe = bundle_path / "package.py"
     package_recipe.write_text(bundle_template(name, deps))
@@ -178,7 +185,7 @@ def ensure_proto_env_package_files(proto_envs):
         penv_packages_config = dict(packages=package_list)
         filenames.append(
             make_yaml_file(
-                f"{penv.name}-packages-config", penv_packages_config, prefix=user_config_dir()
+                f"{penv.name}-packages-config", penv_packages_config, prefix=mpd_config_dir()
             )
         )
 
@@ -272,13 +279,13 @@ def process_config(project_config, yes_to_all):
     full_block = dict(
         include=proto_env_packages_files,
         definitions=[dict(compiler=compiler_str)],
-        specs= maybe_include_compiler + list(user_specs),
+        specs=maybe_include_compiler + list(user_specs),
         concretizer=dict(unify=True, reuse=True),
         packages=packages_block,
     )
 
     env_file = make_yaml_file(
-        name, dict(spack=full_block), prefix=user_config_dir(), overwrite=True
+        name, dict(spack=full_block), prefix=mpd_config_dir(), overwrite=True
     )
 
     env = ev.create(name, init_file=env_file)
@@ -415,11 +422,11 @@ def concretize_project(project_config, yes_to_all):
     process_config(project_config, yes_to_all)
 
 
-def declare_active(name):
+def select(name):
     session_id = os.getsid(os.getpid())
-    active = Path(user_config_dir() / "active")
-    active.mkdir(exist_ok=True)
-    (active / f"{session_id}").write_text(name)
+    selected = selected_projects_dir()
+    selected.mkdir(exist_ok=True)
+    (selected / f"{session_id}").write_text(name)
 
 
 def refresh_project(name, project_config, yes_to_all):
@@ -470,7 +477,7 @@ def process(args):
 
     print_config_info(project_config)
     prepare_project(project_config)
-    declare_active(project_config["name"])
+    select(project_config["name"])
 
     if len(project_config["packages"]):
         concretize_project(project_config, args.yes_to_all)
