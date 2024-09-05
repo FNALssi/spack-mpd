@@ -38,6 +38,8 @@ def process(args):
     if args.parallel:
         arguments.append(f"-j{args.parallel}")
 
+    arguments += args.test_options
+
     arguments_str = " ".join(arguments)
     print()
     tty.msg("Testing with command:\n\n" + maybe_with_color("c", arguments_str) + "\n")
