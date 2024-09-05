@@ -161,8 +161,8 @@ def make_bundle_file(name, deps, project_config):
 
 
 def external_config_for_spec(spec):
-    external_config = {"spec": spec.short_spec, "prefix": str(spec.prefix), "buildable": False}
-    return {"externals": [external_config]}
+    external_config = {"spec": spec.short_spec, "prefix": str(spec.prefix)}
+    return {"externals": [external_config], "buildable": False}
 
 
 def ensure_proto_env_package_files(proto_envs):
