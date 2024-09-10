@@ -1,5 +1,6 @@
 import shutil
 from collections import namedtuple
+from pathlib import Path
 
 import llnl.util.filesystem as fs
 import llnl.util.tty as tty
@@ -9,11 +10,11 @@ import spack.config
 import spack.paths
 import spack.repo
 
-from pathlib import Path
 from . import config
 
-
 SUBCOMMAND = "init"
+
+MPD_DIR = Path(spack.paths.prefix) / "var" / "mpd"
 
 
 def setup_subparser(subparsers):
@@ -29,30 +30,26 @@ def setup_subparser(subparsers):
         action="store_true",
         help='assume "yes" is the answer to confirmation request for reinitialization',
     )
-    init.add_argument("-u", "--user-dir", 
-                      action="store", 
-                      help="Set MPD configuration directory (default ~/.mpd)",
-                      default=(Path.home() / ".mpd").resolve())
-    init.add_argument("-r", "--repo-scope", action="store", help="Set Spack configuration scope to use (default: user)", default="user")
 
 
 def initialized():
-    local_dir = config.user_config_dir()
+    config_dir = config.mpd_config_dir()
     repos = spack.config.get("repos")
-    tty.debug(f"Checking that local user dir {str(local_dir)} exists and that it is in the list {repos}")
-    return local_dir.exists() and str(local_dir) in repos #, scope="user"
+    tty.debug(
+        f"Checking that MPD directory {str(config_dir)} exists and that it is in the list {repos}"
+    )
+    return config_dir.exists() and str(config_dir) in repos
 
 
 def process(args):
     spack_root = spack.paths.prefix
 
-    local_dir = Path(args.user_dir).resolve()
-    spack.config.set('config:mpd_user_dir', str(local_dir))
+    local_dir = MPD_DIR.resolve()
+    spack.config.set("config:mpd_dir", str(local_dir))
 
     if initialized() and not args.force:
         assert local_dir.exists()
-        tty.msg(f"Using Spack instance at {spack_root}")
-        tty.warn(f"MPD already initialized on this system ({local_dir})")
+        tty.warn(f"MPD already initialized for Spack instance at {spack_root}")
         return
 
     if not fs.can_access(spack_root):
@@ -77,20 +74,18 @@ def process(args):
         if not should_reinitialize:
             return tty.info("No changes made")
 
-        if str(local_dir) in spack.config.get("repos"): 
+        if str(local_dir) in spack.config.get("repos"):
             RemoveArgs = namedtuple("args", ["namespace_or_path", "scope"])
-            spack.cmd.repo.repo_remove(RemoveArgs(namespace_or_path=str(local_dir), scope=args.repo_scope))
+            spack.cmd.repo.repo_remove(RemoveArgs(namespace_or_path=str(local_dir), scope="site"))
         shutil.rmtree(local_dir, ignore_errors=True)
 
-    full_path, _ = spack.repo.create_repo(
-        str(local_dir), "local-mpd", spack.repo.packages_dir_name
-    )
+    full_path, _ = spack.repo.create_repo(str(local_dir), "mpd", spack.repo.packages_dir_name)
     tty.msg(f"Using Spack instance at {spack_root}")
 
     # The on-disk configuration is adjusted in this process, so we must clear the caches
     # to force repo_add to reread the configuration files.
     spack.config.CONFIG.clear_caches()
     AddArgs = namedtuple("args", ["path", "scope"])
-    spack.cmd.repo.repo_add(AddArgs(path=full_path, scope=args.repo_scope))
+    spack.cmd.repo.repo_add(AddArgs(path=full_path, scope="site"))
 
     config.selected_projects_dir().mkdir(exist_ok=True)

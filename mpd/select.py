@@ -3,9 +3,8 @@ import llnl.util.tty as tty
 import spack.environment as ev
 
 from . import config
-from .preconditions import preconditions, State
+from .preconditions import State, preconditions
 from .util import bold
-
 
 SUBCOMMAND = "select"
 
@@ -20,7 +19,7 @@ def setup_subparser(subparsers):
 def process(args):
     preconditions(State.INITIALIZED, ~State.ACTIVE_ENVIRONMENT)
 
-    cfg = config.user_config()
+    cfg = config.mpd_config()
     if not cfg:
         tty.error(f"No existing MPD projects--cannot select {args.project}.")
 

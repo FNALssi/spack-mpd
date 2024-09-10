@@ -8,7 +8,7 @@ import spack.environment as ev
 from spack.repo import PATH
 from spack.spec import Spec
 
-from .config import selected_project_config, update, user_config_dir
+from .config import mpd_config_dir, selected_project_config, update
 from .preconditions import State, preconditions
 from .util import bold, make_yaml_file
 
@@ -61,7 +61,7 @@ def deploy(config, deployed_name, parallel, force):
         concretizer=dict(unify=True, reuse=True),
         develop=developed_packages,
     )
-    env_file = make_yaml_file(deployed_name, dict(spack=full_block), prefix=user_config_dir())
+    env_file = make_yaml_file(deployed_name, dict(spack=full_block), prefix=mpd_config_dir())
 
     if ev.exists(deployed_name) and force:
         ev.read(deployed_name).destroy()
