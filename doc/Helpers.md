@@ -8,7 +8,8 @@ git-clone` command is:
 
 ```console
 $ spack mpd git-clone -h
-usage: spack mpd git-clone [-h] [--help-repos | --help-suites | --suite <suite name>] [<repo spec> ...]
+usage: spack mpd git-clone [-h] [--suites <suite name> [<suite name> ...]] [--fork | --help-repos | --help-suites]
+                           [<repo spec> ...]
 
 clone git repositories for development
 
@@ -18,9 +19,11 @@ positional arguments:
                         (b) any URL to a Git repository.
 
 optional arguments:
+  --fork                fork GitHub repository or set origin to already forked repository
   --help-repos          list supported repositories
   --help-suites         list supported suites
-  --suite <suite name>  clone repositories corresponding to the given suite name
+  --suites <suite name> [<suite name> ...]
+                        clone repositories corresponding to the given suite name (multiple allowed)
   -h, --help            show this help message and exit
 ```
 
@@ -30,15 +33,11 @@ A `repo spec` can be:
 - any URL to a Git repository.
 
 > [!WARNING]
-> 1. When using `spack mpd git-clone <repository name>`, the cloned repository
->    will be read-only (i.e. no pushes allowed to the remote
->    repository).  Users who would like to clone repositories with
->    write permissions should use the corresponding repository URL
->    (e.g. `spack mpd git-clone git@github.com/Org/RepoName.git`).
-> 2. `spack mpd g` does not yet support forking of GitHub
->    repositories.  If this is desired, users should use the [GitHub
->    CLI](https://cli.github.com) directly.  A feature request could
->    also be made of `spack-mpd`.
+> When using `spack mpd git-clone <repository name>`, the cloned repository
+> will be read-only (i.e. no pushes allowed to the remote
+> repository).  Users who would like to clone repositories with
+> write permissions should use the corresponding repository URL
+> (e.g. `spack mpd git-clone git@github.com/Org/RepoName.git`).
 
 After cloning any repositories into your selected project's source
 directory, be sure to refresh the project (`spack mpd refresh`), which
@@ -75,14 +74,14 @@ prints a table of existing projects with the status of their
 corresponding environments:
 
 ```console
-$ spack mpd list
+$ spack mpd ls
 
 ==> Existing MPD projects:
 
-   Project name    Environment status
-   ------------    ------------------
-   art-devel       installed
- ▶ test            installed
+   Project name    Environment    Deployed environment
+   ------------    -----------    --------------------
+   meld-devel      installed      (none)
+ ▶ test            installed      (none)
 
 ```
 
@@ -91,14 +90,14 @@ shell session.  Projects with a preceding left-pointing triangle `◀`
 indicate projects that are active in other shell sessions:
 
 ```console
-$ spack mpd list
+$ spack mpd ls
 
 ==> Existing MPD projects:
 
-   Project name    Environment status
-   ------------    ------------------
-   art-devel       installed
- ◀ test            installed
+   Project name    Environment    Deployed environment
+   ------------    -----------    --------------------
+   meld-devel      installed      (none)
+ ◀ test            installed      (none)
 
 ```
 
@@ -111,14 +110,14 @@ overwriting another.
 If two or more shells have selected the same MPD project, a warning will be printed to the screen:
 
 ```console
-$ spack mpd list
+$ spack mpd ls
 
 ==> Existing MPD projects:
 
-   Project name    Environment status
-   ------------    ------------------
-   art-devel       installed
- ▶ test            installed           Warning: used by more than one shell
+   Project name    Environment    Deployed environment
+   ------------    -----------    --------------------
+   meld-devel      installed      (none)
+ ▶ test            installed      (none)               Warning: used by more than one shell
 
 ```
 
