@@ -29,8 +29,8 @@ developers.
     $ git clone https://github.com/NuSoftHEP/nusofthep-spack-recipes.git
     $ git clone https://github.com/LArSoft/larsoft-spack-recipes.git
     $ spack repo add fnal_art
-    $ spack repo add nusofthep-spack-packages
-    $ spack repo add larsoft-spack-packages
+    $ spack repo add nusofthep-spack-recipes
+    $ spack repo add larsoft-spack-recipes
     ```
 
 ## Using MPD
