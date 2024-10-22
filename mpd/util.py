@@ -7,7 +7,11 @@ import spack.util.spack_yaml as syaml
 
 
 def bold(msg):
-    return tty.color.colorize("@*{" + msg + "}")
+    return tty.color.colorize(f"@*{{{msg}}}")
+
+
+def cyan(msg):
+    return tty.color.colorize(f"@c{{{msg}}}")
 
 
 def get_number(prompt, **kwargs):

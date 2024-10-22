@@ -7,7 +7,7 @@ import spack
 
 from .config import selected_project_config
 from .preconditions import State, preconditions
-from .util import maybe_with_color
+from .util import cyan
 
 SUBCOMMAND = "build"
 ALIASES = ["b"]
@@ -60,7 +60,7 @@ def build(project_config, generator, parallel, generator_options):
 
     configure_list_str = " ".join(configure_list)
     print()
-    tty.msg("Configuring with command:\n\n" + maybe_with_color("c", configure_list_str) + "\n")
+    tty.msg("Configuring with command:\n\n" + cyan(configure_list_str) + "\n")
 
     subprocess.run(configure_list)
 
@@ -76,7 +76,7 @@ def build(project_config, generator, parallel, generator_options):
     all_arguments = ["cmake", "--build", build_area] + generator_list
     all_arguments_str = " ".join(all_arguments)
     print()
-    tty.msg("Building with command:\n\n" + maybe_with_color("c", all_arguments_str) + "\n")
+    tty.msg("Building with command:\n\n" + cyan(all_arguments_str) + "\n")
 
     subprocess.run(all_arguments)
 

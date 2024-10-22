@@ -1,10 +1,8 @@
 import llnl.util.tty as tty
 
-import spack.environment as ev
-
 from . import config
 from .preconditions import State, preconditions
-from .util import bold
+from .util import cyan
 
 SUBCOMMAND = "select"
 
@@ -28,21 +26,15 @@ def process(args):
         tty.error(f"No existing MPD projects--cannot select {args.project}.")
 
     if args.project not in projects:
-        msg = f"{bold(args.project)} is not an existing MPD project.  Choose from:\n"
-        for i, key in enumerate(projects.keys()):
+        msg = (f"{cyan(args.project)} is not an existing MPD project.  "
+               "Choose from:\n")
+        for i, key in enumerate(sorted(projects.keys())):
             msg += f"\n {i + 1}) {key}"
         print()
         tty.error(msg + "\n")
 
-    env_active = ev.active_environment()
-    if env_active:
-        print()
-        tty.die(
-            f"Must deactivate environment {bold(env_active.name)} before selecting project:\n\n"
-            "  spack env deactivate\n"
-        )
-
     if args.project in config.selected_projects():
-        tty.warn(f"Project {bold(args.project)} selected in another shell.  Use with caution.")
+        tty.warn(f"Project {cyan(args.project)} selected in another shell.  "
+                 "Use with caution.")
 
     config.selected_project_token().write_text(args.project)

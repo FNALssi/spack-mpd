@@ -24,7 +24,7 @@ from .config import (
     update,
 )
 from .preconditions import State, preconditions
-from .util import bold, get_number, make_yaml_file
+from .util import bold, cyan, get_number, make_yaml_file
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n", "newDev"]
@@ -172,32 +172,11 @@ def external_config_for_spec(spec):
     return {"externals": [external_config], "buildable": False}
 
 
-def ensure_proto_env_package_files(proto_envs):
-    filenames = []
-    for penv in proto_envs:
-        package_list = {pkg.name: external_config_for_spec(pkg) for pkg in penv.all_specs()}
-
-        # Don't forget the 'all' stanza
-        all_config = penv.manifest.configuration.get("packages", {}).get("all", {})
-        if all_config:
-            package_list["all"] = all_config
-
-        penv_packages_config = dict(packages=package_list)
-        filenames.append(
-            make_yaml_file(
-                f"{penv.name}-packages-config", penv_packages_config, prefix=mpd_config_dir()
-            )
-        )
-
-    return filenames
-
-
 def process_config(project_config, yes_to_all):
     proto_envs = [ev.read(name) for name in project_config["envs"]]
-    proto_env_packages_files = ensure_proto_env_package_files(proto_envs)
 
     print()
-    tty.msg("Concretizing project (this may take a few minutes)")
+    tty.msg(cyan("Concretizing project") + " (this may take a few minutes)")
 
     name = project_config["name"]
     spec_like = f"{name}-bootstrap@develop {project_config['variants']}"
@@ -277,7 +256,7 @@ def process_config(project_config, yes_to_all):
         maybe_include_compiler = compiler_str
 
     full_block = dict(
-        include=proto_env_packages_files,
+        include_concrete=[penv.path for penv in proto_envs],
         definitions=[dict(compiler=compiler_str)],
         specs=maybe_include_compiler + list(user_specs),
         concretizer=dict(unify=True, reuse=True),
@@ -321,7 +300,7 @@ def process_config(project_config, yes_to_all):
         print()
         tty.die(error_msg + "\n")
 
-    tty.msg("Concretization complete\n")
+    tty.msg(cyan("Concretization complete\n"))
     update(project_config, status="concretized")
 
     msg = "Ready to install MPD project " + bold(name) + "\n"
@@ -339,7 +318,7 @@ def process_config(project_config, yes_to_all):
 
         msg += "\nThe following packages will be installed:\n"
         width = len(_parens_number(len(absent_dependencies)))
-        for i, dep in enumerate(absent_dependencies):
+        for i, dep in enumerate(sorted(absent_dependencies)):
             num_str = _parens_number(i + 1)
             msg += f"\n {num_str:>{width}}  {dep}"
         msg += "\n\nPlease ensure you have adequate space for these installations.\n"
@@ -378,9 +357,9 @@ def process_config(project_config, yes_to_all):
 
 
 def print_config_info(config):
-    print(f"\nUsing build area: {config['build']}")
-    print(f"Using local area: {config['local']}")
-    print(f"Using sources area: {config['source']}\n")
+    print(f"\nUsing {cyan('build')} area: {config['build']}")
+    print(f"Using {cyan('local')} area: {config['local']}")
+    print(f"Using {cyan('sources')} area: {config['source']}\n")
     packages = config["packages"]
     if not packages:
         return
@@ -444,8 +423,6 @@ def refresh_project(name, project_config, yes_to_all):
         return
 
     if ev.exists(name):
-        proto_envs = [ev.read(name) for name in project_config["envs"]]
-        ensure_proto_env_package_files(proto_envs)
         ev.read(name).destroy()
     concretize_project(project_config, yes_to_all)
 
@@ -458,7 +435,7 @@ def process(args):
     name = args.name
     if mpd_project_exists(name):
         if args.force:
-            tty.warn(f"Overwriting existing MPD project {bold(name)}")
+            tty.info(f"Overwriting existing MPD project {bold(name)}")
             if ev.exists(name):
                 ev.read(name).destroy()
                 tty.info(f"Existing environment {name} has been removed")
@@ -470,7 +447,7 @@ def process(args):
                 " to overwrite the existing project.\n"
             )
     else:
-        tty.msg(f"Creating project: {name}")
+        tty.msg(f"Creating project: {bold(name)}")
 
     project_config = project_config_from_args(args)
     update(project_config, status="(none)")

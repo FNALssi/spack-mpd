@@ -10,7 +10,7 @@ from spack.spec import Spec
 
 from .config import mpd_config_dir, selected_project_config, update
 from .preconditions import State, preconditions
-from .util import bold, make_yaml_file
+from .util import bold, cyan, make_yaml_file
 
 SUBCOMMAND = "deploy"
 ALIASES = ["d"]
@@ -39,6 +39,8 @@ def setup_subparser(subparsers):
 
 def deploy(config, deployed_name, parallel, force):
     name = config["name"]
+    print()
+    tty.info(f"Deploying project {cyan(name)} as environment {bold(deployed_name)}\n")
     source_path = Path(config["source"])
     assert source_path.exists()
     packages = config["packages"]
@@ -67,17 +69,17 @@ def deploy(config, deployed_name, parallel, force):
         ev.read(deployed_name).destroy()
 
     env = ev.create(deployed_name, init_file=env_file)
-    tty.info(f"Deployment environment {deployed_name} has been created")
-
+    tty.msg(cyan("Concretizing environment") + " (this may take a few minutes)")
     with env, env.write_transaction():
         env.concretize()
         env.write()
 
+    tty.msg(cyan("Concretization complete; now installing"))
     result = subprocess.run(["spack", "-e", deployed_name, "install", f"-j{parallel}"])
     if result.returncode == 0:
         print()
         update(config, deployed_env=deployed_name)
-        tty.msg(f"MPD project {name} has been deployed as {bold(deployed_name)}.\n")
+        tty.msg(f"MPD project {cyan(name)} has been deployed as {bold(deployed_name)}.\n")
 
 
 def process(args):

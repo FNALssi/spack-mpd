@@ -2,10 +2,8 @@ import llnl.util.tty as tty
 
 import spack.environment as ev
 
-from . import init
-from . import config
-from .util import bold
-
+from . import config, init
+from .util import bold, cyan
 
 SUBCOMMAND = "status"
 
@@ -22,10 +20,10 @@ def process(args):
         return
 
     selected = config.selected_project()
-    bold_selected = bold(selected) if selected else bold("None")
+    bold_selected = cyan(selected) if selected else cyan("None")
     msg = f"Selected project: {bold_selected}"
     if selected:
         cfg = config.selected_project_config()
-        status = bold("active") if ev.active(selected) else cfg["status"]
+        status = cyan("active") if ev.active(selected) else cfg["status"]
         msg += f"\n    Environment status: {status}"
     tty.info(msg)
