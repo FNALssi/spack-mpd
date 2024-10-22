@@ -20,10 +20,10 @@ def process(args):
         return
 
     selected = config.selected_project()
-    bold_selected = cyan(selected) if selected else cyan("None")
-    msg = f"Selected project: {bold_selected}"
+    is_selected = cyan(selected) if selected else cyan("None")
+    msg = f"Selected project: {cyan(is_selected)}"
     if selected:
         cfg = config.selected_project_config()
-        status = cyan("active") if ev.active(selected) else cfg["status"]
-        msg += f"\n    Environment status: {status}"
+        status = "active" if ev.active(selected) else cfg["status"]
+        msg += f"\n    Environment status: {cyan(status)}"
     tty.info(msg)
