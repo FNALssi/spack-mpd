@@ -15,13 +15,7 @@ from spack import traverse
 from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
 
-from .config import (
-    mpd_config_dir,
-    mpd_project_exists,
-    project_config_from_args,
-    selected_projects_dir,
-    update,
-)
+from .config import mpd_project_exists, project_config_from_args, selected_projects_dir, update
 from .preconditions import State, preconditions
 from .util import bold, cyan, get_number, gray, make_yaml_file
 
@@ -138,14 +132,6 @@ def make_cmake_file(package, dependencies, project_config):
         cmake_presets(source_path, dependencies, project_config["cxxstd"], f)
 
 
-def make_deployment_configuration(name):
-    pass
-
-
-def make_development_configuration(name):
-    pass
-
-
 def external_config_for_spec(spec):
     external_config = {"spec": spec.short_spec, "prefix": str(spec.prefix)}
     return {"externals": [external_config], "buildable": False}
@@ -180,11 +166,12 @@ def process_config(package_requirements, project_config, yes_to_all):
     )
 
     env_file = make_yaml_file(
-        name, dict(spack=full_block), prefix=mpd_config_dir(), overwrite=True
+        name, dict(spack=full_block), prefix=project_config["local"], overwrite=True
     )
 
-    env = ev.create(name, init_file=env_file)
-    tty.info(gray(f"Environment {name} has been created"))
+    local_env_dir = project_config["local"]
+    tty.info(gray("Creating initial environmant"))
+    env = ev.create_in_dir(local_env_dir, init_file=env_file)
     update(project_config, status="created")
 
     with env, env.write_transaction():
@@ -192,18 +179,59 @@ def process_config(package_requirements, project_config, yes_to_all):
         env.write(regenerate=False)
 
     # Create CMake file with correctly ordered packages
-    concretized_roots = [s for s in traverse.traverse_nodes(env.concretized_user_specs,
-                                                            order="topo")]
-    ordered_dependencies = [s.name for s in concretized_roots if s.name in package_requirements]
+
+    # We use the following sorting algorithm:
+    #
+    #  0. Form a dictionary of package name to its list of dependencies that are developed.
+    #  1. In the package dependencies dictionary, find the packages with no listed dependencies.
+    #  2. Place that package name at the front of the ordered-dependency list
+    #  3. Remove the package name from the other packages' dependency lists
+    #  4. Remove the package from the package dependencies dictionary.
+    #  5. Repeat steps 1-4 until there are no more changes to the package-dependencies dictionary.
+    pkg_dependencies = {}
+    for s in env.all_specs():
+        if s.name not in package_requirements:
+            continue
+        ds = []
+        for _, d in traverse.traverse_tree([s], depth_first=False):
+            if d.spec.name not in package_requirements:
+                continue
+            if d.spec.name == s.name:
+                continue
+            ds.append(d.spec.name)
+        pkg_dependencies[s.name] = ds
+
+    ordered_dependencies = []
+    size = len(pkg_dependencies) + 1
+    while (size != len(pkg_dependencies)):
+        to_remove = []
+        for k, vs1 in pkg_dependencies.items():
+            if len(vs1) != 0:
+                continue
+
+            to_remove.append(k)
+            ordered_dependencies.append(k)
+            for vs2 in pkg_dependencies.values():
+                if k not in vs2:
+                    continue
+                vs2.remove(k)
+
+        size = len(pkg_dependencies)
+        for k in to_remove:
+            del pkg_dependencies[k]
+
+    # Create properly ordered CMake file
     make_cmake_file(name, ordered_dependencies, project_config)
 
+    # Now add the first-order dependencies
     developed_specs = [s for _, s in env.concretized_specs() if s.name in package_requirements]
     first_order_deps = [s.name for depth,
                         s in traverse.traverse_nodes(developed_specs, depth=True) if depth == 1]
 
     tty.msg(cyan("Adjusting environment for development"))
-    result = subprocess.run(["spack", "-e", name, "add"] + first_order_deps,
-                            stdout=subprocess.DEVNULL)
+    result = subprocess.run(["spack", "-e", ".", "add"] + first_order_deps,
+                            stdout=subprocess.DEVNULL,
+                            cwd=local_env_dir)
     with env, env.write_transaction():
         env.concretize()
         env.write()
@@ -214,7 +242,11 @@ def process_config(package_requirements, project_config, yes_to_all):
     absent_dependencies = []
     missing_intermediate_deps = {}
     for n in env.all_specs():
-        if n.install_status() == InstallStatus.absent and n.name not in package_requirements:
+        # Skip the packages under development
+        if n.name in package_requirements:
+            continue
+
+        if n.install_status() == InstallStatus.absent:
             absent_dependencies.append(n.cshort_spec)
 
         checked_out_deps = [p.name for p in n.dependencies() if p.name in package_requirements]
@@ -226,7 +258,7 @@ def process_config(package_requirements, project_config, yes_to_all):
             "The following packages are intermediate dependencies of the\n"
             "currently cloned packages and must also be cloned:\n"
         )
-        for pkg_name, checked_out_deps in missing_intermediate_deps.items():
+        for pkg_name, checked_out_deps in sorted(missing_intermediate_deps.items()):
             checked_out_deps_str = ", ".join(checked_out_deps)
             error_msg += "\n - " + bold(pkg_name)
             error_msg += f" (depends on {checked_out_deps_str})"
@@ -276,15 +308,16 @@ def process_config(package_requirements, project_config, yes_to_all):
     else:
         ncores = os.cpu_count() // 2
 
-    tty.msg(gray(f"Installing {name}\n"))
-    result = subprocess.run(["spack", "-e", name, "install", f"-j{ncores}"] + nondeveloped_pkgs)
+    tty.msg(gray("Installing development environment\n"))
+    result = subprocess.run(["spack", "-e", ".", "install", f"-j{ncores}"] + nondeveloped_pkgs,
+                            cwd=local_env_dir)
 
     if result.returncode == 0:
         print()
         update(project_config, status="installed")
         msg = (
             f"MPD project {bold(name)} has been installed.  "
-            f"To use it, invoke:\n\n  spack env activate {name}\n"
+            f"To use it, invoke:\n\n  spack env activate {local_env_dir}\n"
         )
         tty.msg(msg)
 
@@ -361,12 +394,14 @@ def process(args):
     print()
 
     name = args.name
+    project_config = project_config_from_args(args)
     if mpd_project_exists(name):
         if args.force:
             tty.info(f"Overwriting existing MPD project {bold(name)}")
-            if ev.exists(name):
-                ev.read(name).destroy()
-                tty.info(gray(f"Existing environment {name} has been removed"))
+            local_env_dir = project_config["local"]
+            if ev.is_env_dir(local_env_dir):
+                ev.Environment(local_env_dir).destroy()
+                tty.info(gray(f"Removed existing environment at {project_config['local']}"))
         else:
             indent = " " * len("==> Error: ")
             tty.die(
@@ -377,7 +412,6 @@ def process(args):
     else:
         tty.msg(f"Creating project: {bold(name)}")
 
-    project_config = project_config_from_args(args)
     update(project_config, status="(none)")
 
     print_config_info(project_config)

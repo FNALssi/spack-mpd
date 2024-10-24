@@ -109,7 +109,6 @@ def project_config_from_args(args):
     project["local"] = str((top_path / "local").absolute())
     project["install"] = str((top_path / "local" / "install").absolute())
     project["envs"] = args.env
-    project["deployed"] = _NONE_STR
 
     packages_to_develop = []
     if srcs_path.exists():
@@ -156,7 +155,7 @@ def mpd_project_exists(project_name):
     return project_name in projects
 
 
-def update(project_config, status=None, deployed_env=None):
+def update(project_config, status=None):
     config_file = mpd_config_file()
     config = None
     if config_file.exists():
@@ -171,8 +170,6 @@ def update(project_config, status=None, deployed_env=None):
     yaml_project_config.update(project_config)
     if status:
         yaml_project_config.update(status=status)
-    if deployed_env:
-        yaml_project_config.update(deployed=deployed_env)
     config["projects"][project_config["name"]] = yaml_project_config
 
     # Update config file

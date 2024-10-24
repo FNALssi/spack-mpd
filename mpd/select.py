@@ -33,8 +33,13 @@ def process(args):
         print()
         tty.error(msg + "\n")
 
+    if args.project == config.selected_project():
+        tty.info(f"Project {cyan(args.project)} already selected")
+        return
+
     if args.project in config.selected_projects():
         tty.warn(f"Project {cyan(args.project)} selected in another shell.  "
                  "Use with caution.")
 
     config.selected_project_token().write_text(args.project)
+    tty.info(f"Project {cyan(args.project)} selected")
