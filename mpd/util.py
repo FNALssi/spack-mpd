@@ -14,6 +14,10 @@ def cyan(msg):
     return tty.color.colorize(f"@c{{{msg}}}")
 
 
+def gray(msg):
+    return tty.color.colorize(f"@K{{{msg}}}")
+
+
 def get_number(prompt, **kwargs):
     default = kwargs.get("default", None)
     abort = kwargs.get("abort", None)

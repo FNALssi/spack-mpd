@@ -1,14 +1,11 @@
 import shutil
-from collections import namedtuple
 from pathlib import Path
 
 import llnl.util.filesystem as fs
 import llnl.util.tty as tty
 
-import spack.cmd.repo
 import spack.config
 import spack.paths
-import spack.repo
 
 from . import config
 
@@ -33,12 +30,7 @@ def setup_subparser(subparsers):
 
 
 def initialized():
-    config_dir = config.mpd_config_dir()
-    repos = spack.config.get("repos")
-    tty.debug(
-        f"Checking that MPD directory {str(config_dir)} exists and that it is in the list {repos}"
-    )
-    return config_dir.exists() and str(config_dir) in repos
+    return config.mpd_config_dir().exists()
 
 
 def process(args):
@@ -74,18 +66,8 @@ def process(args):
         if not should_reinitialize:
             return tty.info("No changes made")
 
-        if str(local_dir) in spack.config.get("repos"):
-            RemoveArgs = namedtuple("args", ["namespace_or_path", "scope"])
-            spack.cmd.repo.repo_remove(RemoveArgs(namespace_or_path=str(local_dir), scope="site"))
         shutil.rmtree(local_dir, ignore_errors=True)
 
-    full_path, _ = spack.repo.create_repo(str(local_dir), "mpd", spack.repo.packages_dir_name)
     tty.msg(f"Using Spack instance at {spack_root}")
-
-    # The on-disk configuration is adjusted in this process, so we must clear the caches
-    # to force repo_add to reread the configuration files.
-    spack.config.CONFIG.clear_caches()
-    AddArgs = namedtuple("args", ["path", "scope"])
-    spack.cmd.repo.repo_add(AddArgs(path=full_path, scope="site"))
 
     config.selected_projects_dir().mkdir(exist_ok=True)

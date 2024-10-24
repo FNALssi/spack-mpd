@@ -19,4 +19,3 @@ def tmp_mpd_dir(tmp_path_factory):
 def with_mpd_init(tmp_mpd_dir):
     SpackCommand("mpd")("init")
     yield
-    SpackCommand("repo")("rm", "--scope=site", str(config.mpd_config_dir()))

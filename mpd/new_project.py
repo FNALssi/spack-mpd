@@ -23,7 +23,7 @@ from .config import (
     update,
 )
 from .preconditions import State, preconditions
-from .util import bold, cyan, get_number, make_yaml_file
+from .util import bold, cyan, get_number, gray, make_yaml_file
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n", "newDev"]
@@ -127,27 +127,6 @@ def cmake_presets(source_path, dependencies, cxx_standard, preset_file):
     return json.dump(presets, preset_file, indent=4)
 
 
-def bundle_template(package, dependencies):
-    camel_package = package.split("-")
-    camel_package = "".join(word.title() for word in camel_package)
-    bundle_str = f"""from spack.package import *
-import spack.extensions
-
-
-class {camel_package}(BundlePackage):
-    "Bundle package for developing {package}"
-
-    homepage = "[See https://...  for instructions]"
-
-    version("develop")
-
-"""
-    for dep in dependencies:
-        bundle_str += f'    depends_on("{dep}")\n'
-
-    return bundle_str
-
-
 def make_cmake_file(package, dependencies, project_config):
     source_path = Path(project_config["source"])
     with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
@@ -167,13 +146,6 @@ def make_development_configuration(name):
     pass
 
 
-def make_bundle_file(name, deps, project_config):
-    bundle_path = mpd_config_dir() / "packages" / name
-    bundle_path.mkdir(exist_ok=True)
-    package_recipe = bundle_path / "package.py"
-    package_recipe.write_text(bundle_template(name, deps))
-
-
 def external_config_for_spec(spec):
     external_config = {"spec": spec.short_spec, "prefix": str(spec.prefix)}
     return {"externals": [external_config], "buildable": False}
@@ -183,7 +155,7 @@ def process_config(package_requirements, project_config, yes_to_all):
     proto_envs = [ev.read(name) for name in project_config["envs"]]
 
     print()
-    tty.msg(cyan("Concretizing project") + " (this may take a few minutes)")
+    tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
 
     name = project_config["name"]
 
@@ -212,12 +184,12 @@ def process_config(package_requirements, project_config, yes_to_all):
     )
 
     env = ev.create(name, init_file=env_file)
-    tty.info(f"Environment {name} has been created")
+    tty.info(gray(f"Environment {name} has been created"))
     update(project_config, status="created")
 
     with env, env.write_transaction():
         env.concretize()
-        env.write()
+        env.write(regenerate=False)
 
     # Create CMake file with correctly ordered packages
     concretized_roots = [s for s in traverse.traverse_nodes(env.concretized_user_specs,
@@ -229,8 +201,9 @@ def process_config(package_requirements, project_config, yes_to_all):
     first_order_deps = [s.name for depth,
                         s in traverse.traverse_nodes(developed_specs, depth=True) if depth == 1]
 
-    tty.info("Adjusting environment for development")
-    result = subprocess.run(["spack", "-e", name, "add"] + first_order_deps)
+    tty.msg(cyan("Adjusting environment for development"))
+    result = subprocess.run(["spack", "-e", name, "add"] + first_order_deps,
+                            stdout=subprocess.DEVNULL)
     with env, env.write_transaction():
         env.concretize()
         env.write()
@@ -260,7 +233,6 @@ def process_config(package_requirements, project_config, yes_to_all):
         print()
         tty.die(error_msg + "\n")
 
-    tty.msg(cyan("Concretization complete\n"))
     update(project_config, status="concretized")
 
     msg = "Ready to install MPD project " + bold(name) + "\n"
@@ -304,7 +276,7 @@ def process_config(package_requirements, project_config, yes_to_all):
     else:
         ncores = os.cpu_count() // 2
 
-    tty.msg(f"Installing {name}")
+    tty.msg(gray(f"Installing {name}\n"))
     result = subprocess.run(["spack", "-e", name, "install", f"-j{ncores}"] + nondeveloped_pkgs)
 
     if result.returncode == 0:
@@ -312,7 +284,7 @@ def process_config(package_requirements, project_config, yes_to_all):
         update(project_config, status="installed")
         msg = (
             f"MPD project {bold(name)} has been installed.  "
-            f"To load it, invoke:\n\n  spack env activate {name}\n"
+            f"To use it, invoke:\n\n  spack env activate {name}\n"
         )
         tty.msg(msg)
 
@@ -338,9 +310,7 @@ def prepare_project(project_config):
 def concretize_project(project_config, yes_to_all):
     packages_to_develop = project_config["packages"]
 
-    # Always replace the bootstrap bundle file
     cxxstd = project_config["cxxstd"]
-    packages_at_develop = []
     package_requirements = {}
     for p in packages_to_develop:
         # Check to see if packages support a 'cxxstd' variant
@@ -350,16 +320,11 @@ def concretize_project(project_config, yes_to_all):
         pkg_requirements = ["@develop", f"%{project_config['compiler']}"]
         if "cxxstd" in pkg.variants:
             pkg_requirements.append(f"cxxstd={cxxstd}")
-        packages_at_develop.append(p + " ".join(pkg_requirements))
         package_requirements[spec.name] = dict(require=[YamlQuote(s) for s in pkg_requirements])
 
     dependencies_to_add = project_config["variants"].split("^")
     # Always erase the first entry...it either applies to the top-level package, or is empty.
     dependencies_to_add.pop(0)
-
-    packages_at_develop.extend(dependencies_to_add)
-
-    make_bundle_file(project_config["name"] + "-bootstrap", packages_at_develop, project_config)
 
     process_config(package_requirements, project_config, yes_to_all)
 
@@ -401,7 +366,7 @@ def process(args):
             tty.info(f"Overwriting existing MPD project {bold(name)}")
             if ev.exists(name):
                 ev.read(name).destroy()
-                tty.info(f"Existing environment {name} has been removed")
+                tty.info(gray(f"Existing environment {name} has been removed"))
         else:
             indent = " " * len("==> Error: ")
             tty.die(
