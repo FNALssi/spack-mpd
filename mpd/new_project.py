@@ -1,18 +1,17 @@
-import copy
 import json
 import os
 import subprocess
 import time
 from pathlib import Path
 
-import ruamel.yaml
+from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import llnl.util.tty as tty
 
 import spack.compilers as compilers
-import spack.deptypes as dt
 import spack.environment as ev
-import spack.hash_types as ht
+import spack.store
+from spack import traverse
 from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
 
@@ -160,6 +159,14 @@ def make_cmake_file(package, dependencies, project_config):
         cmake_presets(source_path, dependencies, project_config["cxxstd"], f)
 
 
+def make_deployment_configuration(name):
+    pass
+
+
+def make_development_configuration(name):
+    pass
+
+
 def make_bundle_file(name, deps, project_config):
     bundle_path = mpd_config_dir() / "packages" / name
     bundle_path.mkdir(exist_ok=True)
@@ -172,95 +179,32 @@ def external_config_for_spec(spec):
     return {"externals": [external_config], "buildable": False}
 
 
-def process_config(project_config, yes_to_all):
+def process_config(package_requirements, project_config, yes_to_all):
     proto_envs = [ev.read(name) for name in project_config["envs"]]
 
     print()
     tty.msg(cyan("Concretizing project") + " (this may take a few minutes)")
 
     name = project_config["name"]
-    spec_like = f"{name}-bootstrap@develop {project_config['variants']}"
-    spec = Spec(spec_like)
 
-    bootstrap_name = spec.name
-
-    concretized_spec = spec.concretized()
-
-    packages_to_develop = project_config["packages"]
-    ordered_dependencies = [
-        p.name for p in concretized_spec.traverse(order="topo") if p.name in packages_to_develop
-    ]
-    ordered_dependencies.reverse()
-
-    make_cmake_file(name, ordered_dependencies, project_config)
-
-    # YAML file
-    spec_dict = concretized_spec.to_dict(ht.dag_hash)
-    nodes = spec_dict["spec"]["nodes"]
-
-    top_level_package = entry(nodes, bootstrap_name)
-    assert top_level_package
-
-    package_names = [dep["name"] for dep in top_level_package["dependencies"]]
-    packages = {dep["name"]: dep for dep in top_level_package["dependencies"]}
-
-    for pname in package_names:
-        i, p = entry_with_index(nodes, pname)
-        assert p
-
-        pdeps = {pdep["name"]: pdep for pdep in p.get("dependencies", [])}
-        packages.update(pdeps)
-        del nodes[i]
-
-    for pname in packages_to_develop:
-        del packages[pname]
-
-    user_specs = set()
-    packages_block = {}
-    for p in concretized_spec.traverse(deptype=dt.BUILD | dt.RUN):
-        if p.name not in packages:
-            continue
-
-        # External packages cannot be specs
-        if p.install_status() != InstallStatus.external:
-            user_specs.add(p.name)
-
-        if any(penv.matching_spec(p) for penv in proto_envs):
-            continue
-
-        requires = []
-        if version := str(p.version):
-            requires.append(f"@{version}")
-        if compiler := str(p.compiler):
-            requires.append(f"%{compiler}")
-        if p.variants:
-            variants = copy.deepcopy(p.variants)
-            if "patches" in variants:
-                del variants["patches"]
-            requires.extend(
-                ruamel.yaml.scalarstring.SingleQuotedScalarString(s) for s in str(variants).split()
-            )
-        if compiler_flags := str(p.compiler_flags):
-            requires.append(compiler_flags)
-
-        packages_block[p.name] = dict(require=requires)
-
-    # If the compiler has been installed via Spack, in can be included as a spec in the
-    # environment configuration.  This makes it possible to use (e.g.) g++ directly within
-    # the environment without having to specify the full path to CMake.
+    # # If the compiler has been installed via Spack, in can be included as a spec in the
+    # # environment configuration.  This makes it possible to use (e.g.) g++ directly within
+    # # the environment without having to specify the full path to CMake.
     compiler = compilers.find(project_config["compiler"])[0]
-    compiler_str = [ruamel.yaml.scalarstring.SingleQuotedScalarString(compiler)]
-    cpspec = compilers.pkg_spec_for_compiler(compiler)
+    cspec = spack.store.STORE.db.query(f"{compiler}")[0]
+    compiler_str = [YamlQuote(compiler)]
     maybe_include_compiler = []
-    if cpspec.install_status() == InstallStatus.installed:
+
+    if cspec.installed:
         maybe_include_compiler = compiler_str
 
+    reuse_block = {"from": [{"type": "local"}, {"type": "external"}]}
     full_block = dict(
         include_concrete=[penv.path for penv in proto_envs],
         definitions=[dict(compiler=compiler_str)],
-        specs=maybe_include_compiler + list(user_specs),
-        concretizer=dict(unify=True, reuse=True),
-        packages=packages_block,
+        specs=maybe_include_compiler + list(package_requirements.keys()),
+        concretizer=dict(unify=True, reuse=reuse_block),
+        packages=package_requirements,
     )
 
     env_file = make_yaml_file(
@@ -275,16 +219,32 @@ def process_config(project_config, yes_to_all):
         env.concretize()
         env.write()
 
+    # Create CMake file with correctly ordered packages
+    concretized_roots = [s for s in traverse.traverse_nodes(env.concretized_user_specs,
+                                                            order="topo")]
+    ordered_dependencies = [s.name for s in concretized_roots if s.name in package_requirements]
+    make_cmake_file(name, ordered_dependencies, project_config)
+
+    developed_specs = [s for _, s in env.concretized_specs() if s.name in package_requirements]
+    first_order_deps = [s.name for depth,
+                        s in traverse.traverse_nodes(developed_specs, depth=True) if depth == 1]
+
+    tty.info("Adjusting environment for development")
+    result = subprocess.run(["spack", "-e", name, "add"] + first_order_deps)
+    with env, env.write_transaction():
+        env.concretize()
+        env.write()
+
+    nondeveloped_pkgs = [s.name for _, s in env.concretized_specs()
+                         if s.name not in package_requirements]
+
     absent_dependencies = []
     missing_intermediate_deps = {}
     for n in env.all_specs():
-        if n.name == bootstrap_name:
-            continue
-
-        if n.install_status() == InstallStatus.absent:
+        if n.install_status() == InstallStatus.absent and n.name not in package_requirements:
             absent_dependencies.append(n.cshort_spec)
 
-        checked_out_deps = [p.name for p in n.dependencies() if p.name in packages_to_develop]
+        checked_out_deps = [p.name for p in n.dependencies() if p.name in package_requirements]
         if checked_out_deps:
             missing_intermediate_deps[n.name] = checked_out_deps
 
@@ -334,7 +294,8 @@ def process_config(project_config, yes_to_all):
     if should_install is False:
         print()
         tty.msg(
-            f"To install {name} later, invoke:\n\n" + f"  spack -e {name} install -j<ncores>\n"
+            f"To install {name} later, invoke:\n\n"
+            f"  spack -e {name} install --only dependencies -j<ncores>\n"
         )
         return
 
@@ -344,7 +305,7 @@ def process_config(project_config, yes_to_all):
         ncores = os.cpu_count() // 2
 
     tty.msg(f"Installing {name}")
-    result = subprocess.run(["spack", "-e", name, "install", f"-j{ncores}"])
+    result = subprocess.run(["spack", "-e", name, "install", f"-j{ncores}"] + nondeveloped_pkgs)
 
     if result.returncode == 0:
         print()
@@ -380,25 +341,27 @@ def concretize_project(project_config, yes_to_all):
     # Always replace the bootstrap bundle file
     cxxstd = project_config["cxxstd"]
     packages_at_develop = []
+    package_requirements = {}
     for p in packages_to_develop:
         # Check to see if packages support a 'cxxstd' variant
         spec = Spec(p)
         pkg_cls = PATH.get_pkg_class(spec.name)
         pkg = pkg_cls(spec)
-        base_spec = f"{p}@develop %{project_config['compiler']}"
+        pkg_requirements = ["@develop", f"%{project_config['compiler']}"]
         if "cxxstd" in pkg.variants:
-            base_spec += f" cxxstd={cxxstd}"
-        packages_at_develop.append(base_spec)
+            pkg_requirements.append(f"cxxstd={cxxstd}")
+        packages_at_develop.append(p + " ".join(pkg_requirements))
+        package_requirements[spec.name] = dict(require=[YamlQuote(s) for s in pkg_requirements])
 
     dependencies_to_add = project_config["variants"].split("^")
-    # Always erase the first entry...it either applies to the top-level package, or is emtpy.
+    # Always erase the first entry...it either applies to the top-level package, or is empty.
     dependencies_to_add.pop(0)
 
     packages_at_develop.extend(dependencies_to_add)
 
     make_bundle_file(project_config["name"] + "-bootstrap", packages_at_develop, project_config)
 
-    process_config(project_config, yes_to_all)
+    process_config(package_requirements, project_config, yes_to_all)
 
 
 def select(name):
