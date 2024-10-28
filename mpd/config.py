@@ -268,7 +268,7 @@ def update_cache():
 
     adjusted = False
     for name, proj_config in projects.items():
-        if not ev.exists(name):
+        if not ev.is_env_dir(proj_config["local"]):
             proj_config["status"] = _NONE_STR
             adjusted = True
         deployed_env = proj_config.get("deployed", _NONE_STR)
@@ -291,9 +291,12 @@ def update_cache():
 
     # Implicitly select project if environment is active
     active_env = ev.active_environment()
-    if active_env:
-        if active_env.name in projects:
-            selected_project_token().write_text(active_env.name)
+    if not active_env:
+        return
+
+    for name, config in projects.items():
+        if active_env.path in config["local"]:
+            selected_project_token().write_text(name)
 
 
 def selected_project(missing_ok=True):
