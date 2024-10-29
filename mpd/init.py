@@ -70,4 +70,4 @@ def process(args):
 
     tty.msg(f"Using Spack instance at {spack_root}")
 
-    config.selected_projects_dir().mkdir(exist_ok=True)
+    config.selected_projects_dir().mkdir(parents=True, exist_ok=True)
