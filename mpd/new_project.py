@@ -165,11 +165,11 @@ def process_config(package_requirements, project_config, yes_to_all):
         packages=package_requirements,
     )
 
+    local_env_dir = project_config["local"]
     env_file = make_yaml_file(
-        name, dict(spack=full_block), prefix=project_config["local"], overwrite=True
+        name, dict(spack=full_block), prefix=local_env_dir, overwrite=True
     )
 
-    local_env_dir = project_config["local"]
     tty.info(gray("Creating initial environmant"))
     env = ev.create_in_dir(local_env_dir, init_file=env_file)
     update(project_config, status="created")
@@ -383,8 +383,10 @@ def refresh_project(name, project_config, yes_to_all):
         )
         return
 
-    if ev.exists(name):
-        ev.read(name).destroy()
+    local_env_dir = project_config["local"]
+    if ev.is_env_dir(local_env_dir):
+        ev.Environment(local_env_dir).destroy()
+    prepare_project(project_config)
     concretize_project(project_config, yes_to_all)
 
 
