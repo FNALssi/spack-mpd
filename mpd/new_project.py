@@ -351,7 +351,8 @@ def concretize_project(project_config, yes_to_all):
         pkg_cls = PATH.get_pkg_class(spec.name)
         pkg = pkg_cls(spec)
         pkg_requirements = ["@develop", f"%{project_config['compiler']}"]
-        if "cxxstd" in pkg.variants:
+        maybe_has_variant = getattr(pkg, "has_variant", lambda _: False)
+        if maybe_has_variant("cxxstd") or "cxxstd" in pkg.variants:
             pkg_requirements.append(f"cxxstd={cxxstd}")
         package_requirements[spec.name] = dict(require=[YamlQuote(s) for s in pkg_requirements])
 
