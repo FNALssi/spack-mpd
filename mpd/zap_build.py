@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import llnl.util.filesystem as fs
 
-from .preconditions import preconditions, State
-from .config import selected_project_config
+import spack.environment as ev
+import spack.package_base
 
+from .config import selected_project_config
+from .preconditions import State, preconditions
 
 SUBCOMMAND = "zap"
 ALIASES = ["z"]
@@ -27,7 +31,6 @@ def setup_subparser(subparsers):
         "--build",
         dest="zap_build",
         action="store_true",
-        default=True,
         help="delete everything in your build directory",
     )
     zap.add_argument(
@@ -41,11 +44,24 @@ def setup_subparser(subparsers):
 def process(args):
     preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
 
-    config = selected_project_config()
-    if args.zap_install:
-        fs.remove_directory_contents(config["install"])
+    project_config = selected_project_config()
+
+    # Default is to zap build only
+    zap_build_only = args.zap_build or not (args.zap_all or args.zap_build or args.zap_install)
+    if zap_build_only:
+        fs.remove_directory_contents(project_config["build"])
+        return
+
     if args.zap_all:
-        fs.remove_directory_contents(config["install"])
-        fs.remove_directory_contents(config["build"])
-    if args.zap_build:
-        fs.remove_directory_contents(config["build"])
+        fs.remove_directory_contents(project_config["build"])
+
+    packages = project_config["packages"]
+    local_env_dir = project_config["local"]
+    assert ev.is_env_dir(local_env_dir)
+    env = ev.Environment(local_env_dir)
+    developed_specs = [s for s in env.all_specs() if s.name in packages]
+
+    for s in developed_specs:
+        if not s.installed:
+            continue
+        spack.package_base.PackageBase.uninstall_by_spec(s, force=True)

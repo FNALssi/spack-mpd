@@ -107,7 +107,6 @@ def project_config_from_args(args):
     project["source"] = str(srcs_path.absolute())
     project["build"] = str((top_path / "build").absolute())
     project["local"] = str((top_path / "local").absolute())
-    project["install"] = str((top_path / "local" / "install").absolute())
     project["envs"] = args.env
 
     packages_to_develop = []

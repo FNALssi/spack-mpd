@@ -53,7 +53,6 @@ def build(project_config, generator, parallel, generator_options):
         "-B",
         build_area,
         f"-DCMAKE_CXX_COMPILER={compilers[0].cxx}",
-        f"-DCMAKE_INSTALL_PREFIX={project_config['install']}",
     ]
     if generator:
         configure_list += ["-G", generator]

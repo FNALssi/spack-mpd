@@ -12,7 +12,6 @@ subcommands = [
     "build",
     "clear",
     "clone",
-    "deploy",
     "init",
     "install",
     "list_projects",

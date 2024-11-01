@@ -79,6 +79,11 @@ def cmake_lists_preamble(package):
 enable_testing()
 
 project({package}-{date} LANGUAGES NONE)
+
+macro(develop pkg prefix)
+  install(CODE "set(CMAKE_INSTALL_PREFIX ${{prefix}})")
+  add_subdirectory(${{pkg}})
+endmacro()
 """
 
 
@@ -125,8 +130,8 @@ def make_cmake_file(package, dependencies, project_config):
     source_path = Path(project_config["source"])
     with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
         f.write(cmake_lists_preamble(package))
-        for d in dependencies:
-            f.write(f"\nadd_subdirectory({d})")
+        for d, prefix in dependencies.items():
+            f.write(f"\ndevelop({d} \"{prefix}\")")
 
     with open((source_path / "CMakePresets.json").absolute(), "w") as f:
         cmake_presets(source_path, dependencies, project_config["cxxstd"], f)
@@ -189,6 +194,7 @@ def process_config(package_requirements, project_config, yes_to_all):
     #  4. Remove the package from the package dependencies dictionary.
     #  5. Repeat steps 1-4 until there are no more changes to the package-dependencies dictionary.
     pkg_dependencies = {}
+    install_prefixes = {}
     for s in env.all_specs():
         if s.name not in package_requirements:
             continue
@@ -200,6 +206,7 @@ def process_config(package_requirements, project_config, yes_to_all):
                 continue
             ds.append(d.spec.name)
         pkg_dependencies[s.name] = ds
+        install_prefixes[s.name] = s.prefix
 
     ordered_dependencies = []
     size = len(pkg_dependencies) + 1
@@ -221,7 +228,9 @@ def process_config(package_requirements, project_config, yes_to_all):
             del pkg_dependencies[k]
 
     # Create properly ordered CMake file
-    make_cmake_file(name, ordered_dependencies, project_config)
+    make_cmake_file(name,
+                    {d: install_prefixes[d] for d in ordered_dependencies},
+                    project_config)
 
     # Now add the first-order dependencies
     developed_specs = [s for _, s in env.concretized_specs() if s.name in package_requirements]
@@ -336,7 +345,7 @@ def print_config_info(config):
 
 
 def prepare_project(project_config):
-    for d in ("top", "build", "local", "install", "source"):
+    for d in ("top", "build", "local", "source"):
         Path(project_config[d]).mkdir(exist_ok=True)
 
 
