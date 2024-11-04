@@ -59,20 +59,6 @@ def setup_subparser(subparsers):
     new_project.add_argument("variants", nargs="*", help="variants to apply to developed packages")
 
 
-def entry(package_list, package_name):
-    for p in package_list:
-        if package_name == p["name"]:
-            return p
-    return None
-
-
-def entry_with_index(package_list, package_name):
-    for i, p in enumerate(package_list):
-        if package_name == p["name"]:
-            return i, p
-    return None
-
-
 def cmake_develop():
     file_dir = Path(__file__).resolve().parent
     return f"""set(CWD "{file_dir}")
