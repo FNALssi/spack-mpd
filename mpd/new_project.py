@@ -73,17 +73,28 @@ def entry_with_index(package_list, package_name):
     return None
 
 
-def cmake_lists_preamble(package):
+def cmake_develop():
+    file_dir = Path(__file__).resolve().parent
+    return f"""set(CWD "{file_dir}")
+macro(develop pkg)
+  install(CODE "execute_process(COMMAND spack python ensure-install-directory.py ${{${{pkg}}_HASH}}\\
+                                WORKING_DIRECTORY ${{CWD}})")
+  install(CODE "set(CMAKE_INSTALL_PREFIX ${{${{pkg}}_INSTALL_PREFIX}})")
+  add_subdirectory(${{pkg}})
+  install(CODE "execute_process(COMMAND spack python add-to-database.py ${{${{pkg}}_HASH}}\\
+                                WORKING_DIRECTORY ${{CWD}})")
+endmacro()
+"""
+
+
+def cmake_lists_preamble(project_name):
     date = time.strftime("%Y-%m-%d")
     return f"""cmake_minimum_required (VERSION 3.18.2 FATAL_ERROR)
 enable_testing()
 
-project({package}-{date} LANGUAGES NONE)
+project({project_name}-{date} LANGUAGES NONE)
 
-macro(develop pkg prefix)
-  install(CODE "set(CMAKE_INSTALL_PREFIX ${{prefix}})")
-  add_subdirectory(${{pkg}})
-endmacro()
+include(develop.cmake)
 """
 
 
@@ -97,8 +108,12 @@ def cmake_presets(source_path, dependencies, cxx_standard, preset_file):
     }
 
     # Pull project-specific presets from each dependency.
-    for dep in dependencies:
-        pkg_presets_file = source_path / dep / "CMakePresets.json"
+    for dep_name, dep_value in dependencies.items():
+        dep_hash, dep_prefix = dep_value
+        allCacheVariables[f"{dep_name}_HASH"] = dep_hash
+        allCacheVariables[f"{dep_name}_INSTALL_PREFIX"] = dep_prefix
+
+        pkg_presets_file = source_path / dep_name / "CMakePresets.json"
         if not pkg_presets_file.exists():
             continue
 
@@ -109,15 +124,15 @@ def cmake_presets(source_path, dependencies, cxx_standard, preset_file):
                 filter(lambda s: s["name"] == "from_product_deps", pkg_config_presets)
             )
             for key, value in default_presets[cacheVariables].items():
-                if key.startswith(dep):
+                if key.startswith(dep_name):
                     allCacheVariables[key] = value
 
     presets = {
         configurePresets: [
             {
                 cacheVariables: allCacheVariables,
-                "description": "Configuration settings as created by 'spack mpd new-dev'",
-                "displayName": "Configuration from mpd new-dev",
+                "description": "Configuration settings as created by 'spack mpd new-project'",
+                "displayName": "Configuration from mpd new-project",
                 "name": "default",
             }
         ],
@@ -126,12 +141,16 @@ def cmake_presets(source_path, dependencies, cxx_standard, preset_file):
     return json.dump(presets, preset_file, indent=4)
 
 
-def make_cmake_file(package, dependencies, project_config):
+def make_cmake_file(project_name, dependencies, project_config):
     source_path = Path(project_config["source"])
+    with open((source_path / "develop.cmake").absolute(), "w") as f:
+        f.write(cmake_develop())
+
     with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
-        f.write(cmake_lists_preamble(package))
-        for d, prefix in dependencies.items():
-            f.write(f"\ndevelop({d} \"{prefix}\")")
+        f.write(cmake_lists_preamble(project_name))
+        for d, value in dependencies.items():
+            hash, prefix = value
+            f.write(f"\ndevelop({d})")
 
     with open((source_path / "CMakePresets.json").absolute(), "w") as f:
         cmake_presets(source_path, dependencies, project_config["cxxstd"], f)
@@ -206,7 +225,7 @@ def process_config(package_requirements, project_config, yes_to_all):
                 continue
             ds.append(d.spec.name)
         pkg_dependencies[s.name] = ds
-        install_prefixes[s.name] = s.prefix
+        install_prefixes[s.name] = (s.dag_hash(), s.prefix)
 
     ordered_dependencies = []
     size = len(pkg_dependencies) + 1
