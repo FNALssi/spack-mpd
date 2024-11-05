@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -227,7 +228,9 @@ def process_config(package_requirements, project_config, yes_to_all):
     )
 
     tty.info(gray("Creating initial environmant"))
-    env = ev.create_in_dir(local_env_dir, init_file=env_file)
+    if ev.exists(name):
+        ev.read(name).destroy()
+    env = ev.create(name, init_file=env_file)
     update(project_config, status="created")
 
     with env, env.write_transaction():
@@ -237,15 +240,38 @@ def process_config(package_requirements, project_config, yes_to_all):
     # Create properly ordered CMake file
     make_cmake_files(project_config, ordered_roots(env, package_requirements))
 
+    # Make development environment
+    shutil.copytree(env.path, local_env_dir, dirs_exist_ok=True)
+
     # Now add the first-order dependencies
+    env = ev.Environment(local_env_dir)
     developed_specs = [s for _, s in env.concretized_specs() if s.name in package_requirements]
-    first_order_deps = [s.name for depth,
-                        s in traverse.traverse_nodes(developed_specs, depth=True) if depth == 1]
+    first_order_deps = {}
+    for s in developed_specs:
+        for depth, dep in traverse.traverse_nodes([s], depth=True):
+            if depth != 1:
+                continue
+            if dep.name in package_requirements:
+                continue
+            first_order_deps[dep.name] = dep.format("{name}{@version}"
+                                                    "{%compiler.name}{@compiler.version}{compiler_flags}"
+                                                    "{variants}")
+
+    tty.info(gray("Handling dependencies"))
+    subprocess.run(["spack", "-e", ".", "add"] + list(first_order_deps.keys()),
+                   stdout=subprocess.DEVNULL,
+                   cwd=local_env_dir)
 
     tty.msg(cyan("Adjusting environment for development"))
-    result = subprocess.run(["spack", "-e", ".", "add"] + first_order_deps,
-                            stdout=subprocess.DEVNULL,
-                            cwd=local_env_dir)
+    with env, env.write_transaction():
+        env.concretize()
+        env.write(regenerate=False)
+
+    subprocess.run(["spack", "-e", ".", "rm"] + list(package_requirements.keys()),
+                   stdout=subprocess.DEVNULL,
+                   cwd=local_env_dir)
+
+    tty.info(gray("Finalizing concretization"))
     with env, env.write_transaction():
         env.concretize()
         env.write()
@@ -281,7 +307,7 @@ def process_config(package_requirements, project_config, yes_to_all):
 
     update(project_config, status="concretized")
 
-    msg = "Ready to install MPD project " + bold(name) + "\n"
+    msg = "Ready to install development environment for " + bold(name) + "\n"
 
     if absent_dependencies:
         # Remove duplicates, preserving order
@@ -303,18 +329,13 @@ def process_config(package_requirements, project_config, yes_to_all):
     tty.msg(msg)
 
     if not yes_to_all:
-        should_install = tty.get_yes_or_no(
-            "Would you like to continue with installation?", default=True
-        )
+        should_install = tty.get_yes_or_no("Would you like to continue?", default=True)
     else:
         should_install = True
 
     if should_install is False:
         print()
-        tty.msg(
-            f"To install {name} later, invoke:\n\n"
-            f"  spack -e {name} install --only dependencies -j<ncores>\n"
-        )
+        tty.msg("Development environment not installed.\n")
         return
 
     if not yes_to_all:
@@ -330,8 +351,8 @@ def process_config(package_requirements, project_config, yes_to_all):
         print()
         update(project_config, status="installed")
         msg = (
-            f"MPD project {bold(name)} has been installed.  "
-            f"To use it, invoke:\n\n  spack env activate {local_env_dir}\n"
+            f"The development environment for {bold(name)} is ready.  "
+            f"To activate it, invoke:\n\n  spack env activate {local_env_dir}\n"
         )
         tty.msg(msg)
 
