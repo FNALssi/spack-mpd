@@ -59,9 +59,11 @@ def setup_subparser(subparsers):
     new_project.add_argument("variants", nargs="*", help="variants to apply to developed packages")
 
 
-def cmake_develop():
+def cmake_develop(project_config):
+    source_path = Path(project_config["source"])
     file_dir = Path(__file__).resolve().parent
-    return f"""set(CWD "{file_dir}")
+    with open((source_path / "develop.cmake").absolute(), "w") as out:
+        out.write(f"""set(CWD "{file_dir}")
 macro(develop pkg)
   install(CODE "execute_process(COMMAND spack python ensure-install-directory.py ${{${{pkg}}_HASH}}\\
                                 WORKING_DIRECTORY ${{CWD}})")
@@ -70,12 +72,12 @@ macro(develop pkg)
   install(CODE "execute_process(COMMAND spack python add-to-database.py ${{${{pkg}}_HASH}}\\
                                 WORKING_DIRECTORY ${{CWD}})")
 endmacro()
-"""
+""")
 
 
 def cmake_lists_preamble(project_name):
     date = time.strftime("%Y-%m-%d")
-    return f"""cmake_minimum_required (VERSION 3.18.2 FATAL_ERROR)
+    return f"""cmake_minimum_required(VERSION 3.18.2 FATAL_ERROR)
 enable_testing()
 
 project({project_name}-{date} LANGUAGES NONE)
@@ -84,7 +86,18 @@ include(develop.cmake)
 """
 
 
-def cmake_presets(source_path, dependencies, cxx_standard, preset_file):
+def cmake_lists(project_config, dependencies):
+    source_path = Path(project_config["source"])
+    with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
+        f.write(cmake_lists_preamble(project_config["name"]))
+        for d, hash, prefix in dependencies:
+            f.write(f"\ndevelop({d})")
+        f.write("\n")
+
+
+def cmake_presets(project_config, dependencies):
+    source_path = Path(project_config["source"])
+    cxx_standard = project_config["cxxstd"]
     configurePresets, cacheVariables = "configurePresets", "cacheVariables"
     allCacheVariables = {
         "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
@@ -94,8 +107,7 @@ def cmake_presets(source_path, dependencies, cxx_standard, preset_file):
     }
 
     # Pull project-specific presets from each dependency.
-    for dep_name, dep_value in dependencies.items():
-        dep_hash, dep_prefix = dep_value
+    for dep_name, dep_hash, dep_prefix in dependencies:
         allCacheVariables[f"{dep_name}_HASH"] = dep_hash
         allCacheVariables[f"{dep_name}_INSTALL_PREFIX"] = dep_prefix
 
@@ -124,27 +136,61 @@ def cmake_presets(source_path, dependencies, cxx_standard, preset_file):
         ],
         "version": 3,
     }
-    return json.dump(presets, preset_file, indent=4)
-
-
-def make_cmake_file(project_name, dependencies, project_config):
-    source_path = Path(project_config["source"])
-    with open((source_path / "develop.cmake").absolute(), "w") as f:
-        f.write(cmake_develop())
-
-    with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
-        f.write(cmake_lists_preamble(project_name))
-        for d, value in dependencies.items():
-            hash, prefix = value
-            f.write(f"\ndevelop({d})")
 
     with open((source_path / "CMakePresets.json").absolute(), "w") as f:
-        cmake_presets(source_path, dependencies, project_config["cxxstd"], f)
+        json.dump(presets, f, indent=4)
 
 
-def external_config_for_spec(spec):
-    external_config = {"spec": spec.short_spec, "prefix": str(spec.prefix)}
-    return {"externals": [external_config], "buildable": False}
+def make_cmake_files(project_config, dependencies):
+    cmake_develop(project_config)
+    cmake_lists(project_config, dependencies)
+    cmake_presets(project_config, dependencies)
+
+
+def ordered_roots(env, package_requirements):
+    # We use the following sorting algorithm:
+    #
+    #  0. Form a dictionary of package name to its list of dependencies that are developed.
+    #  1. In the package dependencies dictionary, find the packages with no listed dependencies.
+    #  2. Place that package name at the front of the ordered-dependency list
+    #  3. Remove the package name from the other packages' dependency lists
+    #  4. Remove the package from the package dependencies dictionary.
+    #  5. Repeat steps 1-4 until there are no more changes to the package-dependencies dictionary.
+    pkg_dependencies = {}
+    install_prefixes = {}
+    for s in env.all_specs():
+        if s.name not in package_requirements:
+            continue
+        ds = []
+        for _, d in traverse.traverse_tree([s], depth_first=False):
+            if d.spec.name not in package_requirements:
+                continue
+            if d.spec.name == s.name:
+                continue
+            ds.append(d.spec.name)
+        pkg_dependencies[s.name] = ds
+        install_prefixes[s.name] = (s.name, s.dag_hash(), s.prefix)
+
+    ordered_dependencies = []
+    size = len(pkg_dependencies) + 1
+    while (size != len(pkg_dependencies)):
+        to_remove = []
+        for k, vs1 in pkg_dependencies.items():
+            if len(vs1) != 0:
+                continue
+
+            to_remove.append(k)
+            ordered_dependencies.append(install_prefixes[k])
+            for vs2 in pkg_dependencies.values():
+                if k not in vs2:
+                    continue
+                vs2.remove(k)
+
+        size = len(pkg_dependencies)
+        for k in to_remove:
+            del pkg_dependencies[k]
+
+    return ordered_dependencies
 
 
 def process_config(package_requirements, project_config, yes_to_all):
@@ -188,54 +234,8 @@ def process_config(package_requirements, project_config, yes_to_all):
         env.concretize()
         env.write(regenerate=False)
 
-    # Create CMake file with correctly ordered packages
-
-    # We use the following sorting algorithm:
-    #
-    #  0. Form a dictionary of package name to its list of dependencies that are developed.
-    #  1. In the package dependencies dictionary, find the packages with no listed dependencies.
-    #  2. Place that package name at the front of the ordered-dependency list
-    #  3. Remove the package name from the other packages' dependency lists
-    #  4. Remove the package from the package dependencies dictionary.
-    #  5. Repeat steps 1-4 until there are no more changes to the package-dependencies dictionary.
-    pkg_dependencies = {}
-    install_prefixes = {}
-    for s in env.all_specs():
-        if s.name not in package_requirements:
-            continue
-        ds = []
-        for _, d in traverse.traverse_tree([s], depth_first=False):
-            if d.spec.name not in package_requirements:
-                continue
-            if d.spec.name == s.name:
-                continue
-            ds.append(d.spec.name)
-        pkg_dependencies[s.name] = ds
-        install_prefixes[s.name] = (s.dag_hash(), s.prefix)
-
-    ordered_dependencies = []
-    size = len(pkg_dependencies) + 1
-    while (size != len(pkg_dependencies)):
-        to_remove = []
-        for k, vs1 in pkg_dependencies.items():
-            if len(vs1) != 0:
-                continue
-
-            to_remove.append(k)
-            ordered_dependencies.append(k)
-            for vs2 in pkg_dependencies.values():
-                if k not in vs2:
-                    continue
-                vs2.remove(k)
-
-        size = len(pkg_dependencies)
-        for k in to_remove:
-            del pkg_dependencies[k]
-
     # Create properly ordered CMake file
-    make_cmake_file(name,
-                    {d: install_prefixes[d] for d in ordered_dependencies},
-                    project_config)
+    make_cmake_files(project_config, ordered_roots(env, package_requirements))
 
     # Now add the first-order dependencies
     developed_specs = [s for _, s in env.concretized_specs() if s.name in package_requirements]
