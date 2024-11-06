@@ -151,6 +151,16 @@ def make_cmake_files(project_config, dependencies):
     cmake_presets(project_config, dependencies)
 
 
+def remove_view(local_env_dir):
+    spack_env = Path(local_env_dir) / ".spack-env"
+    view_path = (spack_env / "view")
+    if view_path.is_symlink():
+        view_path.unlink()
+    else:
+        shutil.rmtree(view_path, ignore_errors=True)
+    shutil.rmtree(spack_env / "._view", ignore_errors=True)
+
+
 def ordered_roots(env, package_requirements):
     # We use the following sorting algorithm:
     #
@@ -226,6 +236,8 @@ def process_config(package_requirements, project_config, yes_to_all):
     )
 
     local_env_dir = project_config["local"]
+
+    # Always start fresh
     env_file = make_yaml_file(
         name, dict(spack=full_block), prefix=local_env_dir, overwrite=True
     )
@@ -243,8 +255,11 @@ def process_config(package_requirements, project_config, yes_to_all):
     # Create properly ordered CMake file
     make_cmake_files(project_config, ordered_roots(env, package_requirements))
 
-    # Make development environment
+    # Make development environment from initial environment
+    #   - Then remove the embedded '.spack-env/view' subdirectory, which will induce a
+    #     SpackEnvironmentViewError exception if not removed.
     shutil.copytree(env.path, local_env_dir, dirs_exist_ok=True)
+    remove_view(local_env_dir)
 
     # Now add the first-order dependencies
     env = ev.Environment(local_env_dir)
@@ -266,20 +281,17 @@ def process_config(package_requirements, project_config, yes_to_all):
                    cwd=local_env_dir)
 
     tty.info(gray("Finalizing concretization"))
-    with env, env.write_transaction():
-        env.concretize()
-        env.write(regenerate=False)
-
-    subprocess.run(["spack", "-e", ".", "rm"] + list(package_requirements.keys()),
-                   stdout=subprocess.DEVNULL,
-                   cwd=local_env_dir)
-
+    remove_view(local_env_dir)
     with env, env.write_transaction():
         env.concretize()
         env.write()
 
-    nondeveloped_pkgs = [s.name for _, s in env.concretized_specs()
-                         if s.name not in package_requirements]
+    subprocess.run(["spack", "-e", ".", "rm"] + list(package_requirements.keys()),
+                   stdout=subprocess.DEVNULL,
+                   cwd=local_env_dir)
+    with env, env.write_transaction():
+        env.concretize()
+        env.write()
 
     absent_dependencies = []
     missing_intermediate_deps = {}
@@ -349,8 +361,7 @@ def process_config(package_requirements, project_config, yes_to_all):
         ncores = os.cpu_count() // 2
 
     tty.msg(gray("Installing development environment\n"))
-    result = subprocess.run(["spack", "-e", ".", "install", f"-j{ncores}"] + nondeveloped_pkgs,
-                            cwd=local_env_dir)
+    result = subprocess.run(["spack", "-e", ".", "install", f"-j{ncores}"], cwd=local_env_dir)
 
     if result.returncode == 0:
         print()

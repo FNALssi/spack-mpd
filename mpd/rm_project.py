@@ -1,10 +1,8 @@
 import shutil
 import subprocess
-from pathlib import Path
 
-from .config import mpd_packages, rm_config, project_config
-from .preconditions import preconditions, State
-
+from .config import project_config, rm_config
+from .preconditions import State, preconditions
 
 SUBCOMMAND = "rm-project"
 ALIASES = ["rm"]
@@ -30,23 +28,11 @@ Removing a project will:
     )
 
 
-def _run_no_output(*args):
-    return subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
-def _rm_packages(name):
-    packages_path = Path(mpd_packages())
-    if not packages_path.exists():
-        return
-
-    shutil.rmtree(packages_path / f"{name}-bootstrap", ignore_errors=True)
-
-
 def rm_project(name, config):
-    _run_no_output("spack", "env", "rm", "-y", name)
-    _rm_packages(name)
+    subprocess.run(["spack", "env", "rm", "-y", config["local"]],
+                   stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL)
     shutil.rmtree(config["build"], ignore_errors=True)
-    shutil.rmtree(config["local"], ignore_errors=True)
     rm_config(name)
 
 

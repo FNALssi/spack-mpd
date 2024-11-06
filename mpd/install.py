@@ -6,7 +6,7 @@ import spack.environment as ev
 
 from .config import selected_project_config
 from .preconditions import State, preconditions
-from .util import bold, cyan
+from .util import bold, cyan, gray
 
 SUBCOMMAND = "install"
 ALIASES = ["i"]
@@ -22,15 +22,15 @@ def setup_subparser(subparsers):
 
 
 def install(project_config):
-
     all_arguments = ["cmake", "--install", project_config["build"]]
     all_arguments_str = " ".join(all_arguments)
 
     print()
     tty.msg("Installing developed packages with comment:\n\n" + cyan(all_arguments_str) + "\n")
 
-    subprocess.run(all_arguments)
+    subprocess.run(all_arguments, stdout=subprocess.DEVNULL)
 
+    tty.msg(gray("Installing environment"))
     # Now install the environment
     name = project_config["name"]
     env = ev.read(name)

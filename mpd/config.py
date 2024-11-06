@@ -50,10 +50,6 @@ def mpd_config_dir():
     return Path(spack.config.get("config:mpd_dir")).resolve()
 
 
-def mpd_packages():
-    return mpd_config_dir() / "packages"
-
-
 def mpd_config_file():
     return mpd_config_dir() / "config"
 

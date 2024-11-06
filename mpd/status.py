@@ -23,11 +23,12 @@ def process(args):
         tty.warn("MPD not initialized--invoke: " + bold("spack mpd init"))
         return
 
-    selected = config.selected_project_config()
+    selected = config.selected_project()
     if not selected:
         tty.info(f"Selected project: {cyan('None')}")
         return
 
+    selected = config.project_config(selected)
     name = selected["name"]
     msg = f"Selected project: {cyan(name)}"
 
