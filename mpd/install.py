@@ -2,9 +2,11 @@ import subprocess
 
 import llnl.util.tty as tty
 
+import spack.environment as ev
+
 from .config import selected_project_config
 from .preconditions import State, preconditions
-from .util import cyan
+from .util import bold, cyan
 
 SUBCOMMAND = "install"
 ALIASES = ["i"]
@@ -25,9 +27,19 @@ def install(project_config):
     all_arguments_str = " ".join(all_arguments)
 
     print()
-    tty.msg("Installing with command:\n\n" + cyan(all_arguments_str) + "\n")
+    tty.msg("Installing developed packages with comment:\n\n" + cyan(all_arguments_str) + "\n")
 
     subprocess.run(all_arguments)
+
+    # Now install the environment
+    name = project_config["name"]
+    env = ev.read(name)
+    with env, env.write_transaction():
+        env.install_all()
+        env.write()
+
+    print()
+    tty.msg(f"The {bold(name)} environment has been installed.\n")
 
 
 def process(args):

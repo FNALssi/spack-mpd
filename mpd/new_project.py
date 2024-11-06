@@ -61,16 +61,19 @@ def setup_subparser(subparsers):
 
 
 def cmake_develop(project_config):
+    project_name = project_config["name"]
     source_path = Path(project_config["source"])
     file_dir = Path(__file__).resolve().parent
     with open((source_path / "develop.cmake").absolute(), "w") as out:
         out.write(f"""set(CWD "{file_dir}")
 macro(develop pkg)
-  install(CODE "execute_process(COMMAND spack python ensure-install-directory.py ${{${{pkg}}_HASH}}\\
+  install(CODE "execute_process(COMMAND spack python ensure-install-directory.py\\
+                                        {project_name} ${{${{pkg}}_HASH}}\\
                                 WORKING_DIRECTORY ${{CWD}})")
   install(CODE "set(CMAKE_INSTALL_PREFIX ${{${{pkg}}_INSTALL_PREFIX}})")
   add_subdirectory(${{pkg}})
-  install(CODE "execute_process(COMMAND spack python add-to-database.py ${{${{pkg}}_HASH}}\\
+  install(CODE "execute_process(COMMAND spack python add-to-database.py\\
+                                        {project_name} ${{${{pkg}}_HASH}}\\
                                 WORKING_DIRECTORY ${{CWD}})")
 endmacro()
 """)
@@ -227,7 +230,7 @@ def process_config(package_requirements, project_config, yes_to_all):
         name, dict(spack=full_block), prefix=local_env_dir, overwrite=True
     )
 
-    tty.info(gray("Creating initial environmant"))
+    tty.info(gray("Creating initial environment"))
     if ev.exists(name):
         ev.read(name).destroy()
     env = ev.create(name, init_file=env_file)
@@ -257,12 +260,12 @@ def process_config(package_requirements, project_config, yes_to_all):
                                                     "{%compiler.name}{@compiler.version}{compiler_flags}"
                                                     "{variants}")
 
-    tty.info(gray("Handling dependencies"))
+    tty.msg(cyan("Adjusting environment for development"))
     subprocess.run(["spack", "-e", ".", "add"] + list(first_order_deps.keys()),
                    stdout=subprocess.DEVNULL,
                    cwd=local_env_dir)
 
-    tty.msg(cyan("Adjusting environment for development"))
+    tty.info(gray("Finalizing concretization"))
     with env, env.write_transaction():
         env.concretize()
         env.write(regenerate=False)
@@ -271,7 +274,6 @@ def process_config(package_requirements, project_config, yes_to_all):
                    stdout=subprocess.DEVNULL,
                    cwd=local_env_dir)
 
-    tty.info(gray("Finalizing concretization"))
     with env, env.write_transaction():
         env.concretize()
         env.write()
@@ -335,7 +337,10 @@ def process_config(package_requirements, project_config, yes_to_all):
 
     if should_install is False:
         print()
-        tty.msg("Development environment not installed.\n")
+        tty.msg(
+            f"To install the development environment later, invoke:\n\n"
+            f"  spack -e {local_env_dir} install -j<ncores>\n"
+        )
         return
 
     if not yes_to_all:
