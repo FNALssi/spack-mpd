@@ -70,8 +70,8 @@ def check_active(conditions):
     # In this case, an active environment is allowed so long as it's different
     # from the development environment of the selected project.
     if not should_be_active and active_env_name == project_env_name:
-        return (f"A Spack environment must {bold('not')} be active "
-                f"({cyan(ev.active_environment().name)} currently active)")
+        return (f"The Spack environment {cyan(ev.active_environment().name)} "
+                f"must {bold('not')} be active")
 
     # In this case, the active environment must be the same as the development
     # environment of the project.
