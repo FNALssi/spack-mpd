@@ -99,15 +99,19 @@ def cmake_lists(project_config, dependencies):
         f.write("\n")
 
 
-def cmake_presets(project_config, dependencies):
+def cmake_presets(project_config, dependencies, view_path):
     source_path = Path(project_config["source"])
     cxx_standard = project_config["cxxstd"]
     configurePresets, cacheVariables = "configurePresets", "cacheVariables"
+    view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
     allCacheVariables = {
         "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
         "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
         "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
         "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxx_standard},
+        "CMAKE_INSTALL_RPATH_USE_LINK_PATH": {"type": "BOOL", "value": "ON"},
+        "CMAKE_INSTALL_RPATH": {"type": "STRING",
+                                "value": ";".join(view_lib_dirs)},
     }
 
     # Pull project-specific presets from each dependency.
@@ -145,10 +149,10 @@ def cmake_presets(project_config, dependencies):
         json.dump(presets, f, indent=4)
 
 
-def make_cmake_files(project_config, dependencies):
+def make_cmake_files(project_config, dependencies, view_path):
     cmake_develop(project_config)
     cmake_lists(project_config, dependencies)
-    cmake_presets(project_config, dependencies)
+    cmake_presets(project_config, dependencies, view_path)
 
 
 def remove_view(local_env_dir):
@@ -253,7 +257,9 @@ def process_config(package_requirements, project_config, yes_to_all):
         env.write(regenerate=False)
 
     # Create properly ordered CMake file
-    make_cmake_files(project_config, ordered_roots(env, package_requirements))
+    make_cmake_files(project_config,
+                     ordered_roots(env, package_requirements),
+                     Path(env.view_path_default))
 
     # Make development environment from initial environment
     #   - Then remove the embedded '.spack-env/view' subdirectory, which will induce a
