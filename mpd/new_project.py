@@ -223,7 +223,6 @@ def process_config(package_requirements, project_config, yes_to_all):
     # # environment configuration.  This makes it possible to use (e.g.) g++ directly within
     # # the environment without having to specify the full path to CMake.
     compiler = compilers.find(project_config["compiler"])[0]
-    cspec = spack.store.STORE.db.query(f"{compiler}")[0]
     compiler_str = [YamlQuote(compiler)]
 
     reuse_block = {"from": [{"type": "local"}, {"type": "external"}]}
