@@ -225,16 +225,12 @@ def process_config(package_requirements, project_config, yes_to_all):
     compiler = compilers.find(project_config["compiler"])[0]
     cspec = spack.store.STORE.db.query(f"{compiler}")[0]
     compiler_str = [YamlQuote(compiler)]
-    maybe_include_compiler = []
-
-    if cspec.installed:
-        maybe_include_compiler = compiler_str
 
     reuse_block = {"from": [{"type": "local"}, {"type": "external"}]}
     full_block = dict(
         include_concrete=[penv.path for penv in proto_envs],
         definitions=[dict(compiler=compiler_str)],
-        specs=maybe_include_compiler + list(package_requirements.keys()),
+        specs=list(package_requirements.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
         packages=package_requirements,
     )
@@ -252,6 +248,7 @@ def process_config(package_requirements, project_config, yes_to_all):
     env = ev.create(name, init_file=env_file)
     update(project_config, status="created")
 
+    tty.info(gray("Concretizing initial environment"))
     with env, env.write_transaction():
         env.concretize()
         env.write(regenerate=False)
@@ -264,7 +261,8 @@ def process_config(package_requirements, project_config, yes_to_all):
     # Make development environment from initial environment
     #   - Then remove the embedded '.spack-env/view' subdirectory, which will induce a
     #     SpackEnvironmentViewError exception if not removed.
-    shutil.copytree(env.path, local_env_dir, dirs_exist_ok=True)
+    tty.info(cyan("Creating local development environment"))
+    shutil.copytree(env.path, local_env_dir, symlinks=True, dirs_exist_ok=True)
     remove_view(local_env_dir)
 
     # Now add the first-order dependencies
@@ -281,7 +279,7 @@ def process_config(package_requirements, project_config, yes_to_all):
                                                     "{%compiler.name}{@compiler.version}{compiler_flags}"
                                                     "{variants}")
 
-    tty.msg(cyan("Adjusting environment for development"))
+    tty.msg(gray("Adjusting specifications for package development"))
     subprocess.run(["spack", "-e", ".", "add"] + list(first_order_deps.keys()),
                    stdout=subprocess.DEVNULL,
                    cwd=local_env_dir)
