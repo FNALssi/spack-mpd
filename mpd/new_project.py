@@ -1,3 +1,4 @@
+import functools
 import json
 import os
 import shutil
@@ -166,49 +167,27 @@ def remove_view(local_env_dir):
 
 
 def ordered_roots(env, package_requirements):
-    # We use the following sorting algorithm:
-    #
-    #  0. Form a dictionary of package name to its list of dependencies that are developed.
-    #  1. In the package dependencies dictionary, find the packages with no listed dependencies.
-    #  2. Place that package name at the front of the ordered-dependency list
-    #  3. Remove the package name from the other packages' dependency lists
-    #  4. Remove the package from the package dependencies dictionary.
-    #  5. Repeat steps 1-4 until there are no more changes to the package-dependencies dictionary.
-    pkg_dependencies = {}
+    packages = list(package_requirements.keys())
+
+    # Build comparison table with parent < child represented as the pair (parent, child)
+    parent_child = []
     install_prefixes = {}
     for s in env.all_specs():
         if s.name not in package_requirements:
             continue
-        ds = []
-        for _, d in traverse.traverse_tree([s], depth_first=False):
-            if d.spec.name not in package_requirements:
-                continue
-            if d.spec.name == s.name:
-                continue
-            ds.append(d.spec.name)
-        pkg_dependencies[s.name] = ds
+        parent_child.extend((s.name, d.name) for d in s.traverse(order="topo", root=False)
+                            if d.name in packages)
         install_prefixes[s.name] = (s.name, s.dag_hash(), s.prefix)
 
-    ordered_dependencies = []
-    size = len(pkg_dependencies) + 1
-    while (size != len(pkg_dependencies)):
-        to_remove = []
-        for k, vs1 in pkg_dependencies.items():
-            if len(vs1) != 0:
-                continue
+    def compare_parents(a, b):
+        if (a, b) in parent_child:
+            return -1
+        if (b, a) in parent_child:
+            return 1
+        return 0
 
-            to_remove.append(k)
-            ordered_dependencies.append(install_prefixes[k])
-            for vs2 in pkg_dependencies.values():
-                if k not in vs2:
-                    continue
-                vs2.remove(k)
-
-        size = len(pkg_dependencies)
-        for k in to_remove:
-            del pkg_dependencies[k]
-
-    return ordered_dependencies
+    sorted_packages = sorted(packages, key=functools.cmp_to_key(compare_parents), reverse=True)
+    return [install_prefixes[p] for p in sorted_packages]
 
 
 def process_config(package_requirements, project_config, yes_to_all):
