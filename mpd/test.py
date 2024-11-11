@@ -2,6 +2,9 @@ import subprocess
 
 import llnl.util.tty as tty
 
+import spack.environment as ev
+import spack.environment.shell as ev_shell
+
 from .config import selected_project_config
 from .preconditions import State, preconditions
 from .util import maybe_with_color
@@ -29,7 +32,7 @@ def setup_subparser(subparsers):
 
 
 def process(args):
-    preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.ACTIVE_ENVIRONMENT)
+    preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
 
     config = selected_project_config()
     build_dir = config["build"]
@@ -44,4 +47,6 @@ def process(args):
     print()
     tty.msg("Testing with command:\n\n" + maybe_with_color("c", arguments_str) + "\n")
 
+    development_env = ev.Environment(config["local"])
+    ev_shell.activate(development_env).apply_modifications()
     subprocess.run(arguments)

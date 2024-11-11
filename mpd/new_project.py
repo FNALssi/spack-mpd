@@ -12,7 +12,6 @@ import llnl.util.tty as tty
 
 import spack.compilers as compilers
 import spack.environment as ev
-import spack.store
 from spack import traverse
 from spack.repo import PATH
 from spack.spec import InstallStatus, Spec
@@ -389,9 +388,20 @@ def concretize_project(project_config, yes_to_all):
             pkg_requirements.append(f"cxxstd={cxxstd}")
         package_requirements[spec.name] = dict(require=[YamlQuote(s) for s in pkg_requirements])
 
+    # Add explicit dependencies to the concretization set
     dependencies_to_add = project_config["variants"].split("^")
     # Always erase the first entry...it either applies to the top-level package, or is empty.
     dependencies_to_add.pop(0)
+    for d in dependencies_to_add:
+        s = Spec(d)
+        pkg_requirements = []
+        if s.versions and str(s.versions[0]) != ":":
+            pkg_requirements.append(f"{s.versions}")
+        if s.compiler:
+            pkg_requirements.append(f"%{s.compiler}")
+        if s.variants:
+            pkg_requirements.append(f"{s.variants}".strip())
+        package_requirements[s.name] = dict(require=[YamlQuote(s) for s in pkg_requirements])
 
     process_config(package_requirements, project_config, yes_to_all)
 

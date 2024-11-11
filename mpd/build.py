@@ -1,9 +1,12 @@
 import subprocess
+from pathlib import Path
 
 import llnl.util.filesystem as fs
 import llnl.util.tty as tty
 
 import spack
+import spack.environment as ev
+import spack.environment.shell as ev_shell
 
 from .config import selected_project_config
 from .preconditions import State, preconditions
@@ -41,17 +44,14 @@ def setup_subparser(subparsers):
     )
 
 
-def build(project_config, generator, parallel, generator_options):
-    build_area = project_config["build"]
-    compilers = spack.compilers.compilers_for_spec(project_config["compiler"])
-    assert len(compilers) == 1
+def configure_cmake_project(project_config, compilers, generator):
     configure_list = [
         "cmake",
         "--preset",
         "default",
         project_config["source"],
         "-B",
-        build_area,
+        project_config["build"],
         f"-DCMAKE_C_COMPILER={compilers[0].cc}",
         f"-DCMAKE_CXX_COMPILER={compilers[0].cxx}",
     ]
@@ -63,6 +63,15 @@ def build(project_config, generator, parallel, generator_options):
     tty.msg("Configuring with command:\n\n" + cyan(configure_list_str) + "\n")
 
     subprocess.run(configure_list)
+
+
+def build(project_config, generator, parallel, generator_options):
+    build_area = project_config["build"]
+    compilers = spack.compilers.compilers_for_spec(project_config["compiler"])
+    assert len(compilers) == 1
+
+    if not (Path(build_area) / "CMakeCache.txt").exists():
+        configure_cmake_project(project_config, compilers, generator)
 
     generator_list = []
     if parallel:
@@ -82,10 +91,12 @@ def build(project_config, generator, parallel, generator_options):
 
 
 def process(args):
-    preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.ACTIVE_ENVIRONMENT)
+    preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
 
     config = selected_project_config()
     if args.clean:
         fs.remove_directory_contents(config["build"])
 
+    development_env = ev.Environment(config["local"])
+    ev_shell.activate(development_env).apply_modifications()
     build(config, args.generator, args.parallel, args.generator_options)
