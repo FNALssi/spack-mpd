@@ -3,6 +3,7 @@ import subprocess
 import llnl.util.tty as tty
 
 import spack.environment as ev
+import spack.environment.shell as ev_shell
 
 from .config import selected_project_config
 from .preconditions import State, preconditions
@@ -26,8 +27,10 @@ def install(project_config):
     all_arguments_str = " ".join(all_arguments)
 
     print()
-    tty.msg("Installing developed packages with comment:\n\n" + cyan(all_arguments_str) + "\n")
+    tty.msg("Installing developed packages with command:\n\n" + cyan(all_arguments_str) + "\n")
 
+    development_env = ev.Environment(project_config["local"])
+    ev_shell.activate(development_env).apply_modifications()
     subprocess.run(all_arguments, stdout=subprocess.DEVNULL)
 
     tty.msg(gray("Installing environment"))
@@ -43,6 +46,6 @@ def install(project_config):
 
 
 def process(args):
-    preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.ACTIVE_ENVIRONMENT)
+    preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
 
     install(selected_project_config())
