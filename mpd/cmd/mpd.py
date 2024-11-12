@@ -3,10 +3,10 @@ import importlib
 from .. import config
 
 description = "develop multiple packages using Spack for external software"
-section = "scripting"
+section = "developer"
 level = "long"
 
-_VERSION = "0.1.0"
+_VERSION = "0.2.0"
 
 subcommands = [
     "build",
@@ -46,10 +46,12 @@ def mpd(parser, args):
             continue
 
         if args.mpd_subcommand != "init":
-            # Each non-init command either relies on the cached
-            # information in the user configuration or the cached
-            # selected project (if it exists).
+            # Each non-init command either relies on the cached information in
+            # the user configuration or the cached selected project (if it exists).
             config.update_cache()
 
         m.process(args)
         break
+
+    if args.version:
+        print("spack mpd", _VERSION)

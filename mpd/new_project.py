@@ -21,7 +21,7 @@ from .preconditions import State, preconditions
 from .util import bold, cyan, get_number, gray, make_yaml_file
 
 SUBCOMMAND = "new-project"
-ALIASES = ["n", "newDev"]
+ALIASES = ["n"]
 
 
 def setup_subparser(subparsers):
