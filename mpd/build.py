@@ -5,11 +5,9 @@ import llnl.util.filesystem as fs
 import llnl.util.tty as tty
 
 import spack
-import spack.environment as ev
-import spack.environment.shell as ev_shell
 
 from .config import selected_project_config
-from .preconditions import State, preconditions
+from .preconditions import State, activate_development_environment, preconditions
 from .util import cyan
 
 SUBCOMMAND = "build"
@@ -97,6 +95,5 @@ def process(args):
     if args.clean:
         fs.remove_directory_contents(config["build"])
 
-    development_env = ev.Environment(config["local"])
-    ev_shell.activate(development_env).apply_modifications()
+    activate_development_environment(config["local"])
     build(config, args.generator, args.parallel, args.generator_options)

@@ -3,9 +3,10 @@ from enum import Flag, auto
 import llnl.util.tty as tty
 
 import spack.environment as ev
+import spack.environment.shell as ev_shell
 
 from . import config, init
-from .util import bold, cyan
+from .util import bold, cyan, gray, green
 
 
 class State(Flag):
@@ -98,3 +99,15 @@ def preconditions(*conditions):
             msg += f"\n - {e}"
         print()
         tty.die(msg + "\n")
+
+
+def activate_development_environment(env_dir):
+    development_env = ev.Environment(env_dir)
+    active = ev.active_environment()
+    print()
+    if active and active.name == development_env.name:
+        tty.msg(green("Using active development environment ") + gray(f"({development_env.name})"))
+        return
+
+    tty.msg(green("Activating development environment ") + gray(f"({development_env.name})"))
+    ev_shell.activate(development_env).apply_modifications()
