@@ -1,7 +1,10 @@
 import llnl.util.tty as tty
 
+import spack.environment as ev
+
 from . import config
-from .new_project import refresh_project
+from .concretize import concretize_project
+from .config import prepare_project, print_config_info, selected_project_config
 from .preconditions import State, preconditions
 from .util import bold
 
@@ -26,11 +29,32 @@ def setup_subparser(subparsers):
     )
 
 
+def refresh_project(name, project_config, yes_to_all):
+    print()
+
+    tty.msg(f"Refreshing project: {bold(name)}")
+    print_config_info(project_config)
+
+    if not project_config["packages"]:
+        tty.msg(
+            "No packages to develop.  You can clone repositories for development by invoking\n\n"
+            "  spack mpd git-clone --suite <suite name>\n\n"
+            "  (or type 'spack mpd git-clone --help' for more options)\n"
+        )
+        return
+
+    local_env_dir = project_config["local"]
+    if ev.is_env_dir(local_env_dir):
+        ev.Environment(local_env_dir).destroy()
+    prepare_project(project_config)
+    concretize_project(project_config, yes_to_all)
+
+
 def process(args):
     preconditions(State.INITIALIZED, State.SELECTED_PROJECT, ~State.ACTIVE_ENVIRONMENT)
 
-    name = config.selected_project()
-    current_config = config.project_config(name)
+    current_config = selected_project_config()
+    name = current_config["name"]
     new_config = config.refresh(name, args.variants)
     if current_config == new_config and not args.force:
         tty.msg(f"Project {bold(name)} is up-to-date")

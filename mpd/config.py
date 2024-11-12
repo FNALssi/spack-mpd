@@ -10,7 +10,7 @@ import spack.config
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
 
-from . import util
+from .util import cyan, spack_cmd_line
 
 _DEFAULT_CXXSTD = "17"  # Must be a string for CMake
 _NONE_STR = "(none)"
@@ -303,8 +303,33 @@ def selected_project(missing_ok=True):
         return None
 
     print()
-    tty.die(f"Active MPD project required to invoke '{util.spack_cmd_line()}'\n")
+    tty.die(f"Active MPD project required to invoke '{spack_cmd_line()}'\n")
 
 
 def selected_project_config():
     return project_config(selected_project(missing_ok=False))
+
+
+def print_config_info(config):
+    print(f"\nUsing {cyan('build')} area: {config['build']}")
+    print(f"Using {cyan('local')} area: {config['local']}")
+    print(f"Using {cyan('sources')} area: {config['source']}\n")
+    packages = config["packages"]
+    if not packages:
+        return
+
+    print("  Will develop:")
+    for p in packages:
+        print(f"    - {p}")
+
+
+def prepare_project(project_config):
+    for d in ("top", "build", "local", "source"):
+        Path(project_config[d]).mkdir(exist_ok=True)
+
+
+def select(name):
+    session_id = os.getsid(os.getpid())
+    selected = selected_projects_dir()
+    selected.mkdir(exist_ok=True)
+    (selected / f"{session_id}").write_text(name)
