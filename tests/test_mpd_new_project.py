@@ -4,27 +4,26 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 import contextlib
 
-from spack.main import SpackCommand
 import llnl.util.filesystem as fs
 
 from spack.extensions.mpd import config
+from spack.main import SpackCommand
 
 
-# The default value of the top-level directory changes depending on
-# the working directory.  For that reason, we cannot simply declare
-# mpd to be an instance of SpackCommand("mpd") that can be used
-# everywhere.
+# The default value of the top-level directory changes depending on the working
+# directory.  For that reason, we cannot simply declare mpd to be an instance of
+# SpackCommand("mpd") that can be used everywhere.
 def mpd(*args):
     return SpackCommand("mpd")(*args)
 
 
 @contextlib.contextmanager
 def new_project(name, top=None, srcs=None, cwd=None):
-    args = ["--name", name]
+    arguments = ["--name", name]
     if top:
-        args += ["--top", str(top)]
+        arguments += ["-T", str(top)]
     if srcs:
-        args += ["--srcs", str(srcs)]
+        arguments += ["-S", str(srcs)]
 
     cm = contextlib.nullcontext()
     if cwd:
@@ -32,15 +31,17 @@ def new_project(name, top=None, srcs=None, cwd=None):
 
     with cm:
         try:
-            yield mpd("new-project", *args)
+            yield mpd("new-project", *arguments)
         finally:
-            mpd("rm", "-f", name)
+            mpd("rm-project", "--force", name)
 
 
-def test_new_project_paths(with_mpd_init, tmp_path):
+def test_new_project_all_default_paths(with_mpd_init, tmp_path):
     # Specify neither -T or -S
     cwd_a = tmp_path / "a"
+    mpd("ls")
     with new_project(name="a", cwd=cwd_a) as out:
+        print(out)
         assert f"build area: {cwd_a}/build" in out
         assert f"local area: {cwd_a}/local" in out
         assert f"sources area: {cwd_a}/srcs" in out
@@ -48,15 +49,21 @@ def test_new_project_paths(with_mpd_init, tmp_path):
 
         out = mpd("status")
         assert "Selected project: a" in out
-        assert "Environment status: (none)" in out
+        assert "Environment status: inactive" in out
 
+
+def test_new_project_only_top_path(with_mpd_init, tmp_path):
     # Specify only -T
+    mpd("ls")
     top_level_b = tmp_path / "b"
     with new_project(name="b", top=top_level_b) as out:
+        mpd("ls")
         assert f"build area: {top_level_b}/build" in out
         assert f"local area: {top_level_b}/local" in out
         assert f"sources area: {top_level_b}/srcs" in out
 
+
+def test_new_project_only_srcs_path(with_mpd_init, tmp_path):
     # Specify only -S
     cwd_c = tmp_path / "c"
     srcs_c = tmp_path / "c_srcs"
@@ -65,6 +72,8 @@ def test_new_project_paths(with_mpd_init, tmp_path):
         assert f"local area: {cwd_c}/local" in out
         assert f"sources area: {srcs_c}" in out
 
+
+def test_new_project_no_default_paths(with_mpd_init, tmp_path):
     # Specify both -T and -S
     top_level_d = tmp_path / "d"
     srcs_d = tmp_path / "d_srcs"
