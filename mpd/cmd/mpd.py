@@ -21,7 +21,7 @@ subcommands = [
     "select",
     "status",
     "test",
-    "zap_build",
+    "zap",
 ]
 subcommand_modules = {
     scmd: importlib.import_module(f"..{scmd}", f"spack.extensions.mpd.{scmd}")

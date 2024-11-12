@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import llnl.util.filesystem as fs
 
 import spack.environment as ev
@@ -29,7 +27,7 @@ def setup_subparser(subparsers):
     )
     zap.add_argument(
         "--build",
-        dest="zap_build",
+        dest="zap",
         action="store_true",
         help="delete everything in your build directory",
     )
@@ -47,8 +45,8 @@ def process(args):
     project_config = selected_project_config()
 
     # Default is to zap build only
-    zap_build_only = args.zap_build or not (args.zap_all or args.zap_build or args.zap_install)
-    if zap_build_only:
+    zap_only = args.zap or not (args.zap_all or args.zap or args.zap_install)
+    if zap_only:
         fs.remove_directory_contents(project_config["build"])
         return
 
@@ -56,9 +54,7 @@ def process(args):
         fs.remove_directory_contents(project_config["build"])
 
     packages = project_config["packages"]
-    local_env_dir = project_config["local"]
-    assert ev.is_env_dir(local_env_dir)
-    env = ev.Environment(local_env_dir)
+    env = ev.read(project_config["name"])
     developed_specs = [s for s in env.all_specs() if s.name in packages]
 
     for s in developed_specs:
