@@ -6,10 +6,10 @@ import ruamel
 
 import llnl.util.tty as tty
 
-import spack.config
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
 
+from . import init
 from .util import cyan, spack_cmd_line
 
 _DEFAULT_CXXSTD = "17"  # Must be a string for CMake
@@ -26,9 +26,16 @@ def _process_exists(pid):
     return True
 
 
-def selected_projects_dir(missing_ok=True):
-    config_dir = mpd_config_dir(missing_ok)
-    return config_dir / "selected" if config_dir else None
+def mpd_config_dir():
+    return init.mpd_config_dir()
+
+
+def mpd_config_file():
+    return init.mpd_config_file(mpd_config_dir())
+
+
+def selected_projects_dir():
+    return init.mpd_selected_projects_dir(mpd_config_dir())
 
 
 def selected_projects():
@@ -43,30 +50,14 @@ def session_id():
     return f"{os.getsid(os.getpid())}"
 
 
-def selected_project_token(missing_ok=True):
-    projects_dir = selected_projects_dir(missing_ok)
-    if not projects_dir and missing_ok:
-        return None
-    return projects_dir / session_id()
-
-
-def mpd_config_dir(missing_ok=False):
-    config_dir = spack.config.get("config:mpd_dir")
-    if not config_dir and missing_ok:
-        return None
-    return Path(config_dir).resolve()
-
-
-def mpd_config_file(missing_ok=False):
-    config_dir = mpd_config_dir(missing_ok)
-    if not config_dir and missing_ok:
-        return None
-    return config_dir / "config"
+def selected_project_token():
+    projects_dir = selected_projects_dir()
+    return projects_dir / session_id() if projects_dir else None
 
 
 def mpd_config():
-    config_file = mpd_config_file(missing_ok=True)
-    if not config_file or not config_file.exists():
+    config_file = mpd_config_file()
+    if not config_file.exists():
         return None
 
     with open(config_file, "r") as f:
@@ -305,7 +296,7 @@ def update_cache():
 
 
 def selected_project(missing_ok=True):
-    token = selected_project_token(missing_ok)
+    token = selected_project_token()
     if token and token.exists():
         return token.read_text()
 
@@ -317,7 +308,7 @@ def selected_project(missing_ok=True):
 
 
 def selected_project_config():
-    return project_config(selected_project(missing_ok=False))
+    return project_config(selected_project())
 
 
 def print_config_info(config):

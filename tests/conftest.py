@@ -1,25 +1,22 @@
 import pytest
 
-import spack
-from spack.extensions.mpd import config, init
+import spack.config
+from spack.extensions.mpd import init
 from spack.main import SpackCommand
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def tmp_mpd_dir(tmp_path_factory):
-    project = config.selected_project()
-    real_path = config.mpd_config_dir(missing_ok=True)
+    real_path = init.mpd_config_dir()
     path_for_test = tmp_path_factory.mktemp("mpd")
-    mpd_dir = (path_for_test / "init").resolve()
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr(init, "MPD_DIR", mpd_dir)
-        yield mpd_dir
-    if not real_path:
-        SpackCommand("config")("--scope", "site", "rm", "config:mpd_dir")
-    else:
+    spack.config.set("config:mpd_dir", str(path_for_test), scope="site")
+
+    yield
+
+    if real_path:
         spack.config.set("config:mpd_dir", str(real_path), scope="site")
-    if project:
-        config.select(project)
+    else:
+        SpackCommand("config")("--scope", "site", "rm", "config:mpd_dir")
 
 
 @pytest.fixture

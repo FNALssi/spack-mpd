@@ -7,8 +7,6 @@ import llnl.util.tty as tty
 import spack.config
 import spack.paths
 
-from . import config
-
 SUBCOMMAND = "init"
 
 MPD_DIR = Path(spack.paths.prefix) / "var" / "mpd"
@@ -29,17 +27,35 @@ def setup_subparser(subparsers):
     )
 
 
+def mpd_config_dir():
+    return Path(spack.config.get("config:mpd_dir", MPD_DIR.resolve(), scope="site"))
+
+
+def mpd_config_file(config_dir):
+    return config_dir / "config"
+
+
+def mpd_selected_projects_dir(config_dir):
+    return config_dir / "selected"
+
+
 def initialized():
-    config_dir = config.mpd_config_dir(missing_ok=True)
-    return config_dir and config_dir.exists()
+    config_dir = mpd_config_dir()
+    config_file = mpd_config_file(mpd_config_dir())
+    selected_projects_dir = mpd_selected_projects_dir(mpd_config_dir())
+    return config_dir.exists() and config_file.exists() and selected_projects_dir.exists()
+
+
+def initialize_mpd(config_dir):
+    config_dir.mkdir(exist_ok=True)
+    mpd_config_file(config_dir).touch(exist_ok=True)
+    mpd_selected_projects_dir(config_dir).mkdir(exist_ok=True)
 
 
 def process(args):
     spack_root = spack.paths.prefix
 
-    local_dir = MPD_DIR.resolve()
     if initialized() and not args.force:
-        assert local_dir.exists()
         tty.warn(f"MPD already initialized for Spack instance at {spack_root}")
         return
 
@@ -54,9 +70,13 @@ def process(args):
             + "Please contact scisoft-team@fnal.gov for guidance."
         )
 
-    spack.config.set("config:mpd_dir", str(local_dir), scope="site")
+    # If the value of "config:mpd_dir" has not been set yet, we set it here.  If
+    # it has already been set, we are simply setting it to its current value.
+    # The default returned by mpd_config_dir() is the value of MPD_DIR.
+    config_dir = mpd_config_dir()
+    spack.config.set("config:mpd_dir", str(config_dir), scope="site")
 
-    if local_dir.exists() and args.force:
+    if config_dir.exists() and args.force:
         tty.warn("Reinitializing MPD on this system will remove all MPD projects")
         if args.yes:
             should_reinitialize = True
@@ -67,8 +87,7 @@ def process(args):
         if not should_reinitialize:
             return tty.info("No changes made")
 
-        shutil.rmtree(local_dir, ignore_errors=True)
+        shutil.rmtree(config_dir, ignore_errors=True)
 
     tty.msg(f"Using Spack instance at {spack_root}")
-
-    config.selected_projects_dir().mkdir(parents=True, exist_ok=True)
+    initialize_mpd(config_dir)

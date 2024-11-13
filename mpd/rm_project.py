@@ -1,7 +1,7 @@
 import shutil
 import subprocess
 
-from .config import project_config, rm_config
+from .config import project_config, rm_config, selected_project_token
 from .preconditions import State, preconditions
 
 SUBCOMMAND = "rm-project"
@@ -39,6 +39,8 @@ def rm_project(name, config):
 def process(args):
     if args.force:
         preconditions(State.INITIALIZED, ~State.ACTIVE_ENVIRONMENT)
+        # Automatically clear project selection
+        selected_project_token().unlink(missing_ok=True)
     else:
         preconditions(State.INITIALIZED, ~State.SELECTED_PROJECT, ~State.ACTIVE_ENVIRONMENT)
 
