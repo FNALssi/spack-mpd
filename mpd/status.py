@@ -2,8 +2,9 @@ import llnl.util.tty as tty
 
 import spack.environment as ev
 
-from . import config, init
-from .util import bold, cyan
+from . import config
+from .preconditions import State, preconditions
+from .util import cyan
 
 SUBCOMMAND = "status"
 
@@ -19,9 +20,7 @@ def _environment_status(status_str):
 
 
 def process(args):
-    if not init.initialized():
-        tty.warn("MPD not initialized--invoke: " + bold("spack mpd init"))
-        return
+    preconditions(State.INITIALIZED)
 
     selected = config.selected_project()
     if not selected:

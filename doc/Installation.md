@@ -60,7 +60,7 @@ Now that MPD has been installed, you can [initialize your system to use MPD](Ini
 
 ### Running MPD's unit tests
 
-MPD has several unit tests that should run successfully for any system on which it is installed and initialized.  If you wish to run the unit tests, invoke:
+MPD has several unit tests that should run successfully for any system on which it is installed.  If you wish to run the unit tests, invoke:
 
 ```console
 $ spack unit-test --extension=mpd

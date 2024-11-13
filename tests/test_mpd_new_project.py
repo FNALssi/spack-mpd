@@ -30,10 +30,13 @@ def new_project(name, top=None, srcs=None, cwd=None):
         cm = fs.working_dir(cwd, create=True)
 
     with cm:
+        old_project = config.selected_project()
         try:
             yield mpd("new-project", *arguments)
         finally:
             mpd("rm-project", "--force", name)
+            if old_project:
+                mpd("select", old_project)
 
 
 def test_new_project_all_default_paths(with_mpd_init, tmp_path):
@@ -83,7 +86,7 @@ def test_new_project_no_default_paths(with_mpd_init, tmp_path):
         assert f"sources area: {srcs_d}" in out
 
 
-def test_mpd_refresh(tmp_path):
+def test_mpd_refresh(with_mpd_init, tmp_path):
     with new_project(name="e", cwd=tmp_path):
         cfg = config.selected_project_config()
         out = mpd("refresh")
