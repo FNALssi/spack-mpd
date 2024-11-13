@@ -3,7 +3,7 @@ import llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
 
 from . import config
-from .util import bold, maybe_with_color
+from .util import bold, cyan, maybe_with_color
 
 SUBCOMMAND = "list"
 ALIASES = ["ls"]
@@ -81,8 +81,8 @@ def list_projects():
     name = "Project name"
     name_width = max(len(k) for k in projects.keys())
     name_width = max(len(name), name_width)
-    location = "Environment location"
-    location_width = max(len(v["local"]) for v in projects.values())
+    location = "Sources directory"
+    location_width = max(len(v["source"]) for v in projects.values())
     location_width = max(len(location), location_width)
     msg += f"   {name:<{name_width}}    {location}\n"
     msg += "   " + "-" * name_width + "    " + "-" * location_width
@@ -92,9 +92,9 @@ def list_projects():
         indicator, color_code, warning = format_fields(key, selected)
         msg += maybe_with_color(
             color_code,
-            f"\n {indicator} {key:<{name_width}}    {value['local']:<{location_width}} {warning}"
+            f"\n {indicator} {key:<{name_width}}    {value['source']:<{location_width}} {warning}"
         )
-    msg += "\n"
+    msg += f"\n\nType {cyan('spack mpd ls <project name>')} for more details about a project.\n"
     print()
     tty.msg(msg)
 
