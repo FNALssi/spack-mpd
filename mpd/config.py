@@ -47,16 +47,18 @@ def selected_project_token():
 
 
 def mpd_config_dir():
-    return Path(spack.config.get("config:mpd_dir")).resolve()
+    config_dir = spack.config.get("config:mpd_dir")
+    return Path(config_dir).resolve() if config_dir else None
 
 
 def mpd_config_file():
-    return mpd_config_dir() / "config"
+    config_dir = mpd_config_dir()
+    return config_dir / "config" if config_dir else None
 
 
 def mpd_config():
     config_file = mpd_config_file()
-    if not config_file.exists():
+    if not config_file or not config_file.exists():
         return None
 
     with open(config_file, "r") as f:

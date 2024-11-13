@@ -30,7 +30,8 @@ def setup_subparser(subparsers):
 
 
 def initialized():
-    return config.mpd_config_dir().exists()
+    config_dir = config.mpd_config_dir()
+    return config_dir and config_dir.exists()
 
 
 def process(args):
