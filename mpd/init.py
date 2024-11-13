@@ -30,15 +30,14 @@ def setup_subparser(subparsers):
 
 
 def initialized():
-    return config.mpd_config_dir().exists()
+    config_dir = config.mpd_config_dir(missing_ok=True)
+    return config_dir and config_dir.exists()
 
 
 def process(args):
     spack_root = spack.paths.prefix
 
     local_dir = MPD_DIR.resolve()
-    spack.config.set("config:mpd_dir", str(local_dir))
-
     if initialized() and not args.force:
         assert local_dir.exists()
         tty.warn(f"MPD already initialized for Spack instance at {spack_root}")
@@ -54,6 +53,8 @@ def process(args):
             + indent
             + "Please contact scisoft-team@fnal.gov for guidance."
         )
+
+    spack.config.set("config:mpd_dir", str(local_dir), scope="site")
 
     if local_dir.exists() and args.force:
         tty.warn("Reinitializing MPD on this system will remove all MPD projects")

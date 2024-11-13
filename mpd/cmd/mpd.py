@@ -40,12 +40,13 @@ def setup_parser(subparser):
 
 
 def mpd(parser, args):
+    is_initialized = subcommand_modules["init"].initialized()
     for m in subcommand_modules.values():
         scmds = [m.SUBCOMMAND] + getattr(m, "ALIASES", [])
         if args.mpd_subcommand not in scmds:
             continue
 
-        if args.mpd_subcommand != "init":
+        if args.mpd_subcommand != "init" and is_initialized:
             # Each non-init command either relies on the cached information in
             # the user configuration or the cached selected project (if it exists).
             config.update_cache()

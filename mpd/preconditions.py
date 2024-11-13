@@ -33,7 +33,9 @@ def check_initialized(conditions):
         return None
     if init.initialized() == should_be_initialized:
         return None
-    return f"MPD must{sign(should_be_initialized)} be initialized"
+    if should_be_initialized is True:
+        return f"MPD not initialized--invoke {bold('spack mpd init')}"
+    return "MPD must not be initialized"
 
 
 def check_selected(conditions):

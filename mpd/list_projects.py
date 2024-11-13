@@ -3,6 +3,7 @@ import llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
 
 from . import config
+from .preconditions import State, preconditions
 from .util import bold, cyan, maybe_with_color
 
 SUBCOMMAND = "list"
@@ -138,6 +139,8 @@ def project_details(project_names):
 
 
 def process(args):
+    preconditions(State.INITIALIZED)
+
     if args.project:
         project_details(args.project)
     elif args.top:
