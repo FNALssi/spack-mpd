@@ -14,7 +14,7 @@ A successful initialization will print something like:
 
 ``` console
 $ spack mpd init
-==> Using Spack instance at /scratch/knoepfel/knoepfel-spack
+==> MPD initialized for Spack instance at /scratch/knoepfel/knoepfel-spack
 ==> MPD configuration directory: /scratch/knoepfel/knoepfel-spack/var/mpd
 ```
 
@@ -38,7 +38,7 @@ all existing projects:
 $ spack mpd init -f
 ==> Warning: Reinitializing MPD on this system will remove all MPD projects
 ==> Would you like to proceed with reinitialization? [y/N] y
-==> Using Spack instance at /scratch/knoepfel/knoepfel-spack
+==> MPD initialized for Spack instance at /scratch/knoepfel/knoepfel-spack
 ==> MPD configuration directory: /scratch/knoepfel/knoepfel-spack/var/mpd
 ```
 
@@ -48,8 +48,6 @@ If you do not have write access to the Spack instance you are using,
 when invoking `spack mpd init` you will see an error like:
 
 ```console
-==> Using Spack instance at /scratch/knoepfel/spack
-
 ==> Error: To use MPD, you must have a Spack instance you can write to.
            You do not have permission to write to the Spack instance above.
            Please contact scisoft-team@fnal.gov for guidance.
