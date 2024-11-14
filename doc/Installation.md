@@ -18,10 +18,11 @@ At this point you, should be able to invoke `spack help --all` and see:
 
 ```console
 $ spack help --all
-...
-scripting:
+⋮
+developer:
+  ⋮
   mpd                   develop multiple packages using Spack for external software
-...
+⋮
 ```
 
 and furthermore, if you type `spack mpd --help` you should see something like:
@@ -38,12 +39,10 @@ positional arguments:
     clear               clear selected MPD project
     git-clone (g, clone)
                         clone git repositories
-    deploy (d)          deploy developed packages
     init                initialize MPD on this system
     install (i)         install built repositories
     list (ls)           list MPD projects
-    new-project (n, newDev)
-                        create MPD development area
+    new-project (n)     create MPD development area
     refresh             refresh project
     rm-project (rm)     remove MPD project
     select              select MPD project
@@ -51,8 +50,8 @@ positional arguments:
     test (t)            build and run tests
     zap (z)             delete everything in your build and/or install areas
 
-options:
-  -V, --version         print MPD version (0.1.0) and exit
+optional arguments:
+  -V, --version         print MPD version (0.2.0) and exit
   -h, --help            show this help message and exit
 ```
 
@@ -63,31 +62,35 @@ Now that MPD has been installed, you can [initialize your system to use MPD](Ini
 MPD has several unit tests that should run successfully for any system on which it is installed.  If you wish to run the unit tests, invoke:
 
 ```console
-$ spack unit-test --extension=mpd
-================================================== test session starts ===================================================
-platform linux -- Python 3.9.18, pytest-7.3.2, pluggy-1.0.0
+$ spack unit-test --extension mpd
+========================================= test session starts ==========================================
+platform linux -- Python 3.9.18, pytest-8.2.1, pluggy-1.5.0
 rootdir: /home/knoepfel/spack-mpd
 configfile: pytest.ini
 testpaths: tests
-collected 4 items
+collected 7 items
 
-tests/test_mpd_clone.py .                                                                                          [ 25%]
-tests/test_mpd_init.py .                                                                                           [ 50%]
-tests/test_mpd_new_project.py ..                                                                                   [100%]
+tests/test_mpd_clone.py .                                                                        [ 14%]
+tests/test_mpd_init.py .                                                                         [ 28%]
+tests/test_mpd_new_project.py .....                                                              [100%]
 
-================================================== slowest 30 durations ==================================================
-1.49s call     tests/test_mpd_new_project.py::test_new_project_paths
-0.81s call     tests/test_mpd_clone.py::test_new_project_clone
-0.42s call     tests/test_mpd_new_project.py::test_mpd_refresh
-0.04s call     tests/test_mpd_init.py::test_mpd_init
-0.02s setup    tests/test_mpd_clone.py::test_new_project_clone
-0.02s setup    tests/test_mpd_new_project.py::test_new_project_paths
-0.01s teardown tests/test_mpd_init.py::test_mpd_init
-0.01s teardown tests/test_mpd_new_project.py::test_mpd_refresh
-0.01s teardown tests/test_mpd_clone.py::test_new_project_clone
+========================================= slowest 30 durations =========================================
+1.48s call     tests/test_mpd_clone.py::test_new_project_clone
+1.15s call     tests/test_mpd_new_project.py::test_mpd_refresh
+1.12s call     tests/test_mpd_new_project.py::test_new_project_all_default_paths
+1.12s call     tests/test_mpd_new_project.py::test_new_project_only_top_path
+1.05s call     tests/test_mpd_new_project.py::test_new_project_no_default_paths
+1.05s call     tests/test_mpd_new_project.py::test_new_project_only_srcs_path
+0.08s call     tests/test_mpd_init.py::test_mpd_init
+0.04s setup    tests/test_mpd_clone.py::test_new_project_clone
+0.04s setup    tests/test_mpd_new_project.py::test_new_project_all_default_paths
+0.04s setup    tests/test_mpd_new_project.py::test_new_project_only_srcs_path
+0.03s setup    tests/test_mpd_new_project.py::test_new_project_no_default_paths
+0.03s setup    tests/test_mpd_new_project.py::test_new_project_only_top_path
+0.03s setup    tests/test_mpd_new_project.py::test_mpd_refresh
 
-(3 durations < 0.005s hidden.  Use -vv to show these durations.)
-=================================================== 4 passed in 2.85s ====================================================
+(8 durations < 0.005s hidden.  Use -vv to show these durations.)
+========================================== 7 passed in 7.30s ===========================================
 ```
 
 If you encounter any failures, please [report an issue](https://github.com/knoepfel/spack-mpd/issues).
