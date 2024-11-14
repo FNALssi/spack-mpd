@@ -13,8 +13,9 @@ $ spack mpd init
 A successful initialization will print something like:
 
 ``` console
-==> Using Spack instance at /scratch/knoepfel/spack
-==> Added repo with namespace 'local-mpd'.
+$ spack mpd init
+==> Using Spack instance at /scratch/knoepfel/knoepfel-spack
+==> MPD configuration directory: /scratch/knoepfel/knoepfel-spack/var/mpd
 ```
 
 At this point, you may safely use any MPD subcommand.
@@ -26,8 +27,8 @@ supported.  If you execute `spack mpd init` again on a system that you
 have already initialized, you will see something like:
 
 ``` console
-==> Using Spack instance at /scratch/knoepfel/spack
-==> Warning: MPD already initialized on this system (/home/knoepfel/.mpd)
+==> Warning: MPD already initialized for Spack instance at /scratch/knoepfel/knoepfel-spack
+==> MPD configuration directory: /scratch/knoepfel/knoepfel-spack/var/mpd
 ```
 
 If you wish to "start from scratch" you may force a reinitialization, which will remove
@@ -37,9 +38,8 @@ all existing projects:
 $ spack mpd init -f
 ==> Warning: Reinitializing MPD on this system will remove all MPD projects
 ==> Would you like to proceed with reinitialization? [y/N] y
-==> Removed repository /home/knoepfel/.mpd
-==> Using Spack instance at /scratch/knoepfel/spack
-==> Added repo with namespace 'local-mpd'.
+==> Using Spack instance at /scratch/knoepfel/knoepfel-spack
+==> MPD configuration directory: /scratch/knoepfel/knoepfel-spack/var/mpd
 ```
 
 ### A writeable Spack instance
@@ -54,6 +54,3 @@ when invoking `spack mpd init` you will see an error like:
            You do not have permission to write to the Spack instance above.
            Please contact scisoft-team@fnal.gov for guidance.
 ```
-
-At this point, MPD does not yet support the creation of writeable
-Spack instances as part of the initialization process.
