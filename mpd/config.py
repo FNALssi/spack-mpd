@@ -65,73 +65,97 @@ def mpd_config():
     return None
 
 
-def _compiler(variants):
-    compiler = None
-    compiler_index = None
-    for i, variant in enumerate(variants):
-        match = re.fullmatch(r"%([\w-]+(@[\d\.]+|/\w+)?)", variant)
-        if match:
-            compiler = match[1]
-            compiler_index = i
-            break
-    return compiler, compiler_index
-
-
-def _cxxstd(variants):
-    cxx_standard = _DEFAULT_CXXSTD
-    cxxstd_index = None
+def parse_for_variant(pattern, variants, default=None):
     for i, variant in enumerate(variants):
         # We want to pick out the cxxstd variant for the top-level spec, not any dependencies.
         if variant.startswith("^"):
             break
 
-        match = re.fullmatch(r"cxxstd={1,2}(\d{2})", variant)
+        match = re.fullmatch(pattern, variant)
         if match:
-            cxx_standard = match[1]
-            cxxstd_index = i
-            break
-    return cxx_standard, cxxstd_index
+            return match[1], i
+
+    return default, None
+
+
+def _compiler(variants):
+    return parse_for_variant(r"%([\w-]+(@[\d\.]+|/\w+)?)", variants)
+
+
+def _cxxstd(variants):
+    return parse_for_variant(r"cxxstd={1,2}(\d{2})", variants, default=_DEFAULT_CXXSTD)
+
+
+def _generator(variants):
+    value, index = parse_for_variant(r"generator=(\w+)", variants, default="make")
+    if value == "make":
+        return "Unix Makefiles", index
+    if value == "ninja":
+        return "Ninja", index
+    tty.die(f"Only 'make' and 'ninja' generators are allowed (specified {value}).")
+
+
+def prepare_project_directories(top_path, srcs_path):
+    def _create_dir(path):
+        path.mkdir(exist_ok=True)
+        return str(path.absolute())
+
+    return {"top": _create_dir(top_path),
+            "source": _create_dir(srcs_path),
+            "build": _create_dir(top_path / "build"),
+            "local": _create_dir(top_path / "local")}
+
+
+def handle_variants(project_cfg, variants):
+    if not variants:
+        return project_cfg
+
+    # Select and remove compiler
+    compiler, compiler_index = _compiler(variants)
+    if compiler_index is not None:
+        del variants[compiler_index]
+
+    if compiler:
+        project_cfg["compiler"] = compiler
+    else:
+        tty.warn(f"No compiler spec specified in the variants list, using {_NONE_STR}")
+        project_cfg["compiler"] = _NONE_STR
+
+    # Select and remove cxxstd
+    cxxstd, cxxstd_index = _cxxstd(variants)
+    if cxxstd_index is not None:
+        del variants[cxxstd_index]
+
+    project_cfg["cxxstd"] = cxxstd
+
+    # Select and remove generator
+    generator, generator_index = _generator(variants)
+    if generator_index is not None:
+        del variants[generator_index]
+
+    if generator:
+        project_cfg["generator"] = generator
+
+    project_cfg["variants"] = " ".join(variants)
+    return project_cfg
 
 
 def project_config_from_args(args):
     project = ruamel.yaml.comments.CommentedMap()
     project["name"] = args.name
+    project["envs"] = args.env
 
     top_path = Path(args.top)
     srcs_path = Path(args.srcs) if args.srcs else top_path / "srcs"
 
-    project["top"] = str(top_path.absolute())
-    project["source"] = str(srcs_path.absolute())
-    project["build"] = str((top_path / "build").absolute())
-    project["local"] = str((top_path / "local").absolute())
-    project["envs"] = args.env
-
-    packages_to_develop = []
-    if srcs_path.exists():
-        packages_to_develop = sorted(
-            f.name for f in srcs_path.iterdir() if not f.name.startswith(".") and f.is_dir()
-        )
+    directories = prepare_project_directories(top_path, srcs_path)
+    project.update(directories)
+    assert srcs_path.exists()
+    packages_to_develop = sorted(
+        f.name for f in srcs_path.iterdir() if not f.name.startswith(".") and f.is_dir()
+    )
     project["packages"] = packages_to_develop
-
-    # Select and remove compiler
-    compiler, compiler_index = _compiler(args.variants)
-    if compiler_index is not None:
-        del args.variants[compiler_index]
-
-    # Select and remove cxxstd
-    cxxstd, cxxstd_index = _cxxstd(args.variants)
-    if cxxstd_index is not None:
-        del args.variants[cxxstd_index]
-
-    if compiler:
-        project["compiler"] = compiler
-    else:
-        tty.warn(f"No compiler spec specified in the variants list, using {_NONE_STR}")
-        project["compiler"] = _NONE_STR
-
-    project["cxxstd"] = cxxstd
-    project["variants"] = " ".join(args.variants)
-    return project
+    return handle_variants(project, args.variants)
 
 
 def mpd_project_exists(project_name):
@@ -183,36 +207,23 @@ def refresh(project_name, new_variants):
     assert config is not None
     assert project_name is not None
     project_cfg = project_config(project_name, config)
-    sp = Path(project_cfg["source"])
-    assert sp.exists()
+
+    top_path = Path(project_cfg["top"])
+    srcs_path = Path(project_cfg["source"])
+
+    prepare_project_directories(top_path, srcs_path)
+    assert srcs_path.exists()
     packages_to_develop = sorted(
-        f.name for f in sp.iterdir() if not f.name.startswith(".") and f.is_dir()
+        f.name for f in srcs_path.iterdir() if not f.name.startswith(".") and f.is_dir()
     )
+    project_cfg["packages"] = packages_to_develop
 
-    # Update .mpd file
-    config["projects"][project_name]["packages"] = packages_to_develop
-
-    if new_variants:
-        # Select and remove compiler
-        compiler, compiler_index = _compiler(new_variants)
-        if compiler_index is not None:
-            del new_variants[compiler_index]
-            config["projects"][project_name]["compiler"] = compiler
-
-        # Select and remove cxxstd
-        cxxstd, cxxstd_index = _cxxstd(new_variants)
-        if cxxstd_index is not None:
-            del new_variants[cxxstd_index]
-            config["projects"][project_name]["cxxstd"] = cxxstd
-
-        # Rest of variants
-        config["projects"][project_name]["variants"] = " ".join(new_variants)
-
+    config[project_name] = handle_variants(project_cfg, new_variants)
     with open(config_file, "w") as f:
         syaml.dump(config, stream=f)
 
     # Return configuration for this project
-    return config["projects"][project_name]
+    return config[project_name]
 
 
 def rm_config(project_name):
@@ -322,11 +333,6 @@ def print_config_info(config):
     print("  Will develop:")
     for p in packages:
         print(f"    - {p}")
-
-
-def prepare_project(project_config):
-    for d in ("top", "build", "local", "source"):
-        Path(project_config[d]).mkdir(exist_ok=True)
 
 
 def select(name):

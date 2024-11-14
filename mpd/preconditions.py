@@ -12,6 +12,7 @@ from .util import bold, cyan, gray, green
 class State(Flag):
     INITIALIZED = auto()
     SELECTED_PROJECT = auto()
+    PACKAGES_TO_DEVELOP = auto()
     ACTIVE_ENVIRONMENT = auto()
 
 
@@ -53,6 +54,24 @@ def check_selected(conditions):
     return None
 
 
+def check_packages(conditions):
+    should_be_packages = test_bit(conditions, State.PACKAGES_TO_DEVELOP)
+    if should_be_packages is None:
+        return None
+
+    selected_project = config.selected_project(missing_ok=True)
+    selected_config = config.project_config(selected_project)
+    if not selected_config:
+        return None  # This will be handled by a different check
+
+    packages = selected_config["packages"]
+    if packages and not should_be_packages:
+        return f"There {bold('cannot')} be any repositories in {selected_config['source']}"
+    if not packages and should_be_packages:
+        return f"Repositories to develop must exist in {cyan(selected_config['source'])}"
+    return None
+
+
 def check_active(conditions):
     should_be_active = test_bit(conditions, State.ACTIVE_ENVIRONMENT)
     if should_be_active is None:
@@ -90,6 +109,9 @@ def preconditions(*conditions):
         errors.append(initialization_precondition)
 
     if selected_precondition := check_selected(conditions):
+        errors.append(selected_precondition)
+
+    if selected_precondition := check_packages(conditions):
         errors.append(selected_precondition)
 
     if active_precondition := check_active(conditions):

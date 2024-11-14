@@ -5,14 +5,7 @@ import llnl.util.tty as tty
 import spack.environment as ev
 
 from .concretize import concretize_project
-from .config import (
-    mpd_project_exists,
-    prepare_project,
-    print_config_info,
-    project_config_from_args,
-    select,
-    update,
-)
+from .config import mpd_project_exists, print_config_info, project_config_from_args, select, update
 from .preconditions import State, preconditions
 from .util import bold, gray
 
@@ -70,6 +63,7 @@ def process(args):
             if ev.is_env_dir(local_env_dir):
                 ev.Environment(local_env_dir).destroy()
                 tty.info(gray(f"Removed existing environment at {project_config['local']}"))
+            Path(local_env_dir).mkdir(exist_ok=True)
         else:
             indent = " " * len("==> Error: ")
             tty.die(
@@ -83,7 +77,6 @@ def process(args):
     update(project_config, status="(none)")
 
     print_config_info(project_config)
-    prepare_project(project_config)
     select(project_config["name"])
 
     if len(project_config["packages"]):

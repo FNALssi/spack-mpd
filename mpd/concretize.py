@@ -301,7 +301,7 @@ def process_config(package_requirements, project_config, yes_to_all):
 
     update(project_config, status="concretized")
 
-    msg = "Ready to install development environment for " + bold(name) + "\n"
+    msg = cyan("Ready to install development environment for ") + bold(name) + "\n"
 
     if absent_dependencies:
         # Remove duplicates, preserving order
@@ -320,6 +320,8 @@ def process_config(package_requirements, project_config, yes_to_all):
             num_str = _parens_number(i + 1)
             msg += f"\n {num_str:>{width}}  {dep}"
         msg += "\n\nPlease ensure you have adequate space for these installations.\n"
+    else:
+        msg += "\n    No new packages to install\n"
     tty.msg(msg)
 
     if not yes_to_all:
@@ -346,11 +348,8 @@ def process_config(package_requirements, project_config, yes_to_all):
     if result.returncode == 0:
         print()
         update(project_config, status="installed")
-        msg = (
-            f"The development environment for {bold(name)} is ready.  "
-            f"To activate it, invoke:\n\n  spack env activate {local_env_dir}\n"
-        )
-        tty.msg(msg)
+        tty.msg(f"{bold(name)} is ready for development "
+                f"(e.g type {cyan('spack mpd build ...')})\n")
 
 
 def concretize_project(project_config, yes_to_all):
@@ -370,7 +369,7 @@ def concretize_project(project_config, yes_to_all):
         package_requirements[spec.name] = dict(require=[YamlQuote(s) for s in pkg_requirements])
 
     # Add explicit dependencies to the concretization set
-    dependencies_to_add = project_config["variants"].split("^")
+    dependencies_to_add = project_config.get("variants", "").split("^")
     # Always erase the first entry...it either applies to the top-level package, or is empty.
     dependencies_to_add.pop(0)
     for d in dependencies_to_add:

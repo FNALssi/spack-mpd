@@ -29,7 +29,7 @@ def setup_subparser(subparsers):
 
 
 def process(args):
-    preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
+    preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.PACKAGES_TO_DEVELOP)
 
     config = selected_project_config()
     build_dir = config["build"]

@@ -22,7 +22,7 @@ def setup_subparser(subparsers):
 
 
 def process(args):
-    preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
+    preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.PACKAGES_TO_DEVELOP)
 
     project_config = selected_project_config()
     activate_development_environment(project_config["local"])

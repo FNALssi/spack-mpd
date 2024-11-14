@@ -7,6 +7,8 @@ import llnl.util.tty as tty
 import spack.config
 import spack.paths
 
+from .util import gray
+
 SUBCOMMAND = "init"
 
 MPD_DIR = Path(spack.paths.prefix) / "var" / "mpd"
@@ -55,25 +57,23 @@ def initialize_mpd(config_dir):
 def process(args):
     spack_root = spack.paths.prefix
 
+    config_dir = mpd_config_dir()
     if initialized() and not args.force:
         tty.warn(f"MPD already initialized for Spack instance at {spack_root}")
+        tty.msg(gray(f"MPD configuration directory: {config_dir}"))
         return
 
     if not fs.can_access(spack_root):
         indent = " " * len("==> Error: ")
-        print()
         tty.die(
             "To use MPD, you must have a Spack instance you can write to.\n"
-            + indent
-            + "You do not have permission to write to the Spack instance above.\n"
-            + indent
-            + "Please contact scisoft-team@fnal.gov for guidance."
+            f"{indent}You do not have permission to write to the Spack instance above.\n"
+            f"{indent}Please contact scisoft-team@fnal.gov for guidance."
         )
 
     # If the value of "config:mpd_dir" has not been set yet, we set it here.  If
     # it has already been set, we are simply setting it to its current value.
     # The default returned by mpd_config_dir() is the value of MPD_DIR.
-    config_dir = mpd_config_dir()
     spack.config.set("config:mpd_dir", str(config_dir), scope="site")
 
     if config_dir.exists() and args.force:
@@ -85,9 +85,11 @@ def process(args):
                 "Would you like to proceed with reinitialization?", default=False
             )
         if not should_reinitialize:
-            return tty.info("No changes made")
+            tty.info("No changes made")
+            return
 
         shutil.rmtree(config_dir, ignore_errors=True)
 
-    tty.msg(f"Using Spack instance at {spack_root}")
+    tty.msg(f"MPD initialized for Spack instance at {spack_root}")
+    tty.msg(gray(f"MPD configuration directory: {config_dir}"))
     initialize_mpd(config_dir)

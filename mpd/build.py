@@ -21,12 +21,6 @@ def setup_subparser(subparsers):
         aliases=ALIASES,
         help="build repositories",
     )
-    build.add_argument(
-        "--generator",
-        "-G",
-        metavar="<generator name>",
-        help="generator used to build CMake project",
-    )
     build.add_argument("--clean", action="store_true", help="clean build area before building")
     build.add_argument(
         "-j",
@@ -42,7 +36,7 @@ def setup_subparser(subparsers):
     )
 
 
-def configure_cmake_project(project_config, compilers, generator):
+def configure_cmake_project(project_config, compilers):
     configure_list = [
         "cmake",
         "--preset",
@@ -52,24 +46,31 @@ def configure_cmake_project(project_config, compilers, generator):
         project_config["build"],
         f"-DCMAKE_C_COMPILER={compilers[0].cc}",
         f"-DCMAKE_CXX_COMPILER={compilers[0].cxx}",
+        "-G",
+        project_config["generator"]
     ]
-    if generator:
-        configure_list += ["-G", generator]
 
-    configure_list_str = " ".join(configure_list)
+    printed_configure_list = []
+    for arg in configure_list:
+        if arg.count(" ") > 0:
+            printed_configure_list.append(f'"{arg}"')
+        else:
+            printed_configure_list.append(arg)
+
+    configure_list_str = " ".join(printed_configure_list)
     print()
     tty.msg("Configuring with command:\n\n" + cyan(configure_list_str) + "\n")
 
     subprocess.run(configure_list)
 
 
-def build(project_config, generator, parallel, generator_options):
+def build(project_config, parallel, generator_options):
     build_area = project_config["build"]
     compilers = spack.compilers.compilers_for_spec(project_config["compiler"])
     assert len(compilers) == 1
 
     if not (Path(build_area) / "CMakeCache.txt").exists():
-        configure_cmake_project(project_config, compilers, generator)
+        configure_cmake_project(project_config, compilers)
 
     generator_list = []
     if parallel:
@@ -89,11 +90,11 @@ def build(project_config, generator, parallel, generator_options):
 
 
 def process(args):
-    preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
+    preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.PACKAGES_TO_DEVELOP)
 
     config = selected_project_config()
     if args.clean:
         fs.remove_directory_contents(config["build"])
 
     activate_development_environment(config["local"])
-    build(config, args.generator, args.parallel, args.generator_options)
+    build(config, args.parallel, args.generator_options)

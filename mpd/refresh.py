@@ -1,10 +1,12 @@
+from pathlib import Path
+
 import llnl.util.tty as tty
 
 import spack.environment as ev
 
 from . import config
 from .concretize import concretize_project
-from .config import prepare_project, print_config_info, selected_project_config
+from .config import print_config_info, selected_project_config
 from .preconditions import State, preconditions
 from .util import bold
 
@@ -46,7 +48,8 @@ def refresh_project(name, project_config, yes_to_all):
     local_env_dir = project_config["local"]
     if ev.is_env_dir(local_env_dir):
         ev.Environment(local_env_dir).destroy()
-    prepare_project(project_config)
+    Path(local_env_dir).mkdir(exist_ok=True)
+
     concretize_project(project_config, yes_to_all)
 
 

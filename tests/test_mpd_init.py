@@ -10,11 +10,11 @@ mpd = SpackCommand("mpd")
 
 def test_mpd_init(tmp_mpd_dir):
     out = mpd("init")
-    assert f"Using Spack instance at {spack.paths.prefix}" in out
+    assert f"MPD initialized for Spack instance at {spack.paths.prefix}" in out
 
     out = mpd("init")
     assert f"Warning: MPD already initialized for Spack instance at {spack.paths.prefix}" in out
 
     out = mpd("init", "-f", "-y")
     assert "Warning: Reinitializing MPD on this system will remove all MPD projects" in out
-    assert f"Using Spack instance at {spack.paths.prefix}" in out
+    assert f"MPD initialized for Spack instance at {spack.paths.prefix}" in out
