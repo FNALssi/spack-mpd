@@ -93,6 +93,7 @@ def test_mpd_refresh(with_mpd_init, tmp_path):
         new_cfg = config.selected_project_config()
         assert "Project e is up-to-date" in out
         assert cfg == new_cfg
+        print(new_cfg)
         assert new_cfg["cxxstd"] == "17"
 
         out = mpd("refresh", "cxxstd=20")

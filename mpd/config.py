@@ -107,26 +107,28 @@ def prepare_project_directories(top_path, srcs_path):
 
 
 def handle_variants(project_cfg, variants):
-    if not variants:
-        return project_cfg
-
     # Select and remove compiler
     compiler, compiler_index = _compiler(variants)
     if compiler_index is not None:
         del variants[compiler_index]
 
-    if compiler:
-        project_cfg["compiler"] = compiler
+    if compiler is None:
+        if "compiler" not in project_cfg:
+            tty.warn(f"No compiler spec specified in the variants list, using {_NONE_STR}")
+            project_cfg["compiler"] = _NONE_STR
     else:
-        tty.warn(f"No compiler spec specified in the variants list, using {_NONE_STR}")
-        project_cfg["compiler"] = _NONE_STR
+        project_cfg["compiler"] = compiler
 
     # Select and remove cxxstd
     cxxstd, cxxstd_index = _cxxstd(variants)
     if cxxstd_index is not None:
         del variants[cxxstd_index]
 
-    project_cfg["cxxstd"] = cxxstd
+    if cxxstd_index is None:
+        if "cxxstd" not in project_cfg:
+            project_cfg["cxxstd"] = cxxstd
+    else:
+        project_cfg["cxxstd"] = cxxstd
 
     # Select and remove generator
     generator, generator_index = _generator(variants)
@@ -136,7 +138,9 @@ def handle_variants(project_cfg, variants):
     if generator:
         project_cfg["generator"] = generator
 
-    project_cfg["variants"] = " ".join(variants)
+    if variants:
+        project_cfg["variants"] = " ".join(variants)
+
     return project_cfg
 
 
