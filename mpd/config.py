@@ -222,12 +222,12 @@ def refresh(project_name, new_variants):
     )
     project_cfg["packages"] = packages_to_develop
 
-    config[project_name] = handle_variants(project_cfg, new_variants)
+    config["projects"][project_name] = handle_variants(project_cfg, new_variants)
     with open(config_file, "w") as f:
         syaml.dump(config, stream=f)
 
     # Return configuration for this project
-    return config[project_name]
+    return config["projects"][project_name]
 
 
 def rm_config(project_name):
