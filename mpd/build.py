@@ -44,11 +44,14 @@ def configure_cmake_project(project_config, compilers):
         project_config["source"],
         "-B",
         project_config["build"],
-        f"-DCMAKE_C_COMPILER={compilers[0].cc}",
-        f"-DCMAKE_CXX_COMPILER={compilers[0].cxx}",
         "-G",
         project_config["generator"]
     ]
+    if compilers:
+        configure_list += [
+            f"-DCMAKE_C_COMPILER={compilers[0].cc}",
+            f"-DCMAKE_CXX_COMPILER={compilers[0].cxx}",
+        ]
 
     printed_configure_list = []
     for arg in configure_list:
@@ -66,8 +69,11 @@ def configure_cmake_project(project_config, compilers):
 
 def build(project_config, parallel, generator_options):
     build_area = project_config["build"]
-    compilers = spack.compilers.compilers_for_spec(project_config["compiler"])
-    assert len(compilers) == 1
+    desired_compiler = project_config["compiler"]
+    compilers = []
+    if desired_compiler:
+        compilers = spack.compilers.compilers_for_spec(desired_compiler)
+        assert len(compilers) == 1
 
     if not (Path(build_area) / "CMakeCache.txt").exists():
         configure_cmake_project(project_config, compilers)

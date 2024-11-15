@@ -194,29 +194,26 @@ def process_config(package_requirements, project_config, yes_to_all):
     print()
     tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
 
-    name = project_config["name"]
-
-    # # If the compiler has been installed via Spack, in can be included as a spec in the
-    # # environment configuration.  This makes it possible to use (e.g.) g++ directly within
-    # # the environment without having to specify the full path to CMake.
-    compiler = compilers.find(project_config["compiler"])[0]
-    compiler_str = [YamlQuote(compiler)]
-
     reuse_block = {"from": [{"type": "local"}, {"type": "external"}]}
     full_block = dict(
         include_concrete=[penv.path for penv in proto_envs],
-        definitions=[dict(compiler=compiler_str)],
         specs=list(package_requirements.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
         packages=package_requirements,
     )
 
+    # Include compiler as a definition in the environment specification.
+    compiler = project_config["compiler"]
+    if compiler:
+        compiler = compilers.find(compiler)[0]
+        compiler_str = [YamlQuote(compiler)]
+        full_block.update(definitions=[dict(compiler=compiler_str)])
+
     local_env_dir = project_config["local"]
+    name = project_config["name"]
 
     # Always start fresh
-    env_file = make_yaml_file(
-        name, dict(spack=full_block), prefix=local_env_dir, overwrite=True
-    )
+    env_file = make_yaml_file(name, dict(spack=full_block), prefix=local_env_dir)
 
     tty.info(gray("Creating initial environment"))
     if ev.exists(name):
@@ -362,7 +359,9 @@ def concretize_project(project_config, yes_to_all):
         spec = Spec(p)
         pkg_cls = PATH.get_pkg_class(spec.name)
         pkg = pkg_cls(spec)
-        pkg_requirements = ["@develop", f"%{project_config['compiler']}"]
+        pkg_requirements = ["@develop"]
+        if compiler := project_config["compiler"]:
+            pkg_requirements.append(f"%{compiler}")
         maybe_has_variant = getattr(pkg, "has_variant", lambda _: False)
         if maybe_has_variant("cxxstd") or "cxxstd" in pkg.variants:
             pkg_requirements.append(f"cxxstd={cxxstd}")

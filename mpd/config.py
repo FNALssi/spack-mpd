@@ -10,7 +10,7 @@ import spack.environment as ev
 import spack.util.spack_yaml as syaml
 
 from . import init
-from .util import cyan, spack_cmd_line
+from .util import cyan, gray, spack_cmd_line
 
 _DEFAULT_CXXSTD = "17"  # Must be a string for CMake
 _NONE_STR = "(none)"
@@ -114,8 +114,9 @@ def handle_variants(project_cfg, variants):
 
     if compiler is None:
         if "compiler" not in project_cfg:
-            tty.warn(f"No compiler spec specified in the variants list, using {_NONE_STR}")
-            project_cfg["compiler"] = _NONE_STR
+            tty.warn("No compiler spec specified in the variants list " +
+                     gray("(using environment default)"))
+            project_cfg["compiler"] = None
     else:
         project_cfg["compiler"] = compiler
 

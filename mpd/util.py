@@ -53,12 +53,10 @@ def get_number(prompt, **kwargs):
     return number
 
 
-def make_yaml_file(package, spec, prefix=None, overwrite=False):
+def make_yaml_file(package, spec, prefix):
     filepath = Path(f"{package}.yaml")
     if prefix:
         filepath = prefix / filepath
-    if filepath.exists() and not overwrite:
-        return str(filepath)
     with open(filepath, "w") as f:
         syaml.dump(spec, stream=f, default_flow_style=False)
     return str(filepath)
