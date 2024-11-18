@@ -36,6 +36,15 @@ def setup_subparser(subparsers):
     )
 
 
+def _generator_value(project_config):
+    value = project_config["generator"]
+    if value == "make":
+        return "Unix Makefiles"
+    if value == "ninja":
+        return "Ninja"
+    tty.die(f"Only 'make' and 'ninja' generators are allowed (specified {value}).")
+
+
 def configure_cmake_project(project_config, compilers):
     configure_list = [
         "cmake",
@@ -45,7 +54,7 @@ def configure_cmake_project(project_config, compilers):
         "-B",
         project_config["build"],
         "-G",
-        project_config["generator"]
+        _generator_value(project_config)
     ]
     if compilers:
         configure_list += [

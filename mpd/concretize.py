@@ -1,3 +1,4 @@
+import copy
 import functools
 import json
 import os
@@ -13,8 +14,7 @@ import llnl.util.tty as tty
 import spack.compilers as compilers
 import spack.environment as ev
 from spack import traverse
-from spack.repo import PATH
-from spack.spec import InstallStatus, Spec
+from spack.spec import InstallStatus
 
 from .config import update
 from .util import bold, cyan, get_number, gray, make_yaml_file
@@ -188,7 +188,11 @@ def ordered_roots(env, package_requirements):
     return [install_prefixes[p] for p in sorted_packages]
 
 
-def process_config(package_requirements, project_config, yes_to_all):
+def concretize_project(project_config, yes_to_all):
+    packages = project_config["packages"]
+    package_requirements = copy.deepcopy(packages)
+    package_requirements.update(project_config["dependencies"])
+
     proto_envs = [ev.read(name) for name in project_config["envs"]]
 
     print()
@@ -197,7 +201,7 @@ def process_config(package_requirements, project_config, yes_to_all):
     reuse_block = {"from": [{"type": "local"}, {"type": "external"}]}
     full_block = dict(
         include_concrete=[penv.path for penv in proto_envs],
-        specs=list(package_requirements.keys()),
+        specs=list(packages.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
         packages=package_requirements,
     )
@@ -248,9 +252,11 @@ def process_config(package_requirements, project_config, yes_to_all):
                 continue
             if dep.name in package_requirements:
                 continue
-            first_order_deps[dep.name] = dep.format("{name}{@version}"
-                                                    "{%compiler.name}{@compiler.version}{compiler_flags}"
-                                                    "{variants}")
+            first_order_deps[dep.name] = dep.format(
+                "{name}{@version}"
+                "{%compiler.name}{@compiler.version}{compiler_flags}"
+                "{variants}"
+            )
 
     tty.msg(gray("Adjusting specifications for package development"))
     subprocess.run(["spack", "-e", ".", "add"] + list(first_order_deps.keys()),
@@ -347,39 +353,3 @@ def process_config(package_requirements, project_config, yes_to_all):
         update(project_config, status="installed")
         tty.msg(f"{bold(name)} is ready for development "
                 f"(e.g type {cyan('spack mpd build ...')})\n")
-
-
-def concretize_project(project_config, yes_to_all):
-    packages_to_develop = project_config["packages"]
-
-    cxxstd = project_config["cxxstd"]
-    package_requirements = {}
-    for p in packages_to_develop:
-        # Check to see if packages support a 'cxxstd' variant
-        spec = Spec(p)
-        pkg_cls = PATH.get_pkg_class(spec.name)
-        pkg = pkg_cls(spec)
-        pkg_requirements = ["@develop"]
-        if compiler := project_config["compiler"]:
-            pkg_requirements.append(f"%{compiler}")
-        maybe_has_variant = getattr(pkg, "has_variant", lambda _: False)
-        if maybe_has_variant("cxxstd") or "cxxstd" in pkg.variants:
-            pkg_requirements.append(f"cxxstd={cxxstd}")
-        package_requirements[spec.name] = dict(require=[YamlQuote(s) for s in pkg_requirements])
-
-    # Add explicit dependencies to the concretization set
-    dependencies_to_add = project_config.get("variants", "").split("^")
-    # Always erase the first entry...it either applies to the top-level package, or is empty.
-    dependencies_to_add.pop(0)
-    for d in dependencies_to_add:
-        s = Spec(d)
-        pkg_requirements = []
-        if s.versions and str(s.versions[0]) != ":":
-            pkg_requirements.append(f"{s.versions}")
-        if s.compiler:
-            pkg_requirements.append(f"%{s.compiler}")
-        if s.variants:
-            pkg_requirements.append(f"{s.variants}".strip())
-        package_requirements[s.name] = dict(require=[YamlQuote(s) for s in pkg_requirements])
-
-    process_config(package_requirements, project_config, yes_to_all)

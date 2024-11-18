@@ -1,18 +1,22 @@
 import os
-import re
 from pathlib import Path
 
 import ruamel
+from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import llnl.util.tty as tty
 
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
+from spack.parser import SPLIT_KVP, SpecParser, TokenType
+from spack.repo import PATH
+from spack.spec import Spec
 
 from . import init
-from .util import cyan, gray, spack_cmd_line
+from .util import cyan, gray, magenta, spack_cmd_line
 
-_DEFAULT_CXXSTD = "17"  # Must be a string for CMake
+_DEFAULT_CXXSTD = "cxxstd=17"  # Must be a string for CMake
+_DEFAULT_GENERATOR = "generator=make"
 _NONE_STR = "(none)"
 
 
@@ -65,36 +69,6 @@ def mpd_config():
     return None
 
 
-def parse_for_variant(pattern, variants, default=None):
-    for i, variant in enumerate(variants):
-        # We want to pick out the cxxstd variant for the top-level spec, not any dependencies.
-        if variant.startswith("^"):
-            break
-
-        match = re.fullmatch(pattern, variant)
-        if match:
-            return match[1], i
-
-    return default, None
-
-
-def _compiler(variants):
-    return parse_for_variant(r"%([\w-]+(@[\d\.]+|/\w+)?)", variants)
-
-
-def _cxxstd(variants):
-    return parse_for_variant(r"cxxstd={1,2}(\d{2})", variants, default=_DEFAULT_CXXSTD)
-
-
-def _generator(variants):
-    value, index = parse_for_variant(r"generator=(\w+)", variants, default="make")
-    if value == "make":
-        return "Unix Makefiles", index
-    if value == "ninja":
-        return "Ninja", index
-    tty.die(f"Only 'make' and 'ninja' generators are allowed (specified {value}).")
-
-
 def prepare_project_directories(top_path, srcs_path):
     def _create_dir(path):
         path.mkdir(exist_ok=True)
@@ -106,42 +80,127 @@ def prepare_project_directories(top_path, srcs_path):
             "local": _create_dir(top_path / "local")}
 
 
+def ordered_requirement_list(requirements):
+    # Assemble things in the right order
+    requirement_list = []
+    for variant_name in ("version", "compiler"):
+        if variant := requirements.pop(variant_name, None):
+            requirement_list.append(YamlQuote(variant))
+
+    # We don't care about the order of the remaining variants
+    requirement_list += [YamlQuote(r) for r in requirements.values()]
+    return requirement_list
+
+
+def handle_variant(token):
+    # Last specification wins (this behavior may need to be massaged)
+    if token.kind in (TokenType.COMPILER, TokenType.COMPILER_AND_VERSION):
+        compiler = token.value[1:]
+        return compiler, token.value
+    if token.kind in (TokenType.KEY_VALUE_PAIR, TokenType.PROPAGATED_KEY_VALUE_PAIR):
+        match = SPLIT_KVP.match(token.value)
+        name = match.group(1)
+        return name, token.value
+    if token.kind == TokenType.BOOL_VARIANT:
+        name = token.value[1:].strip()
+        return name, token.value
+    if token.kind == TokenType.PROPAGATED_BOOL_VARIANT:
+        name = token.value[2:].strip()
+        return name, token.value
+    elif token.kind == TokenType.VERSION:
+        return "version", token.value
+
+    tty.die(f"The variant '{token.value}' is not supported")
+
+
 def handle_variants(project_cfg, variants):
-    # Select and remove compiler
-    compiler, compiler_index = _compiler(variants)
-    if compiler_index is not None:
-        del variants[compiler_index]
+    variant_str = " ".join(variants)
+    tokens_from_str = SpecParser(variant_str).tokens()
+    general_variant_map = {}
+    package_variant_map = {}
+    dependency_variant_map = {}
+    compiler = None
+    dependency = False
+    variant_map = general_variant_map
+    for token in tokens_from_str:
+        if token.kind == TokenType.DEPENDENCY:
+            dependency = True
+            continue
+        elif token.kind == TokenType.UNQUALIFIED_PACKAGE_NAME:
+            parent_map = dependency_variant_map if dependency else package_variant_map
+            variant_map = parent_map.setdefault(token.value, dict())
+            continue
 
-    if compiler is None:
-        if "compiler" not in project_cfg:
-            tty.warn("No compiler spec specified in the variants list " +
-                     gray("(using environment default)"))
-            project_cfg["compiler"] = None
-    else:
+        name, variant = handle_variant(token)
+        variant_map[name] = variant
+
+    # Compiler
+    if compiler:
         project_cfg["compiler"] = compiler
+    elif "compiler" not in project_cfg:
+        tty.warn("No compiler spec specified in the variants list " +
+                 gray("(using environment default)"))
+        project_cfg["compiler"] = None
 
-    # Select and remove cxxstd
-    cxxstd, cxxstd_index = _cxxstd(variants)
-    if cxxstd_index is not None:
-        del variants[cxxstd_index]
+    # CXX standard
+    if "cxxstd" in general_variant_map:
+        cxxstd_variant = general_variant_map.pop("cxxstd")
+        project_cfg["cxxstd"] = cxxstd_variant
+    elif "cxxstd" not in project_cfg:
+        project_cfg["cxxstd"] = _DEFAULT_CXXSTD
 
-    if cxxstd_index is None:
-        if "cxxstd" not in project_cfg:
-            project_cfg["cxxstd"] = cxxstd
-    else:
-        project_cfg["cxxstd"] = cxxstd
-
-    # Select and remove generator
-    generator, generator_index = _generator(variants)
-    if generator_index is not None:
-        del variants[generator_index]
-
-    if generator:
-        project_cfg["generator"] = generator
+    # Generator
+    if "generator" in general_variant_map:
+        generator_variant = general_variant_map.pop("generator")
+        project_cfg["generator"] = generator_variant
+    elif "generator" not in project_cfg:
+        project_cfg["generator"] = _DEFAULT_GENERATOR
 
     if variants:
         project_cfg["variants"] = " ".join(variants)
 
+    # Set packages
+    srcs_path = Path(project_cfg["source"])
+    assert srcs_path.exists()
+    packages_to_develop = sorted(
+        f.name for f in srcs_path.iterdir() if not f.name.startswith(".") and f.is_dir()
+    )
+
+    cxxstd = project_cfg["cxxstd"]
+    generator = project_cfg["generator"]
+    package_requirements = {}
+    for p in packages_to_develop:
+        # Check to see if packages support a 'cxxstd' variant
+        spec = Spec(p)
+        pkg_cls = PATH.get_pkg_class(spec.name)
+        pkg = pkg_cls(spec)
+        pkg_requirements = {}
+        pkg_requirements["version"] = "@develop"
+        if compiler := project_cfg["compiler"]:
+            pkg_requirements["compiler"] = f"%{compiler}"
+        maybe_has_variant = getattr(pkg, "has_variant", lambda _: False)
+        if maybe_has_variant("cxxstd") or "cxxstd" in pkg.variants:
+            pkg_requirements["cxxstd"] = cxxstd
+        if maybe_has_variant("generator") or "generator" in pkg.variants:
+            pkg_requirements["generator"] = generator
+
+        # Go through remaining general variants
+        for name, value in general_variant_map.items():
+            if not maybe_has_variant(name) and name not in pkg.variants:
+                continue
+
+            pkg_requirements[name] = value
+
+        pkg_requirements.update(package_variant_map.get(p, {}))
+
+        package_requirements[spec.name] = dict(require=ordered_requirement_list(pkg_requirements))
+
+    dependency_requirements = {}
+    for name, requirements in dependency_variant_map.items():
+        dependency_requirements[name] = dict(require=ordered_requirement_list(requirements))
+
+    project_cfg["packages"] = package_requirements
+    project_cfg["dependencies"] = dependency_requirements
     return project_cfg
 
 
@@ -155,11 +214,6 @@ def project_config_from_args(args):
 
     directories = prepare_project_directories(top_path, srcs_path)
     project.update(directories)
-    assert srcs_path.exists()
-    packages_to_develop = sorted(
-        f.name for f in srcs_path.iterdir() if not f.name.startswith(".") and f.is_dir()
-    )
-    project["packages"] = packages_to_develop
     return handle_variants(project, args.variants)
 
 
@@ -217,13 +271,8 @@ def refresh(project_name, new_variants):
     srcs_path = Path(project_cfg["source"])
 
     prepare_project_directories(top_path, srcs_path)
-    assert srcs_path.exists()
-    packages_to_develop = sorted(
-        f.name for f in srcs_path.iterdir() if not f.name.startswith(".") and f.is_dir()
-    )
-    project_cfg["packages"] = packages_to_develop
-
     config["projects"][project_name] = handle_variants(project_cfg, new_variants)
+
     with open(config_file, "w") as f:
         syaml.dump(config, stream=f)
 
@@ -336,8 +385,9 @@ def print_config_info(config):
         return
 
     print("  Will develop:")
-    for p in packages:
-        print(f"    - {p}")
+    for pkg, variants in packages.items():
+        requirements = " ".join(variants["require"])
+        print(f"    - {magenta(pkg)}{gray(requirements)}")
 
 
 def select(name):

@@ -94,9 +94,9 @@ def test_mpd_refresh(with_mpd_init, tmp_path):
         assert "Project e is up-to-date" in out
         assert cfg == new_cfg
         print(new_cfg)
-        assert new_cfg["cxxstd"] == "17"
+        assert new_cfg["cxxstd"] == "cxxstd=17"
 
         out = mpd("refresh", "cxxstd=20")
         assert "Refreshing project: e" in out
         new_cfg = config.selected_project_config()
-        assert new_cfg["cxxstd"] == "20"
+        assert new_cfg["cxxstd"] == "cxxstd=20"
