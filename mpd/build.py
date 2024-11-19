@@ -5,6 +5,7 @@ import llnl.util.filesystem as fs
 import llnl.util.tty as tty
 
 import spack
+from spack.parser import SPLIT_KVP
 
 from .config import selected_project_config
 from .preconditions import State, activate_development_environment, preconditions
@@ -37,7 +38,8 @@ def setup_subparser(subparsers):
 
 
 def _generator_value(project_config):
-    value = project_config["generator"]
+    generator_variant = project_config["generator"]
+    value = SPLIT_KVP.match(generator_variant).group(3)
     if value == "make":
         return "Unix Makefiles"
     if value == "ninja":

@@ -14,6 +14,7 @@ import llnl.util.tty as tty
 import spack.compilers as compilers
 import spack.environment as ev
 from spack import traverse
+from spack.parser import SPLIT_KVP
 from spack.spec import InstallStatus
 
 from .config import update
@@ -109,7 +110,8 @@ def cmake_lists(project_config, dependencies):
 
 def cmake_presets(project_config, dependencies, view_path):
     source_path = Path(project_config["source"])
-    cxx_standard = project_config["cxxstd"]
+    cxxstd_variant = project_config["cxxstd"]
+    cxx_standard = SPLIT_KVP.match(cxxstd_variant).group(3)
     configurePresets, cacheVariables = "configurePresets", "cacheVariables"
     view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
     allCacheVariables = {
