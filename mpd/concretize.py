@@ -59,6 +59,15 @@ def setup_subparser(subparsers):
     new_project.add_argument("variants", nargs="*", help="variants to apply to developed packages")
 
 
+def find_environment(env_str):
+    # Patterned off of the behavior in spack.cmd.find_environment
+    if ev.exists(env_str):
+        return ev.read(env_str)
+    if ev.is_env_dir(env_str):
+        return ev.Environment(env_str)
+    tty.die(f"{env_str} does not correspond to an environment.")
+
+
 def cmake_develop(project_config):
     project_name = project_config["name"]
     source_path = Path(project_config["source"])
@@ -193,7 +202,7 @@ def concretize_project(project_config, yes_to_all):
     package_requirements = copy.deepcopy(packages)
     package_requirements.update(project_config["dependencies"])
 
-    proto_envs = [ev.read(name) for name in project_config["envs"]]
+    proto_envs = [find_environment(e) for e in project_config["envs"]]
 
     print()
     tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
@@ -304,8 +313,6 @@ def concretize_project(project_config, yes_to_all):
 
     update(project_config, status="concretized")
 
-    msg = cyan("Ready to install development environment for ") + bold(name) + "\n"
-
     if absent_dependencies:
         # Remove duplicates, preserving order
         unique_absent_dependencies = []
@@ -317,15 +324,15 @@ def concretize_project(project_config, yes_to_all):
         def _parens_number(i):
             return f"({i})"
 
-        msg += "\nThe following packages will be installed:\n"
+        msg = "\nThe following packages will be installed:\n"
         width = len(_parens_number(len(absent_dependencies)))
         for i, dep in enumerate(sorted(absent_dependencies)):
             num_str = _parens_number(i + 1)
             msg += f"\n {num_str:>{width}}  {dep}"
         msg += "\n\nPlease ensure you have adequate space for these installations.\n"
+        tty.msg(msg)
     else:
-        msg += "\n    No new packages to install\n"
-    tty.msg(msg)
+        yes_to_all = True
 
     if not yes_to_all:
         should_install = tty.get_yes_or_no("Would you like to continue?", default=True)
