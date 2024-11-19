@@ -95,8 +95,7 @@ def ordered_requirement_list(requirements):
 def handle_variant(token):
     # Last specification wins (this behavior may need to be massaged)
     if token.kind in (TokenType.COMPILER, TokenType.COMPILER_AND_VERSION):
-        compiler = token.value[1:]
-        return compiler, token.value
+        return "compiler", token.value[1:]
     if token.kind in (TokenType.KEY_VALUE_PAIR, TokenType.PROPAGATED_KEY_VALUE_PAIR):
         match = SPLIT_KVP.match(token.value)
         name = match.group(1)
@@ -119,7 +118,6 @@ def handle_variants(project_cfg, variants):
     general_variant_map = {}
     package_variant_map = {}
     dependency_variant_map = {}
-    compiler = None
     dependency = False
     variant_map = general_variant_map
     for token in tokens_from_str:
@@ -135,8 +133,8 @@ def handle_variants(project_cfg, variants):
         variant_map[name] = variant
 
     # Compiler
-    if compiler:
-        project_cfg["compiler"] = compiler
+    if "compiler" in general_variant_map:
+        project_cfg["compiler"] = general_variant_map.pop("compiler")
     elif "compiler" not in project_cfg:
         tty.warn("No compiler spec specified in the variants list " +
                  gray("(using environment default)"))
