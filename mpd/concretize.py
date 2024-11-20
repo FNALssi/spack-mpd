@@ -76,15 +76,39 @@ def cmake_package_variables(name, cmake_args):
     if not cmake_args:
         return ""
 
-    name_with_underscores = name.replace("-", "_")
-    contents = f"macro(set_{name_with_underscores}_variables)\n"
+    def begin_set_macro(name):
+        name_with_underscores = name.replace("-", "_")
+        return f"macro(set_{name_with_underscores}_variables)\n"
+
+    def begin_unset_macro(name):
+        name_with_underscores = name.replace("-", "_")
+        return f"macro(unset_{name_with_underscores}_variables)\n"
+
+    def end():
+        return "endmacro()\n"
+
+    set_contents = ""
+    unset_contents = ""
     for arg in cmake_args:
         match = CMAKE_CACHE_VARIABLE_PATTERN.match(arg)
         if match:
             variable, vartype, value = match.groups()
-            contents += f"  set({variable} \"{value}\" CACHE {vartype} \"\")\n"
-    contents += "endmacro()\n"
-    return contents
+            set_contents += f"""  # Set {variable}
+  if(DEFINED {variable})
+    set(OLD_{variable} "${{{variable}}}")
+  endif()
+  set({variable} "{value}" CACHE {vartype} "")
+"""
+            unset_contents += f"""  # Restore/unset {variable}
+  if(DEFINED OLD_{variable})
+    set({variable} "${{OLD_{variable}}}")
+    unset(OLD_{variable})
+  else()
+    unset({variable})
+  endif()
+"""
+    return begin_set_macro(name) + set_contents + end() + "\n" + \
+        begin_unset_macro(name) + unset_contents + end() + "\n"
 
 
 def cmake_develop(project_config, package_cmake_args):
@@ -93,7 +117,7 @@ def cmake_develop(project_config, package_cmake_args):
     file_dir = Path(__file__).resolve().parent
     with open((source_path / "develop.cmake").absolute(), "w") as out:
         for name, args in package_cmake_args.items():
-            out.write(cmake_package_variables(name, args) + "\n")
+            out.write(f"# {name} variables\n" + cmake_package_variables(name, args))
         out.write(f"""set(CWD "{file_dir}")
 macro(develop pkg)
   install(CODE "execute_process(COMMAND spack python ensure-install-directory.py\\
@@ -103,6 +127,7 @@ macro(develop pkg)
   string(REPLACE "-" "_" pkg_with_underscores ${{pkg}})
   cmake_language(CALL "set_${{pkg_with_underscores}}_variables")
   add_subdirectory(${{pkg}})
+  cmake_language(CALL "unset_${{pkg_with_underscores}}_variables")
   install(CODE "execute_process(COMMAND spack python add-to-database.py\\
                                         {project_name} ${{${{pkg}}_HASH}}\\
                                 WORKING_DIRECTORY ${{CWD}})")
