@@ -2,6 +2,7 @@ import copy
 import functools
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -22,6 +23,8 @@ from .util import bold, cyan, get_number, gray, make_yaml_file
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n"]
+
+CMAKE_CACHE_VARIABLE_PATTERN = re.compile(r"-D(.*):(.*)=(.*)")
 
 
 def setup_subparser(subparsers):
@@ -69,17 +72,36 @@ def find_environment(env_str):
     tty.die(f"{env_str} does not correspond to an environment.")
 
 
-def cmake_develop(project_config):
+def cmake_package_variables(name, cmake_args):
+    if not cmake_args:
+        return ""
+
+    name_with_underscores = name.replace("-", "_")
+    contents = f"macro(set_{name_with_underscores}_variables)\n"
+    for arg in cmake_args:
+        match = CMAKE_CACHE_VARIABLE_PATTERN.match(arg)
+        if match:
+            variable, vartype, value = match.groups()
+            contents += f"  set({variable} \"{value}\" CACHE {vartype} \"\")\n"
+    contents += "endmacro()\n"
+    return contents
+
+
+def cmake_develop(project_config, package_cmake_args):
     project_name = project_config["name"]
     source_path = Path(project_config["source"])
     file_dir = Path(__file__).resolve().parent
     with open((source_path / "develop.cmake").absolute(), "w") as out:
+        for name, args in package_cmake_args.items():
+            out.write(cmake_package_variables(name, args) + "\n")
         out.write(f"""set(CWD "{file_dir}")
 macro(develop pkg)
   install(CODE "execute_process(COMMAND spack python ensure-install-directory.py\\
                                         {project_name} ${{${{pkg}}_HASH}}\\
                                 WORKING_DIRECTORY ${{CWD}})")
   install(CODE "set(CMAKE_INSTALL_PREFIX ${{${{pkg}}_INSTALL_PREFIX}})")
+  string(REPLACE "-" "_" pkg_with_underscores ${{pkg}})
+  cmake_language(CALL "set_${{pkg_with_underscores}}_variables")
   add_subdirectory(${{pkg}})
   install(CODE "execute_process(COMMAND spack python add-to-database.py\\
                                         {project_name} ${{${{pkg}}_HASH}}\\
@@ -159,8 +181,8 @@ def cmake_presets(project_config, dependencies, view_path):
         json.dump(presets, f, indent=4)
 
 
-def make_cmake_files(project_config, dependencies, view_path):
-    cmake_develop(project_config)
+def make_cmake_files(project_config, cmake_args, dependencies, view_path):
+    cmake_develop(project_config, cmake_args)
     cmake_lists(project_config, dependencies)
     cmake_presets(project_config, dependencies, view_path)
 
@@ -241,8 +263,16 @@ def concretize_project(project_config, yes_to_all):
         env.concretize()
         env.write(regenerate=False)
 
+    # Handle package-specific CMake args as provided by the Spack package
+    cmake_args = {}
+    for s in env.concrete_roots():
+        if s.name not in packages:
+            continue
+        cmake_args[s.name] = s.package.cmake_args()
+
     # Create properly ordered CMake file
     make_cmake_files(project_config,
+                     cmake_args,
                      ordered_roots(env, package_requirements),
                      Path(env.view_path_default))
 
