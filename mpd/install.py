@@ -33,7 +33,8 @@ def process(args):
     print()
     tty.msg("Installing developed packages with command:\n\n" + cyan(all_arguments_str) + "\n")
 
-    subprocess.run(all_arguments, stdout=subprocess.DEVNULL)
+    stdout = None if args.verbose else subprocess.DEVNULL
+    subprocess.run(all_arguments, stdout=stdout)
 
     tty.msg(gray("Installing environment"))
     # Now install the environment
