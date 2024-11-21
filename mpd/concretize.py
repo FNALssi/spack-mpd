@@ -251,6 +251,22 @@ def concretize_project(project_config, yes_to_all):
 
     proto_envs = [find_environment(e) for e in project_config["envs"]]
 
+    for penv in proto_envs:
+        for s in penv.all_specs():
+            if s.name in packages:
+                continue
+            bool_variants = []
+            kv_variants = []
+            for k, v in s.variants.items():
+                if k in ("patches", "build_system", "build_type", "buildtype"):
+                    continue
+                bool_variants.append(v) if isinstance(v.value, bool) else kv_variants.append(v)
+
+            all_variants = [str(v) for v in bool_variants + kv_variants]
+            requirements = [str(s.versions).replace("=", "@"),
+                            "%" + str(s.compiler).replace("=", "")] + all_variants
+            package_requirements[s.name] = dict(require=requirements)
+
     print()
     tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
 
