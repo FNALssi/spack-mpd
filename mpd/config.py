@@ -1,5 +1,7 @@
 import os
+import shutil
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import ruamel
 from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
@@ -13,10 +15,16 @@ from spack.repo import PATH
 from spack.spec import Spec
 
 from . import init
-from .util import cyan, gray, magenta, spack_cmd_line
+from .util import cyan, gray, magenta, spack_cmd_line, yellow
 
-_DEFAULT_CXXSTD = "cxxstd=17"  # Must be a string for CMake
-_DEFAULT_GENERATOR = "generator=make"
+
+def _variant_pair(value, variant):
+    return dict(value=value, variant=variant)
+
+
+_DEFAULT_CXXSTD = _variant_pair(value="17", variant="cxxstd=17")
+_DEFAULT_GENERATOR = _variant_pair(value="make", variant="generator=make")
+_DEVELOP_VARIANT = _variant_pair(value="develop", variant="@develop")
 _NONE_STR = "(none)"
 
 
@@ -95,19 +103,19 @@ def ordered_requirement_list(requirements):
 def handle_variant(token):
     # Last specification wins (this behavior may need to be massaged)
     if token.kind in (TokenType.COMPILER, TokenType.COMPILER_AND_VERSION):
-        return "compiler", token.value[1:]
+        return "compiler", _variant_pair(token.value[1:], token.value)
     if token.kind in (TokenType.KEY_VALUE_PAIR, TokenType.PROPAGATED_KEY_VALUE_PAIR):
         match = SPLIT_KVP.match(token.value)
-        name = match.group(1)
-        return name, token.value
+        name, _, value = match.groups()
+        return name, _variant_pair(value, token.value)
     if token.kind == TokenType.BOOL_VARIANT:
         name = token.value[1:].strip()
-        return name, token.value
+        return name, _variant_pair(token.value[0] == "+", token.value)
     if token.kind == TokenType.PROPAGATED_BOOL_VARIANT:
         name = token.value[2:].strip()
-        return name, token.value
+        return name, _variant_pair(token.value[:2] == "++", token.value)
     elif token.kind == TokenType.VERSION:
-        return "version", token.value
+        return "version", _variant_pair(token.value[1:], token.value)
 
     tty.die(f"The variant '{token.value}' is not supported")
 
@@ -129,8 +137,8 @@ def handle_variants(project_cfg, variants):
             variant_map = parent_map.setdefault(token.value, dict())
             continue
 
-        name, variant = handle_variant(token)
-        variant_map[name] = variant
+        name, variant_pair = handle_variant(token)
+        variant_map[name] = variant_pair
 
     # Compiler
     if "compiler" in general_variant_map:
@@ -166,38 +174,47 @@ def handle_variants(project_cfg, variants):
 
     cxxstd = project_cfg["cxxstd"]
     generator = project_cfg["generator"]
-    package_requirements = {}
+    packages = project_cfg.get("packages", {})
     for p in packages_to_develop:
+        # Start with existing requirements
+        existing_pkg_requirements = packages.get(p, {}).get("require", [])
+        existing_pkg_requirements_str = " ".join(existing_pkg_requirements)
+        pkg_requirements = {}
+        for token in SpecParser(existing_pkg_requirements_str).tokens():
+            name, variant = handle_variant(token)
+            pkg_requirements[name] = variant["variant"]
+
         # Check to see if packages support a 'cxxstd' variant
         spec = Spec(p)
         pkg_cls = PATH.get_pkg_class(spec.name)
         pkg = pkg_cls(spec)
-        pkg_requirements = {}
-        pkg_requirements["version"] = "@develop"
+        pkg_requirements["version"] = _DEVELOP_VARIANT["variant"]
         if compiler := project_cfg["compiler"]:
-            pkg_requirements["compiler"] = f"%{compiler}"
+            pkg_requirements["compiler"] = compiler["variant"]
         maybe_has_variant = getattr(pkg, "has_variant", lambda _: False)
         if maybe_has_variant("cxxstd") or "cxxstd" in pkg.variants:
-            pkg_requirements["cxxstd"] = cxxstd
+            pkg_requirements["cxxstd"] = cxxstd["variant"]
         if maybe_has_variant("generator") or "generator" in pkg.variants:
-            pkg_requirements["generator"] = generator
+            pkg_requirements["generator"] = generator["variant"]
 
         # Go through remaining general variants
         for name, value in general_variant_map.items():
             if not maybe_has_variant(name) and name not in pkg.variants:
                 continue
 
-            pkg_requirements[name] = value
+            pkg_requirements[name] = value["variant"]
 
-        pkg_requirements.update(package_variant_map.get(p, {}))
+        only_variants = {k: v["variant"] for k, v in package_variant_map.get(p, {}).items()}
+        pkg_requirements.update(only_variants)
 
-        package_requirements[spec.name] = dict(require=ordered_requirement_list(pkg_requirements))
+        packages[spec.name] = dict(require=ordered_requirement_list(pkg_requirements))
 
-    dependency_requirements = {}
+    dependency_requirements = project_cfg.get("dependencies", {})
     for name, requirements in dependency_variant_map.items():
-        dependency_requirements[name] = dict(require=ordered_requirement_list(requirements))
+        only_variants = [r["variant"] for r in requirements]
+        dependency_requirements[name] = dict(require=ordered_requirement_list(only_variants))
 
-    project_cfg["packages"] = package_requirements
+    project_cfg["packages"] = packages
     project_cfg["dependencies"] = dependency_requirements
     return project_cfg
 
@@ -250,8 +267,9 @@ def update(project_config, status=None):
     config["projects"][project_config["name"]] = yaml_project_config
 
     # Update config file
-    with open(config_file, "w") as f:
+    with NamedTemporaryFile() as f:
         syaml.dump(config, stream=f)
+        shutil.copy(f.name, config_file)
 
 
 def refresh(project_name, new_variants):
@@ -270,9 +288,9 @@ def refresh(project_name, new_variants):
 
     prepare_project_directories(top_path, srcs_path)
     config["projects"][project_name] = handle_variants(project_cfg, new_variants)
-
-    with open(config_file, "w") as f:
+    with NamedTemporaryFile() as f:
         syaml.dump(config, stream=f)
+        shutil.copy(f.name, config_file)
 
     # Return configuration for this project
     return config["projects"][project_name]
@@ -289,8 +307,9 @@ def rm_config(project_name):
 
     # Remove project entry
     del config["projects"][project_name]
-    with open(config_file, "w") as f:
+    with NamedTemporaryFile() as f:
         syaml.dump(config, stream=f)
+        shutil.copy(f.name, config_file)
 
 
 def project_config(name, config=None):
@@ -336,8 +355,9 @@ def update_cache():
             adjusted = True
 
     if adjusted:
-        with open(mpd_config_file(), "w") as f:
+        with NamedTemporaryFile() as f:
             syaml.dump(config, stream=f)
+            shutil.copy(f.name, mpd_config_file())
 
     # Remove stale selected project tokens
     for sp in selected_projects_dir().iterdir():
@@ -386,6 +406,15 @@ def print_config_info(config):
     for pkg, variants in packages.items():
         requirements = " ".join(variants["require"])
         print(f"    - {magenta(pkg)}{gray(requirements)}")
+
+    dependencies = config["dependencies"]
+    if not dependencies:
+        return
+
+    print("\n  Subject to the constraints:")
+    for pkg, variants in dependencies.items():
+        requirements = " ".join(variants["require"])
+        print(f"    - {yellow(pkg)}{gray(requirements)}")
 
 
 def select(name):

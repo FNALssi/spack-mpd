@@ -15,7 +15,6 @@ import llnl.util.tty as tty
 import spack.compilers as compilers
 import spack.environment as ev
 from spack import traverse
-from spack.parser import SPLIT_KVP
 from spack.spec import InstallStatus
 
 from .config import update
@@ -97,14 +96,14 @@ def cmake_package_variables(name, cmake_args):
   if(DEFINED {variable})
     set(OLD_{variable} "${{{variable}}}")
   endif()
-  set({variable} "{value}" CACHE {vartype} "")
+  set({variable} "{value}" CACHE {vartype} "" FORCE)
 """
             unset_contents += f"""  # Restore/unset {variable}
   if(DEFINED OLD_{variable})
-    set({variable} "${{OLD_{variable}}}")
+    set({variable} "${{OLD_{variable}}}" CACHE {vartype} "" FORCE)
     unset(OLD_{variable})
   else()
-    unset({variable})
+    unset({variable} CACHE)
   endif()
 """
     return begin_set_macro(name) + set_contents + end() + "\n" + \
@@ -157,15 +156,14 @@ def cmake_lists(project_config, dependencies):
 
 def cmake_presets(project_config, dependencies, view_path):
     source_path = Path(project_config["source"])
-    cxxstd_variant = project_config["cxxstd"]
-    cxx_standard = SPLIT_KVP.match(cxxstd_variant).group(3)
+    cxxstd = project_config["cxxstd"]["value"]
     configurePresets, cacheVariables = "configurePresets", "cacheVariables"
     view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
     allCacheVariables = {
         "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
         "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
         "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
-        "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxx_standard},
+        "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxxstd},
         "CMAKE_INSTALL_RPATH_USE_LINK_PATH": {"type": "BOOL", "value": "ON"},
         "CMAKE_INSTALL_RPATH": {"type": "STRING",
                                 "value": ";".join(view_lib_dirs)},
@@ -267,7 +265,7 @@ def concretize_project(project_config, yes_to_all):
     # Include compiler as a definition in the environment specification.
     compiler = project_config["compiler"]
     if compiler:
-        compiler = compilers.find(compiler)[0]
+        compiler = compilers.find(compiler["value"])[0]
         compiler_str = [YamlQuote(compiler)]
         full_block.update(definitions=[dict(compiler=compiler_str)])
 
@@ -298,7 +296,7 @@ def concretize_project(project_config, yes_to_all):
     # Create properly ordered CMake file
     make_cmake_files(project_config,
                      cmake_args,
-                     ordered_roots(env, package_requirements),
+                     ordered_roots(env, packages),
                      Path(env.view_path_default))
 
     # Make development environment from initial environment
@@ -310,13 +308,13 @@ def concretize_project(project_config, yes_to_all):
 
     # Now add the first-order dependencies
     env = ev.Environment(local_env_dir)
-    developed_specs = [s for _, s in env.concretized_specs() if s.name in package_requirements]
+    developed_specs = [s for _, s in env.concretized_specs() if s.name in packages]
     first_order_deps = {}
     for s in developed_specs:
         for depth, dep in traverse.traverse_nodes([s], depth=True):
             if depth != 1:
                 continue
-            if dep.name in package_requirements:
+            if dep.name in packages:
                 continue
             first_order_deps[dep.name] = dep.format(
                 "{name}{@version}"
@@ -326,7 +324,6 @@ def concretize_project(project_config, yes_to_all):
 
     tty.msg(gray("Adjusting specifications for package development"))
     subprocess.run(["spack", "-e", ".", "add"] + list(first_order_deps.keys()),
-                   stdout=subprocess.DEVNULL,
                    cwd=local_env_dir)
 
     tty.info(gray("Finalizing concretization"))
@@ -335,8 +332,7 @@ def concretize_project(project_config, yes_to_all):
         env.concretize()
         env.write()
 
-    subprocess.run(["spack", "-e", ".", "rm"] + list(package_requirements.keys()),
-                   stdout=subprocess.DEVNULL,
+    subprocess.run(["spack", "-e", ".", "rm"] + list(packages.keys()),
                    cwd=local_env_dir)
     with env, env.write_transaction():
         env.concretize()
@@ -346,13 +342,13 @@ def concretize_project(project_config, yes_to_all):
     missing_intermediate_deps = {}
     for n in env.all_specs():
         # Skip the packages under development
-        if n.name in package_requirements:
+        if n.name in packages:
             continue
 
         if n.install_status() == InstallStatus.absent:
             absent_dependencies.append(n.cshort_spec)
 
-        checked_out_deps = [p.name for p in n.dependencies() if p.name in package_requirements]
+        checked_out_deps = [p.name for p in n.dependencies() if p.name in packages]
         if checked_out_deps:
             missing_intermediate_deps[n.name] = checked_out_deps
 
@@ -381,12 +377,13 @@ def concretize_project(project_config, yes_to_all):
         def _parens_number(i):
             return f"({i})"
 
-        msg = "\nThe following packages will be installed:\n"
+        msg = "The following packages will be installed:\n"
         width = len(_parens_number(len(absent_dependencies)))
         for i, dep in enumerate(sorted(absent_dependencies)):
             num_str = _parens_number(i + 1)
             msg += f"\n {num_str:>{width}}  {dep}"
         msg += "\n\nPlease ensure you have adequate space for these installations.\n"
+        print()
         tty.msg(msg)
     else:
         yes_to_all = True
@@ -398,9 +395,12 @@ def concretize_project(project_config, yes_to_all):
 
     if should_install is False:
         print()
+        gray_gt = gray(">")
         tty.msg(
             f"To install the development environment later, invoke:\n\n"
-            f"  spack -e {local_env_dir} install -j<ncores>\n"
+            f"  {gray_gt} spack env activate {local_env_dir}\n"
+            f"  {gray_gt} spack install -j<ncores>\n"
+            f"  {gray_gt} spack env deactivate\n"
         )
         return
 
@@ -410,7 +410,10 @@ def concretize_project(project_config, yes_to_all):
         ncores = os.cpu_count() // 2
 
     tty.msg(gray("Installing development environment\n"))
-    result = subprocess.run(["spack", "-e", ".", "install", f"-j{ncores}"], cwd=local_env_dir)
+    # As of Spack 0.23, an environment should be explicitly activated before invoking
+    # install (i.e. don't use 'spack -e <env> install').
+    result = subprocess.run(f"spack env activate {local_env_dir}; spack install -j{ncores}",
+                            shell=True)
 
     if result.returncode == 0:
         print()

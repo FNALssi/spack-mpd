@@ -26,6 +26,10 @@ def magenta(msg):
     return tty.color.colorize(f"@M{{{msg}}}")
 
 
+def yellow(msg):
+    return tty.color.colorize(f"@y{{{msg}}}")
+
+
 def get_number(prompt, **kwargs):
     default = kwargs.get("default", None)
     abort = kwargs.get("abort", None)
