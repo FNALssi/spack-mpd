@@ -26,42 +26,6 @@ ALIASES = ["n"]
 CMAKE_CACHE_VARIABLE_PATTERN = re.compile(r"-D(.*):(.*)=(.*)")
 
 
-def setup_subparser(subparsers):
-    new_project = subparsers.add_parser(
-        SUBCOMMAND,
-        description="create MPD development area",
-        aliases=ALIASES,
-        help="create MPD development area",
-    )
-    new_project.add_argument("--name", required=True, help="(required)")
-    new_project.add_argument(
-        "-T",
-        "--top",
-        default=Path.cwd(),
-        help="top-level directory for MPD area\n(default: %(default)s)",
-    )
-    new_project.add_argument(
-        "-S",
-        "--srcs",
-        help="directory containing repositories to develop\n"
-        "(default: <top-level directory>/srcs)",
-    )
-    new_project.add_argument(
-        "-f", "--force", action="store_true", help="overwrite existing project with same name"
-    )
-    new_project.add_argument(
-        "-E",
-        "--env",
-        default=[],
-        help="environments from which to create project\n(multiple allowed)",
-        action="append",
-    )
-    new_project.add_argument(
-        "-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts"
-    )
-    new_project.add_argument("variants", nargs="*", help="variants to apply to developed packages")
-
-
 def find_environment(env_str):
     # Patterned off of the behavior in spack.cmd.find_environment
     if ev.exists(env_str):
