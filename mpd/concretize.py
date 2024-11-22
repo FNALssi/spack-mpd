@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import time
+from collections import abc
 from pathlib import Path
 
 from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
@@ -14,6 +15,7 @@ import llnl.util.tty as tty
 
 import spack.compilers as compilers
 import spack.environment as ev
+import spack.util.spack_yaml as syaml
 from spack import traverse
 from spack.spec import InstallStatus
 
@@ -208,28 +210,35 @@ def ordered_roots(env, package_requirements):
     return [install_prefixes[p] for p in sorted_packages]
 
 
+# Stolen shamelessly from https://stackoverflow.com/a/60321833/3585575
+def deep_update(original, update):
+    """Recursively update a dict.
+
+    Subdict's won't be overwritten but also updated.
+    """
+    if not isinstance(original, abc.Mapping):
+        return update
+    for key, value in update.items():
+        if isinstance(value, abc.Mapping):
+            original[key] = deep_update(original.get(key, {}), value)
+        else:
+            original[key] = value
+    return original
+
+
 def concretize_project(project_config, yes_to_all):
-    packages = project_config["packages"]
-    package_requirements = copy.deepcopy(packages)
-    package_requirements.update(project_config["dependencies"])
-
     proto_envs = [find_environment(e) for e in project_config["envs"]]
-
+    package_requirements = {}
     for penv in proto_envs:
-        for s in penv.all_specs():
-            if s.name in packages:
-                continue
-            bool_variants = []
-            kv_variants = []
-            for k, v in s.variants.items():
-                if k in ("patches", "build_system", "build_type", "buildtype"):
-                    continue
-                bool_variants.append(v) if isinstance(v.value, bool) else kv_variants.append(v)
+        penv_config = {}
+        with open(penv.manifest_path, "r") as f:
+            penv_config = syaml.load(f)
+        deep_update(package_requirements, penv_config.mlget(["spack", "packages"], {}))
 
-            all_variants = [str(v) for v in bool_variants + kv_variants]
-            requirements = [str(s.versions).replace("=", "@"),
-                            "%" + str(s.compiler).replace("=", "")] + all_variants
-            package_requirements[s.name] = dict(require=requirements)
+    packages = project_config["packages"]
+    new_package_requirements = copy.deepcopy(packages)
+    new_package_requirements.update(project_config["dependencies"])
+    deep_update(package_requirements, new_package_requirements)
 
     print()
     tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
