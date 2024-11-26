@@ -342,9 +342,10 @@ def concretize_project(project_config, yes_to_all):
             missing_intermediate_deps[n.name] = checked_out_deps
 
     if missing_intermediate_deps:
+        indent = " " * len("==> Error: ")
         error_msg = (
             "The following packages are intermediate dependencies of the\n"
-            "currently cloned packages and must also be cloned:\n"
+            f"{indent}currently cloned packages and must also be cloned:\n"
         )
         for pkg_name, checked_out_deps in sorted(missing_intermediate_deps.items()):
             checked_out_deps_str = ", ".join(checked_out_deps)
