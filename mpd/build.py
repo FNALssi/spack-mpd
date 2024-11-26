@@ -73,7 +73,7 @@ def configure_cmake_project(project_config, compilers):
     print()
     tty.msg("Configuring with command:\n\n" + cyan(configure_list_str) + "\n")
 
-    subprocess.run(configure_list)
+    return subprocess.run(configure_list)
 
 
 def build(project_config, parallel, generator_options):
