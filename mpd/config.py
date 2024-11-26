@@ -117,7 +117,7 @@ def handle_variant(token):
     elif token.kind == TokenType.VERSION:
         return "version", _variant_pair(token.value[1:], token.value)
 
-    tty.die(f"The variant '{token.value}' is not supported")
+    tty.die(f"The token '{token.value}' is not supported")
 
 
 def handle_variants(project_cfg, variants):
@@ -126,19 +126,38 @@ def handle_variants(project_cfg, variants):
     general_variant_map = {}
     package_variant_map = {}
     dependency_variant_map = {}
+    virtual_package = None
+    virtual_dependency = False
+    virtual_dependencies = {}
+    concrete_package_expected = False
     dependency = False
     variant_map = general_variant_map
     for token in tokens_from_str:
         if token.kind == TokenType.DEPENDENCY:
             dependency = True
             continue
-        elif token.kind == TokenType.UNQUALIFIED_PACKAGE_NAME:
-            parent_map = dependency_variant_map if dependency else package_variant_map
-            variant_map = parent_map.setdefault(token.value, dict())
+        if token.kind == TokenType.START_EDGE_PROPERTIES:
+            virtual_dependency = True
+            continue
+        if token.kind == TokenType.END_EDGE_PROPERTIES:
+            virtual_dependency = False
+            concrete_package_expected = True
+            continue
+        if token.kind == TokenType.UNQUALIFIED_PACKAGE_NAME:
+            if concrete_package_expected:
+                virtual_dependencies.setdefault(virtual_package, []).append(token.value)
+                virtual_package = None
+                concrete_package_expected = False
+            else:
+                parent_map = dependency_variant_map if dependency else package_variant_map
+                variant_map = parent_map.setdefault(token.value, dict())
             continue
 
         name, variant_pair = handle_variant(token)
-        variant_map[name] = variant_pair
+        if virtual_dependency:
+            virtual_package = variant_pair["value"]
+        else:
+            variant_map[name] = variant_pair
 
     # Compiler
     if "compiler" in general_variant_map:
@@ -213,6 +232,10 @@ def handle_variants(project_cfg, variants):
     for name, requirements in dependency_variant_map.items():
         only_variants = [r["variant"] for r in requirements]
         dependency_requirements[name] = dict(require=ordered_requirement_list(only_variants))
+
+    # Handle virtual dependencies
+    if virtual_dependencies:
+        dependency_requirements["all"] = dict(providers=virtual_dependencies)
 
     project_cfg["packages"] = packages
     project_cfg["dependencies"] = dependency_requirements
@@ -413,6 +436,13 @@ def print_config_info(config):
 
     print("\n  Subject to the constraints:")
     for pkg, variants in dependencies.items():
+        # Handle virtual dependencies
+        if pkg == "all":
+            for virtual, concretes in variants["providers"].items():
+                for c in concretes:
+                    line = f"^[virtuals={virtual}] {c}"
+                    print(f"    - {yellow(line)}")
+            continue
         requirements = " ".join(variants["require"])
         print(f"    - {yellow(pkg)}{gray(requirements)}")
 
