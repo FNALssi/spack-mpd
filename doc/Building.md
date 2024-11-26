@@ -1,23 +1,30 @@
 # Building a project
 
-Once you have selected an MPD project and activated its corresponding
-environment, you may build your MPD project.  This is done by typing
+Once you have selected an MPD project and its development environment
+has been installed, you may build your MPD project.  This is done by
+typing
 
 ```console
 $ spack mpd build
 ```
 
-The default build generator is `Make`, although the Ninja generator
-can be specified with the `--generator` option:
+## Generator support
+
+Each CMake package supported by Spack can be built with two
+generators: either UNIX makefiles (`make`) or Ninja (`ninja`).  The
+generator, however, is an ingredient to Spack's concretization
+process, and it therefore must be specified as a variant during the
+`spack mpd new-project` or `spack mpd refresh` commands.  For that
+reason, the MPD build interface does not allow the specification of a
+generator—the generator used during the concretization of the project
+will be used during the build.
+
+The build command does support a parallelism argument (`-j<ncores>`),
+and the command also allows the specification of generator commands
+after the double hyphen (`--`):
 
 ```console
-$ spack mpd build --generator Ninja
-```
-
-Generator commands may be specified after two contiguous hyphens `--`:
-
-```console
-$ spack mpd build --generator Ninja -- <generator commands> ...
+$ spack mpd build -j12 -- <generator commands> ...
 ```
 
 It is also possible to *clean* the build area before running the build step:
@@ -28,18 +35,37 @@ $ spack mpd build --clean ...
 
 ## Build commands
 
-The `spack mpd build` command is just a wrapper for invoking two commands in the project's build directory:
+The `spack mpd build` command is just a wrapper for invoking two
+commands in the project's build directory _with an activated
+development environment_:
 
 ```console
-$ cmake --preset default <srcs dir> -B <build dir> -DCMAKE_INSTALL_PREFIX=<install dir>
+$ spack env activate <mpd project local directory>
+$ cmake --preset default <srcs dir> -B <build dir> -G <generator> \
+    -DCMAKE_C_COMPILER=<path to C compiler> \
+    -DCMAKE_CXX_COMPILER=<path to C++ compiler>
 $ cmake --build <build dir> -- <generator commands> ...
+$ spack env deactivate
 ```
 
-After the CMake configuration step has been completed (the first command above), you are permitted to use the generator commands directly if you are in the build directory of the project (e.g.):
+After the CMake configuration step has been completed (the first
+command above), you may use the generator commands directly if you are
+in the build directory of the project (e.g.):
 
 ```console
-$ cmake --preset default <srcs dir> -B <build dir> -DCMAKE_INSTALL_PREFIX=<install dir>
+$ spack env activate <mpd project local directory>
+$ cd <build dir>
+$ cmake --preset default <srcs dir> ...
 $ ninja
+$ spack env deactivate
 ```
 
-This can be very helpful for doing iterative development where the CMake configuration command is not necessary.
+This can be very helpful for doing iterative development where the
+CMake configuration command is not necessary.  The `spack mpd build`
+command, however, takes steps to avoid needless CMake reconfiguration.
+
+> [!NOTE]
+> You do not need to explicitly activate the development environment
+> to invoke `spack mpd build`.  Activating it is only necessary if
+> you'd like to invoke either the `cmake` or generator commands
+> directly in the build directory of the MPD project.
