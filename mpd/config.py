@@ -194,6 +194,10 @@ def handle_variants(project_cfg, variants):
     cxxstd = project_cfg["cxxstd"]
     generator = project_cfg["generator"]
     packages = project_cfg.get("packages", {})
+
+    # We need to make sure that the packages cached in the configuration file still exist
+    packages = {key: value for key, value in packages.items() if key in packages_to_develop}
+
     for p in packages_to_develop:
         # Start with existing requirements
         existing_pkg_requirements = packages.get(p, {}).get("require", [])

@@ -252,20 +252,19 @@ development list, you would see the following upon invoking
 ```console
 $ spack mpd git-clone cetlib cetlib-except
 
-==> The following repositories have been cloned:
+==> Cloning:
 
-  - cetlib
-  - cetlib-except
+  cetlib .................. done    (cloned)
+  cetlib-except ........... done    (cloned)
 
-...
+⋮
 
 $ spack mpd refresh
 
-...
+⋮
 
 ==> Error: The following packages are intermediate dependencies of the
 currently cloned packages and must also be cloned:
 
  - hep-concurrency (depends on cetlib-except)
-
 ```
