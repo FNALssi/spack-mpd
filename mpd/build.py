@@ -85,7 +85,10 @@ def build(project_config, parallel, generator_options):
         assert len(compilers) == 1
 
     if not (Path(build_area) / "CMakeCache.txt").exists():
-        configure_cmake_project(project_config, compilers)
+        result = configure_cmake_project(project_config, compilers)
+        if result.returncode != 0:
+            print()
+            tty.die("The CMake configure step failed. See above\n")
 
     generator_list = []
     if parallel:
