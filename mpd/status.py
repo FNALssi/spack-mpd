@@ -4,7 +4,7 @@ import spack.environment as ev
 
 from . import config
 from .preconditions import State, preconditions
-from .util import cyan
+from .util import cyan, gray
 
 SUBCOMMAND = "status"
 
@@ -15,8 +15,15 @@ def setup_subparser(subparsers):
     )
 
 
-def _environment_status(status_str):
-    return f"\n    Environment status: {cyan(status_str)}"
+def _development_status(selected):
+    dev_status = selected.get("status", "not concretized")
+    return f"\n    Development status: {cyan(dev_status)}"
+
+
+def _install_status(selected):
+    install_status = selected.get("installed", config.UNINSTALLED)
+    color = gray if install_status == config.UNINSTALLED else cyan
+    return f"\n    Last installed:     {color(install_status)}"
 
 
 def process(args):
@@ -29,16 +36,11 @@ def process(args):
 
     selected = config.project_config(selected)
     name = selected["name"]
-    msg = f"Selected project: {cyan(name)}"
+    msg = f"Selected project:   {cyan(name)}"
+    tty.info(msg + _development_status(selected) + _install_status(selected))
 
     env = ev.active_environment()
-    if not env:
-        tty.info(msg + _environment_status("inactive"))
-        return
-
-    if env.path == selected["local"]:
-        tty.info(msg + _environment_status("active"))
-        return
-
-    tty.info(msg)
-    tty.warn(f"An environment is active that does not correspond to the MPD project {cyan(name)}.")
+    if env and env.path != selected["local"]:
+        tty.warn(
+            f"An environment is active that does not correspond to the MPD project {cyan(name)}."
+        )

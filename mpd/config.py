@@ -22,10 +22,11 @@ def _variant_pair(value, variant):
     return dict(value=value, variant=variant)
 
 
+UNINSTALLED = "---"
+
 _DEFAULT_CXXSTD = _variant_pair(value="17", variant="cxxstd=17")
 _DEFAULT_GENERATOR = _variant_pair(value="make", variant="generator=make")
 _DEVELOP_VARIANT = _variant_pair(value="develop", variant="@develop")
-_NONE_STR = "(none)"
 
 
 # Pilfered from https://stackoverflow.com/a/568285/3585575
@@ -276,7 +277,7 @@ def mpd_project_exists(project_name):
     return project_name in projects
 
 
-def update(project_config, status=None):
+def update(project_config, status=None, installed_at=None):
     config_file = mpd_config_file()
     config = None
     if config_file.exists():
@@ -291,6 +292,8 @@ def update(project_config, status=None):
     yaml_project_config.update(project_config)
     if status:
         yaml_project_config.update(status=status)
+    if installed_at:
+        yaml_project_config.update(installed=installed_at)
     config["projects"][project_config["name"]] = yaml_project_config
 
     # Update config file
@@ -373,12 +376,11 @@ def update_cache():
 
     adjusted = False
     for name, proj_config in projects.items():
-        if not ev.is_env_dir(proj_config["local"]):
-            proj_config["status"] = _NONE_STR
+        if "status" in proj_config and not ev.is_env_dir(proj_config["local"]):
+            del proj_config["status"]
             adjusted = True
-        deployed_env = proj_config.get("deployed", _NONE_STR)
-        if deployed_env != _NONE_STR and not ev.exists(deployed_env):
-            proj_config["deployed"] = _NONE_STR
+        if "installed" in proj_config and not ev.exists(name):
+            del proj_config["installed"]
             adjusted = True
 
     if adjusted:

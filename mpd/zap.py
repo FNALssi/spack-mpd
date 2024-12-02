@@ -3,7 +3,7 @@ import llnl.util.filesystem as fs
 import spack.environment as ev
 import spack.package_base
 
-from .config import selected_project_config
+from .config import UNINSTALLED, selected_project_config, update
 from .preconditions import State, preconditions
 
 SUBCOMMAND = "zap"
@@ -61,3 +61,5 @@ def process(args):
         if not s.installed:
             continue
         spack.package_base.PackageBase.uninstall_by_spec(s, force=True)
+
+    update(project_config, installed_at=UNINSTALLED)

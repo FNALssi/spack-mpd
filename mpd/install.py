@@ -1,10 +1,11 @@
 import subprocess
+from datetime import datetime
 
 import llnl.util.tty as tty
 
 import spack.environment as ev
 
-from .config import selected_project_config
+from .config import selected_project_config, update
 from .preconditions import State, activate_development_environment, preconditions
 from .util import bold, cyan, gray
 
@@ -44,5 +45,6 @@ def process(args):
         env.install_all()
         env.write()
 
+    update(project_config, installed_at=datetime.now().replace(microsecond=0).isoformat(" "))
     print()
     tty.msg(f"The {bold(name)} environment has been installed.\n")

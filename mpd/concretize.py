@@ -410,6 +410,6 @@ def concretize_project(project_config, yes_to_all):
 
     if result.returncode == 0:
         print()
-        update(project_config, status="installed")
+        update(project_config, status="ready")
         tty.msg(f"{bold(name)} is ready for development "
                 f"(e.g type {cyan('spack mpd build ...')})\n")

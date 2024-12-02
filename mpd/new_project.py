@@ -5,7 +5,7 @@ import llnl.util.tty as tty
 import spack.environment as ev
 
 from .concretize import concretize_project
-from .config import mpd_project_exists, print_config_info, project_config_from_args, select, update
+from .config import mpd_project_exists, print_config_info, project_config_from_args, select
 from .preconditions import State, preconditions
 from .util import bold, gray
 
@@ -73,8 +73,6 @@ def process(args):
             )
     else:
         tty.msg(f"Creating project: {bold(name)}")
-
-    update(project_config, status="(none)")
 
     print_config_info(project_config)
     select(project_config["name"])
