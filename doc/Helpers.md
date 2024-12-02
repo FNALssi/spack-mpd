@@ -1,5 +1,33 @@
 # Helper commands
 
+## Status
+
+The helper command `spack mpd status` lists the selected project (if
+any), its development status, and when it was last installed.  For
+example:
+
+```console
+$ spack mpd status
+==> Selected project:   test
+    Development status: ready
+    Last installed:     2024-12-02 15:30:44
+```
+
+Development status values include:
+
+- _**created**_: the initial project environment has been created as
+  part of the `new-project` or `refresh` commands,
+- _**concretized**_: the named project environment and the
+  corresponding local development environment have been fully
+  concretized, but neither has been fully installed.
+- _**ready**_: the local development environment has been installed,
+  signifying that the standard MPD development commands (e.g. `spack
+  mpd build`) can be invoked.
+
+If a project's named environment has not yet been installed (or has
+been uninstalled via an MPD `zap` command), the last-installed date
+will read as three hyphens `---`.
+
 ## Cloning repositories to develop
 
 MPD supports cloning *read-only* git repositories into a selected
@@ -107,7 +135,8 @@ with the project that's already selected.  Having two or more shell
 sessions with the same project selected can lead to one shell
 overwriting another.
 
-If two or more shells have selected the same MPD project, a warning will be printed to the screen:
+If two or more shells have selected the same MPD project, a warning
+will be printed to the screen:
 
 ```console
 $ spack mpd ls
@@ -121,11 +150,13 @@ $ spack mpd ls
 
 ```
 
-Destroying (or invoking `spack mpd clear`) on all but one of those shells will remove the warning.
+Closing (or invoking `spack mpd clear` on) all but one of those shells
+will remove the warning.
 
 ### Listing project details
 
-Details of a specific project will be printed to the screen if the project name is provided as a positional argument:
+Details of a specific project will be printed to the screen if the
+project name is provided as a positional argument:
 
 ```console
 $ spack mpd list test
@@ -133,21 +164,44 @@ $ spack mpd list test
 ==> Details for test
 
 name: test
+envs:
+- gcc-14-1
 top: /scratch/knoepfel/test-devel
 source: /scratch/knoepfel/test-devel/srcs
 build: /scratch/knoepfel/test-devel/build
 local: /scratch/knoepfel/test-devel/local
-install: /scratch/knoepfel/test-devel/local/install
-envs:
-- gcc-13-2-0
+compiler:
+  value: gcc@14.1.0
+  variant: '%gcc@14.1.0'
+cxxstd:
+  value: '20'
+  variant: cxxstd=20
+generator:
+  value: make
+  variant: generator=make
+variants: cxxstd=20 %gcc@14.1.0
 packages:
-- cetlib
-- cetlib-except
-- hep-concurrency
-compiler: gcc@13.2.0
-cxxstd: '20'
-variants: ''
-status: installed
+  cetlib-except:
+    require:
+    - '@develop'
+    - '%gcc@14.1.0'
+    - cxxstd=20
+    - generator=make
+  cetlib:
+    require:
+    - '@develop'
+    - '%gcc@14.1.0'
+    - cxxstd=20
+    - generator=make
+  hep-concurrency:
+    require:
+    - '@develop'
+    - '%gcc@14.1.0'
+    - cxxstd=20
+    - generator=make
+dependencies: {}
+status: ready
+installed: '---'
 
 ```
 
@@ -164,7 +218,7 @@ $ cd $(spack mpd ls --source test)
 ```
 
 This is particularly convenient when logging in to the system and
-wanting to begin development immediately:
+wanting to invoke generator commands (e.g. `ninja`) immediately:
 
 ```console
 $ spack env activate test

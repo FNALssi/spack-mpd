@@ -16,7 +16,9 @@ developers.
 ## Prerequisites
 
 1. You must be able to write to the Spack installation that you set up.
-   1. For developers of packages that depend on SciSoft software, you should clone the Fermilab fork of Spack `git clone https://github.com/FNALssi/spack.git`.
+   1. For developers of packages that depend on SciSoft software, you
+      should clone the Fermilab fork of Spack `git clone
+      https://github.com/FNALssi/spack.git`.
    2. _You are encouraged to [chain upstream Spack installations](https://spack.readthedocs.io/en/latest/chain.html) to your own installation to avoid unnecessary building, installation, and wasted disk space._
 2. Invoke `source <your spack installation>/share/spack/setup-env.sh`.
 3. Each package to be developed must have:
@@ -40,11 +42,13 @@ developers.
 2. [Creating a project](doc/Creation.md) (skip if you do not need a new project)
 3. [Project selection and environment activation](doc/Selection.md)
 4. [Building a project](doc/Building.md)
-5. [Zapping a project](doc/Zapping.md)
-6. [Removing a project](doc/Removing.md)
-7. Helper commands
-   1. [Cloning repositories to develop](doc/Helpers.md#cloning-repositories-to-develop)
-   2. [Listing projects](doc/Helpers.md#listing-available-projects)
+5. [Installing a project](doc/Project_installation.md)
+6. [Zapping a project](doc/Zapping.md)
+7. [Removing a project](doc/Removing.md)
+8. Helper commands
+   1. [MPD status](doc/Helpers.md#status)
+   2. [Cloning repositories to develop](doc/Helpers.md#cloning-repositories-to-develop)
+   3. [Listing projects](doc/Helpers.md#listing-available-projects)
 
 ## Limitations
 
