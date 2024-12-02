@@ -5,6 +5,7 @@ import llnl.util.filesystem as fs
 import llnl.util.tty as tty
 
 import spack
+import spack.compilers
 
 from .config import selected_project_config
 from .preconditions import State, activate_development_environment, preconditions

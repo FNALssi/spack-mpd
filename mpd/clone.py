@@ -5,16 +5,16 @@ import select
 import subprocess
 import sys
 import urllib
+from enum import Enum, auto
 
-import llnl.util.tty as tty
 import llnl.util.filesystem as fs
+import llnl.util.tty as tty
 
 import spack.util.git
 from spack.util import executable
-from enum import Enum, auto
 
 from .config import selected_project_config
-from .preconditions import preconditions, State
+from .preconditions import State, preconditions
 from .util import bold, maybe_with_color
 
 SUBCOMMAND = "git-clone"

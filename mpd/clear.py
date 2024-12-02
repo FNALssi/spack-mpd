@@ -24,6 +24,6 @@ def process(args):
     if args.all:
         for p in config.selected_projects_dir().iterdir():
             p.unlink(missing_ok=True)
-        tty.warn(f"All MPD projects in all shells have been cleared.")
+        tty.warn("All MPD projects in all shells have been cleared.")
     else:
         config.selected_project_token().unlink(missing_ok=True)
