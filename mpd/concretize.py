@@ -210,6 +210,44 @@ def ordered_roots(env, package_requirements):
     return [install_prefixes[p] for p in sorted_packages]
 
 
+def verify_no_missing_intermediate_deps(env, packages) -> None:
+    missing_intermediate_deps = {}
+    for n in env.all_specs():
+        # Skip the packages under development
+        if n.name in packages:
+            continue
+
+        checked_out_deps = [p.name for p in n.dependencies() if p.name in packages]
+        if checked_out_deps:
+            missing_intermediate_deps[n.name] = checked_out_deps
+
+    if missing_intermediate_deps:
+        indent = " " * len("==> Error: ")
+        error_msg = (
+            "The following packages are intermediate dependencies of the\n"
+            f"{indent}currently cloned packages and must also be cloned:\n"
+        )
+        for pkg_name, checked_out_deps in sorted(missing_intermediate_deps.items()):
+            checked_out_deps_str = ", ".join(checked_out_deps)
+            error_msg += "\n - " + bold(pkg_name)
+            error_msg += f" (depends on {checked_out_deps_str})"
+        print()
+        tty.die(error_msg + "\n")
+
+
+def absent_dependencies(env, packages) -> list:
+    absent = []
+    for n in env.all_specs():
+        # Skip the packages under development
+        if n.name in packages:
+            continue
+
+        if n.install_status() == InstallStatus.absent:
+            absent.append(n.cshort_spec)
+
+    return sorted(set(absent))
+
+
 # Stolen shamelessly from https://stackoverflow.com/a/60321833/3585575
 def deep_update(original, update):
     """Recursively update a dict.
@@ -275,6 +313,8 @@ def concretize_project(project_config, yes_to_all):
         env.concretize()
         env.write(regenerate=False)
 
+    verify_no_missing_intermediate_deps(env, packages)
+
     # Handle package-specific CMake args as provided by the Spack package
     cmake_args = {}
     for s in env.concrete_roots():
@@ -312,8 +352,7 @@ def concretize_project(project_config, yes_to_all):
             )
 
     tty.msg(gray("Adjusting specifications for package development"))
-    subprocess.run(["spack", "-e", ".", "add"] + list(first_order_deps.keys()),
-                   cwd=local_env_dir)
+    subprocess.run(["spack", "-e", local_env_dir, "add"] + list(first_order_deps.keys()))
 
     tty.info(gray("Finalizing concretization"))
     remove_view(local_env_dir)
@@ -321,55 +360,20 @@ def concretize_project(project_config, yes_to_all):
         env.concretize()
         env.write()
 
-    subprocess.run(["spack", "-e", ".", "rm"] + list(packages.keys()),
-                   cwd=local_env_dir)
+    subprocess.run(["spack", "-e", local_env_dir, "rm"] + list(packages.keys()))
     with env, env.write_transaction():
         env.concretize()
         env.write()
 
-    absent_dependencies = []
-    missing_intermediate_deps = {}
-    for n in env.all_specs():
-        # Skip the packages under development
-        if n.name in packages:
-            continue
-
-        if n.install_status() == InstallStatus.absent:
-            absent_dependencies.append(n.cshort_spec)
-
-        checked_out_deps = [p.name for p in n.dependencies() if p.name in packages]
-        if checked_out_deps:
-            missing_intermediate_deps[n.name] = checked_out_deps
-
-    if missing_intermediate_deps:
-        indent = " " * len("==> Error: ")
-        error_msg = (
-            "The following packages are intermediate dependencies of the\n"
-            f"{indent}currently cloned packages and must also be cloned:\n"
-        )
-        for pkg_name, checked_out_deps in sorted(missing_intermediate_deps.items()):
-            checked_out_deps_str = ", ".join(checked_out_deps)
-            error_msg += "\n - " + bold(pkg_name)
-            error_msg += f" (depends on {checked_out_deps_str})"
-        print()
-        tty.die(error_msg + "\n")
-
     update(project_config, status="concretized")
 
-    if absent_dependencies:
-        # Remove duplicates, preserving order
-        unique_absent_dependencies = []
-        for dep in absent_dependencies:
-            if dep not in unique_absent_dependencies:
-                unique_absent_dependencies.append(dep)
-        absent_dependencies = unique_absent_dependencies
-
+    if absent := absent_dependencies(env, packages):
         def _parens_number(i):
             return f"({i})"
 
         msg = "The following packages will be installed:\n"
-        width = len(_parens_number(len(absent_dependencies)))
-        for i, dep in enumerate(sorted(absent_dependencies)):
+        width = len(_parens_number(len(absent)))
+        for i, dep in enumerate(absent):
             num_str = _parens_number(i + 1)
             msg += f"\n {num_str:>{width}}  {dep}"
         msg += "\n\nPlease ensure you have adequate space for these installations.\n"
@@ -394,10 +398,9 @@ def concretize_project(project_config, yes_to_all):
         )
         return
 
+    ncores = os.cpu_count() // 2
     if not yes_to_all:
-        ncores = get_number("Specify number of cores to use", default=os.cpu_count() // 2)
-    else:
-        ncores = os.cpu_count() // 2
+        ncores = get_number("Specify number of cores to use", default=ncores)
 
     tty.msg(gray("Installing development environment\n"))
     # As of Spack 0.23, an environment should be explicitly activated before invoking
