@@ -292,8 +292,14 @@ def concretize_project(project_config, yes_to_all):
     # Include compiler as a definition in the environment specification.
     compiler = project_config["compiler"]
     if compiler:
-        compiler = compilers.find(compiler["value"])[0]
-        compiler_str = [YamlQuote(compiler)]
+        found_compilers = compilers.find(compiler["value"])
+        if not found_compilers:
+            indent = " " * len("==> Error: ")
+            print()
+            tty.die(f"The compiler {bold(compiler['value'])} is not available.\n"
+                    f"{indent}See {cyan('spack compiler list')} for available compilers.\n"
+                    f"{indent}Also see {cyan('spack compiler add --help')}.\n")
+        compiler_str = [YamlQuote(found_compilers[0])]
         full_block.update(definitions=[dict(compiler=compiler_str)])
 
     local_env_dir = project_config["local"]

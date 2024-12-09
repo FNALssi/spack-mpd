@@ -80,7 +80,16 @@ def check_active(conditions):
     active_env = ev.active_environment()
     active_env_name = active_env.name if active_env else ""
     selected_project = config.selected_project(missing_ok=True)
-    project_env_name = config.project_config(selected_project)["local"] if selected_project else ""
+    selected_project_config = None
+    if selected_project:
+        selected_project_config = config.project_config(selected_project, missing_ok=True)
+
+    if not selected_project_config:
+        if should_be_active:
+            return f"Cannot find configuration for selected project ({selected_project})."
+        return None
+
+    project_env_name = selected_project_config["local"]
 
     if not active_env_name:
         if should_be_active:

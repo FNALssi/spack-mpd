@@ -4,7 +4,7 @@ import spack.environment as ev
 
 from . import config
 from .preconditions import State, preconditions
-from .util import cyan, gray
+from .util import bold, cyan, gray
 
 SUBCOMMAND = "status"
 
@@ -29,12 +29,17 @@ def _install_status(selected):
 def process(args):
     preconditions(State.INITIALIZED)
 
-    selected = config.selected_project()
-    if not selected:
+    selected_name = config.selected_project()
+    if not selected_name:
         tty.info(f"Selected project: {cyan('None')}")
         return
 
-    selected = config.project_config(selected)
+    selected = config.project_config(selected_name, missing_ok=True)
+    if not selected:
+        tty.info(f"Selected project {bold(selected_name)} not yet configured " +
+                 gray("(an error must have occurred while executing the new-project command)"))
+        return
+
     name = selected["name"]
     msg = f"Selected project:   {cyan(name)}"
     tty.info(msg + _development_status(selected) + _install_status(selected))

@@ -342,7 +342,7 @@ def rm_config(project_name):
         shutil.copy(f.name, config_file)
 
 
-def project_config(name, config=None):
+def project_config(name, config=None, missing_ok=False):
     if config is None:
         config_file = mpd_config_file()
         if config_file.exists():
@@ -350,11 +350,15 @@ def project_config(name, config=None):
                 config = syaml.load(f)
 
     if config is None:
+        if missing_ok:
+            return None
         print()
         tty.die("Missing MPD configuration.  Please contact scisoft-team@fnal.gov\n")
 
     projects = config.get("projects")
     if name not in projects:
+        if missing_ok:
+            return None
         print()
         tty.die(
             f"Project '{name}' not supported by MPD configuration."
