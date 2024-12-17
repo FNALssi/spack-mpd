@@ -572,50 +572,46 @@ def process(args):
         # FIXME: Should have a check for successful gh auth status command
 
     should_fork = args.fork and gh
-    if args.repos:
-        preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
-        print()
-        preamble = "Cloning"
-        if should_fork:
-            preamble += " and forking"
-        tty.msg(f"{preamble}:\n")
-        config = selected_project_config()
-        repos = known_repos()
-        repos_to_clone = {}
-        for repo_spec in args.repos:
-            repo = repos.get(repo_spec, SimpleGitRepo(repo_spec))
-            repos_to_clone[repo.name()] = repo
-        changed_srcs_dir = clone_repos(
-            repos_to_clone, should_fork, config["source"], config["local"]
-        )
-        print()
-        if changed_srcs_dir:
-            tty.msg("You may now invoke:\n\n  spack mpd refresh\n")
-        else:
-            tty.msg("No repositories added\n")
-        return
 
-    if args.suites:
+    if args.repos or args.suites:
         preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
         config = selected_project_config()
-
         changed_srcs_dir = False
-        for s in args.suites:
-            suite = None
-            try:
-                suite = suite_for(s)
-            except StopIteration:
-                print()
-                tty.warn(f"Skipping unknown suite {bold(s)}")
-                continue
-
+        if args.repos:
             print()
             preamble = "Cloning"
             if should_fork:
                 preamble += " and forking"
-            tty.msg(f"{preamble} suite {bold(s)}:\n")
-            if clone_repos(suite.repositories(), should_fork, config["source"], config["local"]):
+            tty.msg(f"{preamble}:\n")
+            repos = known_repos()
+            repos_to_clone = {}
+            for repo_spec in args.repos:
+                repo = repos.get(repo_spec, SimpleGitRepo(repo_spec))
+                repos_to_clone[repo.name()] = repo
+            if clone_repos(
+                repos_to_clone, should_fork, config["source"], config["local"]
+            ):
                 changed_srcs_dir = True
+
+        if args.suites:
+            for s in args.suites:
+                suite = None
+                try:
+                    suite = suite_for(s)
+                except StopIteration:
+                    print()
+                    tty.warn(f"Skipping unknown suite {bold(s)}")
+                    continue
+
+                print()
+                preamble = "Cloning"
+                if should_fork:
+                    preamble += " and forking"
+                tty.msg(f"{preamble} suite {bold(s)}:\n")
+                if clone_repos(
+                        suite.repositories(), should_fork, config["source"], config["local"]
+                ):
+                    changed_srcs_dir = True
 
         print()
         if changed_srcs_dir:
