@@ -5,7 +5,7 @@ import llnl.util.tty as tty
 import spack.environment as ev
 
 from .concretize import concretize_project
-from .config import mpd_project_exists, print_config_info, project_config_from_args, select
+from .config import mpd_project_exists, print_config_info, project_config_from_args, select, update
 from .preconditions import State, preconditions
 from .util import bold, gray
 
@@ -80,6 +80,7 @@ def process(args):
     if len(project_config["packages"]):
         concretize_project(project_config, args.yes_to_all)
     else:
+        update(project_config, status="ready")
         tty.msg(
             "You can clone repositories for development by invoking\n\n"
             "  spack mpd git-clone --suite <suite name>\n\n"
