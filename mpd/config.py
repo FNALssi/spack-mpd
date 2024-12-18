@@ -11,7 +11,7 @@ import llnl.util.tty as tty
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
 from spack.parser import SPLIT_KVP, SpecParser, TokenType
-from spack.repo import PATH
+from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
 
 from . import init
@@ -121,6 +121,34 @@ def handle_variant(token):
     tty.die(f"The token '{token.value}' is not supported")
 
 
+def spack_packages(srcs_dir):
+    srcs_path = Path(srcs_dir)
+    assert srcs_path.exists()
+    srcs_repos = sorted(
+        f.name for f in srcs_path.iterdir() if not f.name.startswith(".") and f.is_dir()
+    )
+
+    # Check for unknown packages
+    unknown_packages = []
+    packages_to_develop = {}
+    for p in srcs_repos:
+        spec = Spec(p)
+        try:
+            pkg_cls = PATH.get_pkg_class(spec.name)
+        except UnknownPackageError:
+            unknown_packages.append(p)
+        packages_to_develop[p] = pkg_cls(spec)
+
+    if unknown_packages:
+        print()
+        msg = "The following directories do not correspond to any known Spack package:\n"
+        for p in unknown_packages:
+            msg += f"\n - {srcs_path / p}"
+        tty.die(msg + "\n")
+
+    return packages_to_develop
+
+
 def handle_variants(project_cfg, variants):
     variant_str = " ".join(variants)
     tokens_from_str = SpecParser(variant_str).tokens()
@@ -185,13 +213,7 @@ def handle_variants(project_cfg, variants):
     if variants:
         project_cfg["variants"] = " ".join(variants)
 
-    # Set packages
-    srcs_path = Path(project_cfg["source"])
-    assert srcs_path.exists()
-    packages_to_develop = sorted(
-        f.name for f in srcs_path.iterdir() if not f.name.startswith(".") and f.is_dir()
-    )
-
+    packages_to_develop = spack_packages(project_cfg["source"])
     cxxstd = project_cfg["cxxstd"]
     generator = project_cfg["generator"]
     packages = project_cfg.get("packages", {})
@@ -199,7 +221,7 @@ def handle_variants(project_cfg, variants):
     # We need to make sure that the packages cached in the configuration file still exist
     packages = {key: value for key, value in packages.items() if key in packages_to_develop}
 
-    for p in packages_to_develop:
+    for p, pkg in packages_to_develop.items():
         # Start with existing requirements
         existing_pkg_requirements = packages.get(p, {}).get("require", [])
         existing_pkg_requirements_str = " ".join(existing_pkg_requirements)
@@ -209,9 +231,6 @@ def handle_variants(project_cfg, variants):
             pkg_requirements[name] = variant["variant"]
 
         # Check to see if packages support a 'cxxstd' variant
-        spec = Spec(p)
-        pkg_cls = PATH.get_pkg_class(spec.name)
-        pkg = pkg_cls(spec)
         pkg_requirements["version"] = _DEVELOP_VARIANT["variant"]
         if compiler := project_cfg["compiler"]:
             pkg_requirements["compiler"] = compiler["variant"]
@@ -231,7 +250,7 @@ def handle_variants(project_cfg, variants):
         only_variants = {k: v["variant"] for k, v in package_variant_map.get(p, {}).items()}
         pkg_requirements.update(only_variants)
 
-        packages[spec.name] = dict(require=ordered_requirement_list(pkg_requirements))
+        packages[p] = dict(require=ordered_requirement_list(pkg_requirements))
 
     dependency_requirements = project_cfg.get("dependencies", {})
     for name, requirements in dependency_variant_map.items():
