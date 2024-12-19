@@ -10,7 +10,22 @@ import llnl.util.tty as tty
 
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
-from spack.parser import SPLIT_KVP, SpecParser, TokenType
+
+try:
+    from spack.spec_parser import SPLIT_KVP
+except ImportError:
+    from spack.parser import SPLIT_KVP
+
+try:
+    from spack.spec_parser import SpecParser
+except ImportError:
+    from spack.parser import SpecParser
+
+try:
+    from spack.spec_parser import SpecTokens
+except ImportError:
+    from spack.parser import TokenType as SpecTokens
+
 from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
 
@@ -103,19 +118,19 @@ def ordered_requirement_list(requirements):
 
 def handle_variant(token):
     # Last specification wins (this behavior may need to be massaged)
-    if token.kind in (TokenType.COMPILER, TokenType.COMPILER_AND_VERSION):
+    if token.kind in (SpecTokens.COMPILER, SpecTokens.COMPILER_AND_VERSION):
         return "compiler", _variant_pair(token.value[1:], token.value)
-    if token.kind in (TokenType.KEY_VALUE_PAIR, TokenType.PROPAGATED_KEY_VALUE_PAIR):
+    if token.kind in (SpecTokens.KEY_VALUE_PAIR, SpecTokens.PROPAGATED_KEY_VALUE_PAIR):
         match = SPLIT_KVP.match(token.value)
         name, _, value = match.groups()
         return name, _variant_pair(value, token.value)
-    if token.kind == TokenType.BOOL_VARIANT:
+    if token.kind == SpecTokens.BOOL_VARIANT:
         name = token.value[1:].strip()
         return name, _variant_pair(token.value[0] == "+", token.value)
-    if token.kind == TokenType.PROPAGATED_BOOL_VARIANT:
+    if token.kind == SpecTokens.PROPAGATED_BOOL_VARIANT:
         name = token.value[2:].strip()
         return name, _variant_pair(token.value[:2] == "++", token.value)
-    elif token.kind == TokenType.VERSION:
+    elif token.kind == SpecTokens.VERSION:
         return "version", _variant_pair(token.value[1:], token.value)
 
     tty.die(f"The token '{token.value}' is not supported")
@@ -162,17 +177,17 @@ def handle_variants(project_cfg, variants):
     dependency = False
     variant_map = general_variant_map
     for token in tokens_from_str:
-        if token.kind == TokenType.DEPENDENCY:
+        if token.kind == SpecTokens.DEPENDENCY:
             dependency = True
             continue
-        if token.kind == TokenType.START_EDGE_PROPERTIES:
+        if token.kind == SpecTokens.START_EDGE_PROPERTIES:
             virtual_dependency = True
             continue
-        if token.kind == TokenType.END_EDGE_PROPERTIES:
+        if token.kind == SpecTokens.END_EDGE_PROPERTIES:
             virtual_dependency = False
             concrete_package_expected = True
             continue
-        if token.kind == TokenType.UNQUALIFIED_PACKAGE_NAME:
+        if token.kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
             if concrete_package_expected:
                 virtual_dependencies.setdefault(virtual_package, []).append(token.value)
                 virtual_package = None
