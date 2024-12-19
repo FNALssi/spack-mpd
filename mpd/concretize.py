@@ -13,6 +13,7 @@ from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import llnl.util.tty as tty
 
+import spack.builder as builder
 import spack.compilers as compilers
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
@@ -326,7 +327,13 @@ def concretize_project(project_config, yes_to_all):
     for s in env.concrete_roots():
         if s.name not in packages:
             continue
-        cmake_args[s.name] = s.package.cmake_args()
+
+        # Instead of receiving the CMake args directly from the package, we use the
+        # builder interface, which also supports packages that provide a CMakeBuilder
+        # class.
+        pkg_builder = builder.create(s.package)
+        if cmake_args_method := getattr(pkg_builder, "cmake_args", False):
+            cmake_args[s.name] = cmake_args_method()
 
     # Create properly ordered CMake file
     make_cmake_files(project_config,
