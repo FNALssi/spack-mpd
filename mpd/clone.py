@@ -200,7 +200,7 @@ _supported_suites = [
             "cetlib",
             "cetlib-except",
             "fhicl-cpp",
-            "hep_concurrency",
+            "hep-concurrency",
             "messagefacility",
         ],
     ),
