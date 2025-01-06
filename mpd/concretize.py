@@ -14,7 +14,7 @@ from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 import llnl.util.tty as tty
 
 import spack.builder as builder
-import spack.compilers as compilers
+import spack.compilers
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
 from spack import traverse
@@ -122,12 +122,25 @@ def cmake_lists(project_config, dependencies):
 
 
 def cmake_presets(project_config, dependencies, view_path):
-    source_path = Path(project_config["source"])
+    # Select compiler
+    desired_compiler = project_config["compiler"]["value"]
+    compilers = []
+    if desired_compiler:
+        compilers = spack.compilers.compilers_for_spec(desired_compiler)
+        if not compilers:
+            desired_compiler_variant = project_config["compiler"]["variant"]
+            tty.die(f"No compiler found that corresponds to '{desired_compiler_variant}'")
+
+        # Most recent version wins
+        compilers.sort(key=lambda x: x.spec.version, reverse=True)
+
     cxxstd = project_config["cxxstd"]["value"]
-    configurePresets, cacheVariables = "configurePresets", "cacheVariables"
     view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
+
     allCacheVariables = {
         "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
+        "CMAKE_C_COMPILER": {"type": "PATH", "value": compilers[0].cc},
+        "CMAKE_CXX_COMPILER": {"type": "PATH", "value": compilers[0].cxx},
         "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
         "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
         "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxxstd},
@@ -135,6 +148,9 @@ def cmake_presets(project_config, dependencies, view_path):
         "CMAKE_INSTALL_RPATH": {"type": "STRING",
                                 "value": ";".join(view_lib_dirs)},
     }
+
+    source_path = Path(project_config["source"])
+    configurePresets, cacheVariables = "configurePresets", "cacheVariables"
 
     # Pull project-specific presets from each dependency.
     for dep_name, dep_hash, dep_prefix in dependencies:
@@ -293,7 +309,7 @@ def concretize_project(project_config, yes_to_all):
     # Include compiler as a definition in the environment specification.
     compiler = project_config["compiler"]
     if compiler:
-        found_compilers = compilers.find(compiler["value"])
+        found_compilers = spack.compilers.find(compiler["value"])
         if not found_compilers:
             indent = " " * len("==> Error: ")
             print()

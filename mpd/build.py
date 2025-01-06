@@ -46,7 +46,7 @@ def _generator_value(project_config):
     tty.die(f"Only 'make' and 'ninja' generators are allowed (specified {value}).")
 
 
-def configure_cmake_project(project_config, compilers):
+def configure_cmake_project(project_config):
     configure_list = [
         "cmake",
         "--preset",
@@ -57,11 +57,6 @@ def configure_cmake_project(project_config, compilers):
         "-G",
         _generator_value(project_config)
     ]
-    if compilers:
-        configure_list += [
-            f"-DCMAKE_C_COMPILER={compilers[0].cc}",
-            f"-DCMAKE_CXX_COMPILER={compilers[0].cxx}",
-        ]
 
     printed_configure_list = []
     for arg in configure_list:
@@ -79,14 +74,8 @@ def configure_cmake_project(project_config, compilers):
 
 def build(project_config, parallel, generator_options):
     build_area = project_config["build"]
-    desired_compiler = project_config["compiler"]["value"]
-    compilers = []
-    if desired_compiler:
-        compilers = spack.compilers.compilers_for_spec(desired_compiler)
-        assert len(compilers) == 1
-
     if not (Path(build_area) / "CMakeCache.txt").exists():
-        result = configure_cmake_project(project_config, compilers)
+        result = configure_cmake_project(project_config)
         if result.returncode != 0:
             print()
             tty.die("The CMake configure step failed. See above\n")
