@@ -367,21 +367,17 @@ def concretize_project(project_config, yes_to_all):
     # Now add the first-order dependencies
     env = ev.Environment(local_env_dir)
     developed_specs = [s for _, s in env.concretized_specs() if s.name in packages]
-    first_order_deps = {}
+    first_order_deps = {"cmake"}
     for s in developed_specs:
         for depth, dep in traverse.traverse_nodes([s], depth=True):
             if depth != 1:
                 continue
             if dep.name in packages:
                 continue
-            first_order_deps[dep.name] = dep.format(
-                "{name}{@version}"
-                "{%compiler.name}{@compiler.version}{compiler_flags}"
-                "{variants}"
-            )
+            first_order_deps.add(dep.name)
 
     tty.msg(gray("Adjusting specifications for package development"))
-    subprocess.run(["spack", "-e", local_env_dir, "add"] + list(first_order_deps.keys()))
+    subprocess.run(["spack", "-e", local_env_dir, "add"] + list(first_order_deps))
 
     tty.info(gray("Finalizing concretization"))
     remove_view(local_env_dir)
