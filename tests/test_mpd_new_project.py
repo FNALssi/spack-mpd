@@ -3,6 +3,7 @@
 #
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 import contextlib
+import re
 
 import llnl.util.filesystem as fs
 
@@ -51,8 +52,8 @@ def test_new_project_all_default_paths(with_mpd_init, tmp_path):
         assert "a" == config.selected_project()
 
         out = mpd("status")
-        assert "Selected project: a" in out
-        assert "Environment status: inactive" in out
+        assert re.search(r"Selected project:\s+a", out, re.DOTALL)
+        assert "Development status: not concretized" in out
 
 
 def test_new_project_only_top_path(with_mpd_init, tmp_path):
@@ -88,15 +89,17 @@ def test_new_project_no_default_paths(with_mpd_init, tmp_path):
 
 def test_mpd_refresh(with_mpd_init, tmp_path):
     with new_project(name="e", cwd=tmp_path):
+        # Update the cached configuration
+        mpd("ls")
+
         cfg = config.selected_project_config()
         out = mpd("refresh")
         new_cfg = config.selected_project_config()
         assert "Project e is up-to-date" in out
         assert cfg == new_cfg
-        print(new_cfg)
-        assert new_cfg["cxxstd"] == "cxxstd=17"
+        assert new_cfg["cxxstd"]["value"] == "17"
 
         out = mpd("refresh", "cxxstd=20")
         assert "Refreshing project: e" in out
         new_cfg = config.selected_project_config()
-        assert new_cfg["cxxstd"] == "cxxstd=20"
+        assert new_cfg["cxxstd"]["value"] == "20"
