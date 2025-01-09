@@ -269,7 +269,7 @@ def handle_variants(project_cfg, variants):
 
     dependency_requirements = project_cfg.get("dependencies", {})
     for name, requirements in dependency_variant_map.items():
-        only_variants = [r["variant"] for r in requirements]
+        only_variants = {key: value["variant"] for key, value in requirements.items()}
         dependency_requirements[name] = dict(require=ordered_requirement_list(only_variants))
 
     # Handle virtual dependencies
