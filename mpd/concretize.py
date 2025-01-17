@@ -15,6 +15,7 @@ import llnl.util.tty as tty
 
 import spack.builder as builder
 import spack.compilers
+import spack.config
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
 from spack import traverse
@@ -123,9 +124,9 @@ def cmake_lists(project_config, dependencies):
 
 def cmake_presets(project_config, dependencies, view_path):
     # Select compiler
-    desired_compiler = project_config["compiler"]["value"]
     compilers = []
-    if desired_compiler:
+    if desired_compiler := project_config.get("compiler"):
+        desired_compiler = desired_compiler["value"]
         compilers = spack.compilers.compilers_for_spec(desired_compiler)
         if not compilers:
             desired_compiler_variant = project_config["compiler"]["variant"]
@@ -133,6 +134,18 @@ def cmake_presets(project_config, dependencies, view_path):
 
         # Most recent version wins
         compilers.sort(key=lambda x: x.spec.version, reverse=True)
+
+    # If no compilers specified, find preferred one
+    if not compilers:
+        candidates = {c.name: c for c in spack.compilers.all_compilers()}
+        preferred_compilers = spack.config.get("packages:all:compiler", list())
+        for c in preferred_compilers:
+            if candidate := candidates.get(c):
+                compilers.append(candidate)
+                break
+
+    if not compilers:
+        tty.die("No default compiler available--you must specify the compiler (e.g. %gcc@x.y)")
 
     cxxstd = project_config["cxxstd"]["value"]
     view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
@@ -307,8 +320,7 @@ def concretize_project(project_config, yes_to_all):
     )
 
     # Include compiler as a definition in the environment specification.
-    compiler = project_config["compiler"]
-    if compiler:
+    if compiler := project_config.get("compiler"):
         found_compilers = spack.compilers.find(compiler["value"])
         if not found_compilers:
             indent = " " * len("==> Error: ")

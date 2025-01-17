@@ -150,9 +150,9 @@ def spack_packages(srcs_dir):
         spec = Spec(p)
         try:
             pkg_cls = PATH.get_pkg_class(spec.name)
+            packages_to_develop[p] = pkg_cls(spec)
         except UnknownPackageError:
             unknown_packages.append(p)
-        packages_to_develop[p] = pkg_cls(spec)
 
     if unknown_packages:
         print()
@@ -208,8 +208,7 @@ def handle_variants(project_cfg, variants):
         project_cfg["compiler"] = general_variant_map.pop("compiler")
     elif "compiler" not in project_cfg:
         tty.warn("No compiler spec specified in the variants list " +
-                 gray("(using environment default)"))
-        project_cfg["compiler"] = None
+                 gray("(will use environment default)"))
 
     # CXX standard
     if "cxxstd" in general_variant_map:
@@ -247,7 +246,7 @@ def handle_variants(project_cfg, variants):
 
         # Check to see if packages support a 'cxxstd' variant
         pkg_requirements["version"] = _DEVELOP_VARIANT["variant"]
-        if compiler := project_cfg["compiler"]:
+        if compiler := project_cfg.get("compiler"):
             pkg_requirements["compiler"] = compiler["variant"]
         maybe_has_variant = getattr(pkg, "has_variant", lambda _: False)
         if maybe_has_variant("cxxstd") or "cxxstd" in pkg.variants:
