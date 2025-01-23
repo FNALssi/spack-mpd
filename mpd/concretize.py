@@ -1,5 +1,4 @@
 import copy
-import functools
 import json
 import os
 import re
@@ -216,27 +215,60 @@ def remove_view(local_env_dir):
     shutil.rmtree(spack_env / "._view", ignore_errors=True)
 
 
+def no_dependents(packages):
+    no_incoming_edges = []
+    for pkg in packages.keys():
+        found = False
+        for deps in packages.values():
+            if pkg in deps:
+                found = True
+                break
+
+        if not found:
+            no_incoming_edges.append(pkg)
+    return no_incoming_edges
+
+
+def toposort_packages(packages):
+    # Stolen from https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
+    #
+    #   Kahn, Arthur B. (1962), "Topological sorting of large networks",
+    #     Communications of the ACM, 5 (11): 558–562
+
+    packages = copy.deepcopy(packages)
+
+    L = []  # Empty list that will contain the sorted elements
+    S = no_dependents(packages)  # Nodes with no incoming edges/dependents
+
+    num_candidates = len(S)
+    while num_candidates:
+        n = S.pop()
+        L.append(n)
+        children = packages.pop(n)
+        updated_no_incoming_edges = no_dependents(packages)
+        for child in children:
+            if child in updated_no_incoming_edges:
+                S.append(child)
+        num_candidates = len(S)
+
+    assert not packages  # Spack will not allow a cycle
+    return reversed(L)  # We want the lowest-level packages first
+
+
 def ordered_roots(env, package_requirements):
     packages = list(package_requirements.keys())
 
     # Build comparison table with parent < child represented as the pair (parent, child)
-    parent_child = []
+    parent_children = {}
     install_prefixes = {}
     for s in env.all_specs():
         if s.name not in package_requirements:
             continue
-        parent_child.extend((s.name, d.name) for d in s.traverse(order="topo", root=False)
-                            if d.name in packages)
+        parent_children[s.name] = [d.name for d in s.traverse(order="topo", root=False)
+                                   if d.name in packages]
         install_prefixes[s.name] = (s.name, s.dag_hash(), s.prefix)
 
-    def compare_parents(a, b):
-        if (a, b) in parent_child:
-            return -1
-        if (b, a) in parent_child:
-            return 1
-        return 0
-
-    sorted_packages = sorted(packages, key=functools.cmp_to_key(compare_parents), reverse=True)
+    sorted_packages = toposort_packages(parent_children)
     return [install_prefixes[p] for p in sorted_packages]
 
 

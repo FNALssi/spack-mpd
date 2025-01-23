@@ -487,6 +487,9 @@ def print_config_info(config):
                     print(f"    - {yellow(line)}")
             continue
         requirements = " ".join(variants["require"])
+        # Only the '@' sign can be directly next to the package name
+        if requirements and requirements[0] != "@":
+            requirements = " " + requirements
         print(f"    - {yellow(pkg)}{gray(requirements)}")
 
 
