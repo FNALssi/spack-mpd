@@ -21,6 +21,10 @@ and the status of their corresponding Spack environments."""
     lst.add_argument(
         "project", metavar="<project name>", nargs="*", help="print details of the MPD project"
     )
+    lst.add_argument("--raw",
+                     action="store_true",
+                     help="print YAML configuration of the MPD project\n"
+                          "(used only when project name is provided)")
     lst_path = lst.add_mutually_exclusive_group()
     lst_path.add_argument(
         "-t", "--top", metavar="<project name>", help="print top-level directory for project"
@@ -117,7 +121,7 @@ def project_path(project_name, path_kind):
     print(projects[project_name][path_kind])
 
 
-def project_details(project_names):
+def project_details(project_names, raw):
     cfg = config.mpd_config()
     if not cfg:
         _no_known_projects()
@@ -133,16 +137,21 @@ def project_details(project_names):
         if name not in projects:
             tty.warn(f"No existing MPD project named {bold(name)}")
             continue
+        preamble = f"Details for {bold(name)}"
+        if raw:
+            tty.msg(preamble + "\n\n" + syaml.dump_config(projects[name]))
+            continue
 
-        msg = f"Details for {bold(name)}\n\n" + syaml.dump_config(projects[name])
-        tty.msg(msg)
+        tty.msg(preamble)
+        config.print_config_info(projects[name])
+        print()
 
 
 def process(args):
     preconditions(State.INITIALIZED)
 
     if args.project:
-        project_details(args.project)
+        project_details(args.project, args.raw)
     elif args.top:
         project_path(args.top, "top")
     elif args.build:

@@ -481,17 +481,19 @@ def selected_project_config():
 
 
 def print_config_info(config):
-    print(f"\nUsing {cyan('build')} area: {config['build']}")
-    print(f"Using {cyan('local')} area: {config['local']}")
-    print(f"Using {cyan('sources')} area: {config['source']}\n")
+    print("\n  Project directories:")
+    print(f"    {cyan('top')}     {config['top']}")
+    print(f"    {cyan('build')}   {config['build']}")
+    print(f"    {cyan('local')}   {config['local']}")
+    print(f"    {cyan('sources')} {config['source']}\n")
     packages = config["packages"]
     if not packages:
         return
 
-    print("  Will develop:")
+    print("  Packages to develop:")
     for pkg, variants in packages.items():
         requirements = " ".join(variants["require"])
-        print(f"    - {magenta(pkg)}{gray(requirements)}")
+        print(f"    {magenta(pkg)}{gray(requirements)}")
 
     dependencies = config["dependencies"]
     if not dependencies:
@@ -504,13 +506,13 @@ def print_config_info(config):
             for virtual, concretes in variants["providers"].items():
                 for c in concretes:
                     line = f"^[virtuals={virtual}] {c}"
-                    print(f"    - {yellow(line)}")
+                    print(f"    {yellow(line)}")
             continue
         requirements = " ".join(variants["require"])
         # Only the '@' sign can be directly next to the package name
         if requirements and requirements[0] != "@":
             requirements = " " + requirements
-        print(f"    - {yellow(pkg)}{gray(requirements)}")
+        print(f"    {yellow(pkg)}{gray(requirements)}")
 
 
 def select(name):
