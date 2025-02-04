@@ -232,6 +232,26 @@ def handle_variants(project_cfg, variants):
     generator = project_cfg["generator"]
     packages = project_cfg.get("packages", {})
 
+    # Ensure that specified packages are actually cloned
+    not_cloned = []
+    for k, v in package_variant_map.items():
+        if k not in packages_to_develop:
+            not_cloned.append((k, v))
+
+    if not_cloned:
+        err_msg = "The following specifications correspond to packages that are not "
+        err_msg += "under development:\n"
+        for k, variants in not_cloned:
+            only_variants = {key: value["variant"] for key, value in variants.items()}
+            requirements = " ".join(ordered_requirement_list(only_variants))
+            # Only the '@' sign can be directly next to the package name
+            if requirements and requirements[0] != "@":
+                requirements = " " + requirements
+            err_msg += f"\n - {k}{requirements}"
+        err_msg += "\n\nThe packages should either be cloned, or if they are intended to be\n"
+        err_msg += "constaints, they should be prefaced with the caret (^)."
+        tty.die(err_msg)
+
     # We need to make sure that the packages cached in the configuration file still exist
     packages = {key: value for key, value in packages.items() if key in packages_to_develop}
 
