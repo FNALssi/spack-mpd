@@ -340,6 +340,13 @@ def concretize_project(project_config, yes_to_all):
         deep_update(package_requirements, penv_config.mlget(["spack", "packages"], {}))
 
     packages = project_config["packages"]
+
+    # Omit ignorable packages
+    ignored = project_config["ignored"]
+    for ignore in project_config["ignored"]:
+        if ignore in packages:
+            del packages[ignore]
+
     new_package_requirements = copy.deepcopy(packages)
     new_package_requirements.update(project_config["dependencies"])
     deep_update(package_requirements, new_package_requirements)

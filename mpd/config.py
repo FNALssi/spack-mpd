@@ -10,6 +10,7 @@ import llnl.util.tty as tty
 
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
+from spack.build_systems.cmake import CMakePackage
 
 try:
     from spack.spec_parser import SPLIT_KVP
@@ -255,7 +256,12 @@ def handle_variants(project_cfg, variants):
     # We need to make sure that the packages cached in the configuration file still exist
     packages = {key: value for key, value in packages.items() if key in packages_to_develop}
 
+    ignored_packages = []
     for p, pkg in packages_to_develop.items():
+        if not issubclass(type(pkg), CMakePackage):
+            ignored_packages.append(p)
+            continue
+
         # Start with existing requirements
         existing_pkg_requirements = packages.get(p, {}).get("require", [])
         existing_pkg_requirements_str = " ".join(existing_pkg_requirements)
@@ -296,6 +302,7 @@ def handle_variants(project_cfg, variants):
         dependency_requirements["all"] = dict(providers=virtual_dependencies)
 
     project_cfg["packages"] = packages
+    project_cfg["ignored"] = ignored_packages
     project_cfg["dependencies"] = dependency_requirements
     return project_cfg
 
@@ -490,10 +497,21 @@ def print_config_info(config):
     if not packages:
         return
 
-    print("  Packages to develop:")
+    ignored_packages = config["ignored"]
+    all_packages = {}
+    for ip in ignored_packages:
+        all_packages[ip] = f"*{gray(ip)}"
+
     for pkg, variants in packages.items():
         requirements = " ".join(variants["require"])
-        print(f"    {magenta(pkg)}{gray(requirements)}")
+        all_packages[pkg] = f" {magenta(pkg)}{gray(requirements)}"
+
+    print("  Packages to develop:")
+    for _, msg_for_pkg in sorted(all_packages.items()):
+        print(f"   {msg_for_pkg}")
+
+    if len(ignored_packages):
+        print("\n    *" + gray("ignored: repository not registered as a CMake package with Spack"))
 
     dependencies = config["dependencies"]
     if not dependencies:

@@ -285,7 +285,6 @@ _supported_suites = [
             "larcoreobj",
             "lardataalg",
             "lardataobj",
-            "larsoftobj",
             "larvecutils",
         ],
     ),
