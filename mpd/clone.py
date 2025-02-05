@@ -340,6 +340,7 @@ _supported_suites = [
     ),
     Suite(
         "uboone",
+        gh_org_name="uboone",
         repos=[
             "ubana",
             "ubcore",
