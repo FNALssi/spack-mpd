@@ -141,17 +141,6 @@ class GitHubRepo:
         return f"https://github.com/{self._org}/{self._repo}.git"
 
 
-class RedmineRepo:
-    def __init__(self, repo):
-        self._repo = repo
-
-    def name(self):
-        return self._repo
-
-    def url(self):
-        return f"https://cdcvs.fnal.gov/projects/{self._repo}"
-
-
 class SimpleGitRepo:
     def __init__(self, url):
         path = urllib.parse.urlparse(url).path
@@ -177,15 +166,11 @@ class Suite:
     def __init__(self, name, gh_org_name=None, repos=[]):
         self.name = name
         self.org_name = gh_org_name
-        self.org = GitHubOrg(self.org_name) if gh_org_name else None
+        self.org = GitHubOrg(self.org_name)
         self.repos = repos
 
     def repositories(self):
-        if self.org:
-            return {p: self.org.repo(p) for p in self.repos}
-        else:
-            # If not GitHub, it's redmine
-            return {p: RedmineRepo(p) for p in self.repos}
+        return {p: self.org.repo(p) for p in self.repos}
 
 
 # N.B. Listing of repositories is done in alphabetical order.
