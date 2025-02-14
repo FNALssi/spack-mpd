@@ -19,8 +19,10 @@ def mpd(*args):
 
 
 @contextlib.contextmanager
-def new_project(name, top=None, srcs=None, cwd=None):
-    arguments = ["--name", name]
+def new_project(name=None, top=None, srcs=None, cwd=None):
+    arguments = []
+    if name:
+        arguments += ["--name", name]
     if top:
         arguments += ["-T", str(top)]
     if srcs:
@@ -32,16 +34,33 @@ def new_project(name, top=None, srcs=None, cwd=None):
 
     with cm:
         old_project = config.selected_project()
+        new_project_name = None
         try:
             yield mpd("new-project", *arguments)
+            new_project_name = config.selected_project_config()["name"]
         finally:
-            mpd("rm-project", "--force", name)
+            if name:
+                mpd("rm-project", "--force", new_project_name)
             if old_project:
                 mpd("select", old_project)
 
 
+def test_new_project_all_defaults(with_mpd_init, tmp_path):
+    # Specify nothing
+    cwd_z = tmp_path / "z"
+    mpd("ls")
+    with new_project(cwd=cwd_z) as out:
+        print(out)
+        assert "Creating project: z" in out
+        assert f"top     {cwd_z}" in out
+        assert f"build   {cwd_z}/build" in out
+        assert f"local   {cwd_z}/local" in out
+        assert f"sources {cwd_z}/srcs" in out
+        assert "z" == config.selected_project()
+
+
 def test_new_project_all_default_paths(with_mpd_init, tmp_path):
-    # Specify neither -T or -S
+    # Specify only --name
     cwd_a = tmp_path / "a"
     mpd("ls")
     with new_project(name="a", cwd=cwd_a) as out:
@@ -58,7 +77,7 @@ def test_new_project_all_default_paths(with_mpd_init, tmp_path):
 
 
 def test_new_project_only_top_path(with_mpd_init, tmp_path):
-    # Specify only -T
+    # Specify --name and -T
     mpd("ls")
     top_level_b = tmp_path / "b"
     with new_project(name="b", top=top_level_b) as out:
@@ -70,7 +89,7 @@ def test_new_project_only_top_path(with_mpd_init, tmp_path):
 
 
 def test_new_project_only_srcs_path(with_mpd_init, tmp_path):
-    # Specify only -S
+    # Specify --name and -S
     cwd_c = tmp_path / "c"
     srcs_c = tmp_path / "c_srcs"
     with new_project(name="c", srcs=srcs_c, cwd=cwd_c) as out:
@@ -81,7 +100,7 @@ def test_new_project_only_srcs_path(with_mpd_init, tmp_path):
 
 
 def test_new_project_no_default_paths(with_mpd_init, tmp_path):
-    # Specify both -T and -S
+    # Specify --name, -T and -S
     top_level_d = tmp_path / "d"
     srcs_d = tmp_path / "d_srcs"
     with new_project(name="d", top=top_level_d, srcs=srcs_d) as out:

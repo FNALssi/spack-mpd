@@ -20,7 +20,7 @@ def setup_subparser(subparsers):
         aliases=ALIASES,
         help="create MPD development area",
     )
-    new_project.add_argument("--name", required=True, help="(required)")
+    new_project.add_argument("--name", help="(required if --top not specified)")
     new_project.add_argument(
         "-T",
         "--top",
@@ -54,8 +54,8 @@ def process(args):
 
     print()
 
-    name = args.name
     project_config = project_config_from_args(args)
+    name = project_config["name"]
     if mpd_project_exists(name):
         if args.force:
             tty.info(f"Overwriting existing MPD project {bold(name)}")
@@ -75,7 +75,7 @@ def process(args):
         tty.msg(f"Creating project: {bold(name)}")
 
     print_config_info(project_config)
-    select(project_config["name"])
+    select(name)
 
     if len(project_config["packages"]):
         concretize_project(project_config, args.yes_to_all)
@@ -83,6 +83,6 @@ def process(args):
         update(project_config, status="ready")
         tty.msg(
             "You can clone repositories for development by invoking\n\n"
-            "  spack mpd git-clone --suite <suite name>\n\n"
+            f"  {gray('>')} spack mpd git-clone --suites <suite name>\n\n"
             "  (or type 'spack mpd git-clone --help' for more options)\n"
         )

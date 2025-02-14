@@ -209,7 +209,7 @@ def handle_variants(project_cfg, variants):
         project_cfg["compiler"] = general_variant_map.pop("compiler")
     elif "compiler" not in project_cfg:
         tty.warn("No compiler spec specified in the variants list " +
-                 gray("(will use environment default)"))
+                 gray("(will use default)"))
 
     # CXX standard
     if "cxxstd" in general_variant_map:
@@ -309,10 +309,10 @@ def handle_variants(project_cfg, variants):
 
 def project_config_from_args(args):
     project = ruamel.yaml.comments.CommentedMap()
-    project["name"] = args.name
+    top_path = Path(args.top)
+    project["name"] = args.name if args.name else top_path.name
     project["envs"] = args.env
 
-    top_path = Path(args.top)
     srcs_path = Path(args.srcs) if args.srcs else top_path / "srcs"
 
     directories = prepare_project_directories(top_path, srcs_path)

@@ -8,7 +8,7 @@ from . import config
 from .concretize import concretize_project
 from .config import print_config_info, selected_project_config
 from .preconditions import State, preconditions
-from .util import bold
+from .util import bold, gray
 
 SUBCOMMAND = "refresh"
 
@@ -40,7 +40,7 @@ def refresh_project(name, project_config, yes_to_all):
     if not project_config["packages"]:
         tty.msg(
             "No packages to develop.  You can clone repositories for development by invoking\n\n"
-            "  spack mpd git-clone --suite <suite name>\n\n"
+            f"  {gray('>')} spack mpd git-clone --suites <suite name>\n\n"
             "  (or type 'spack mpd git-clone --help' for more options)\n"
         )
         return
