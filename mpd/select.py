@@ -78,9 +78,12 @@ def process(args):
 
     # Top-level directory specified - find the corresponding projects
     if not project and args.directory:
+        absolute_dir = Path(args.directory).absolute()
         for pname, pconfig in projects.items():
-            if str(Path(args.directory).absolute()) == pconfig.get("top"):
+            if str(absolute_dir) == pconfig.get("top"):
                 project = pname
+        if project is None:
+            tty.die(f"Could not select project with top-level directory {absolute_dir}")
 
     # Project name specified
     if not project and args.project:
