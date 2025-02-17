@@ -342,7 +342,6 @@ def concretize_project(project_config, yes_to_all):
     packages = project_config["packages"]
 
     # Omit ignorable packages
-    ignored = project_config["ignored"]
     for ignore in project_config["ignored"]:
         if ignore in packages:
             del packages[ignore]
@@ -355,10 +354,12 @@ def concretize_project(project_config, yes_to_all):
     tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
 
     reuse_block = {"from": [{"type": "local"}, {"type": "external"}]}
+    view_dict = {"default": dict(root=".spack-env/view", exclude=['gcc-runtime'])}
     full_block = dict(
         include_concrete=[penv.path for penv in proto_envs],
         specs=list(packages.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
+        view=view_dict,
         packages=package_requirements,
     )
 
