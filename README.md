@@ -31,7 +31,8 @@ developers.
 3. Each package to be developed must have:
    1.  An accessible [Spack recipe](https://spack.readthedocs.io/en/latest/packaging_guide.html).  To verify this, you should see the package listed when typing `spack list <package name>`.
    2.  A `develop` version (assumes an accessible Spack recipe).  To verify this, you should see `develop` listed as a supported version when typing `spack info <package name>`.
-4. Developers of SciSoft-provided software (`art`, `larreco`, `nusimdata`, etc.) should make sure they clone the Fermilab-managed Spack recipes; the bootstrap script, above does this for you, but 
+4. Developers of SciSoft-provided software (`art`, `larreco`, `nusimdata`, etc.) should make sure they clone the Fermilab-managed Spack recipes. 
+ The bootstrap script, above does this for you, but if you just cloned it, you need to:
     ```console
     $ cd <some dir>
     $ git clone https://github.com/FNALssi/fnal_art.git
