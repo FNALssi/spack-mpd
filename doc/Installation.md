@@ -1,5 +1,7 @@
 # Installing MPD
 
+   Note: if you installed Spack with the `bootstrap` script from `fermi-spack-tools`, this will already have been done for you.
+
 1. Clone the [`spack-mpd` repository](https://github.com/knoepfel/spack-mpd).
 2. Invoke `spack config edit config` and add the following to your configuration:
     ```yaml
