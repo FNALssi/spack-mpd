@@ -16,15 +16,21 @@ developers.
 ## Prerequisites
 
 1. You must be able to write to the Spack installation that you set up.
-   1. For developers of packages that depend on SciSoft software, you
-      should clone the Fermilab fork of Spack `git clone
-      https://github.com/FNALssi/spack.git`.
+   1. For developers of packages that depend on SciSoft software, we
+      recommend you clone the Fermilab fork of Spack using our bootstrap script:
+      
+      ```console
+      wget https://github.com/FNALssi/fermi-spack-tools/raw/refs/heads/fnal-develop/bin/bootstrap
+      bash bootstrap $PWD/spack```
+
+     or you can directly git clone it: `git clone https://github.com/FNALssi/spack.git`, and add repositories per item 4., below.
+
    2. _You are encouraged to [chain upstream Spack installations](https://spack.readthedocs.io/en/latest/chain.html) to your own installation to avoid unnecessary building, installation, and wasted disk space._
 2. Invoke `source <your spack installation>/share/spack/setup-env.sh`.
 3. Each package to be developed must have:
    1.  An accessible [Spack recipe](https://spack.readthedocs.io/en/latest/packaging_guide.html).  To verify this, you should see the package listed when typing `spack list <package name>`.
    2.  A `develop` version (assumes an accessible Spack recipe).  To verify this, you should see `develop` listed as a supported version when typing `spack info <package name>`.
-4. Developers of SciSoft-provided software (`art`, `larreco`, `nusimdata`, etc.) should make sure they clone the Fermilab-managed Spack recipes:
+4. Developers of SciSoft-provided software (`art`, `larreco`, `nusimdata`, etc.) should make sure they clone the Fermilab-managed Spack recipes; the bootstrap script, above does this for you, but 
     ```console
     $ cd <some dir>
     $ git clone https://github.com/FNALssi/fnal_art.git
