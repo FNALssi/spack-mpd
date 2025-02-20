@@ -21,7 +21,8 @@ developers.
       
       ```console
       wget https://github.com/FNALssi/fermi-spack-tools/raw/refs/heads/fnal-develop/bin/bootstrap
-      bash bootstrap $PWD/spack```
+      bash bootstrap $PWD/spack
+      ```
 
      or you can directly git clone it: `git clone https://github.com/FNALssi/spack.git`, and add repositories per item 4., below.
 
