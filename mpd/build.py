@@ -51,6 +51,7 @@ def configure_cmake_project(project_config):
         "cmake",
         "--preset",
         "default",
+        "-Wno-dev",
         project_config["source"],
         "-B",
         project_config["build"],
