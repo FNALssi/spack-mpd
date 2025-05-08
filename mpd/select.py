@@ -66,10 +66,11 @@ def process(args):
     if not projects:
         tty.error(f"No existing MPD projects--cannot select {args.project}.")
 
-    project = None
+    directory = args.directory
+    project = args.project
     # If no arguments are provided, then either select the project automatically, or go
     # through the project menu.
-    if args.directory is None and args.project is None:
+    if not directory and not project:
         if len(projects) == 1:
             # Automatically select the project if there is only one
             project = list(projects.keys())[0]
@@ -77,8 +78,8 @@ def process(args):
             project = select_from_prompt(projects)
 
     # Top-level directory specified - find the corresponding projects
-    if not project and args.directory:
-        absolute_dir = Path(args.directory).absolute()
+    if directory and not project:
+        absolute_dir = Path(directory).resolve()
         for pname, pconfig in projects.items():
             if str(absolute_dir) == pconfig.get("top"):
                 project = pname
@@ -86,12 +87,9 @@ def process(args):
             tty.die(f"Could not select project with top-level directory {absolute_dir}")
 
     # Project name specified
-    if not project and args.project:
-        project = args.project
-        if project not in projects:
-            project = select_from_prompt(
-                projects,
-                error_msg=f"{cyan(project)} is not an existing MPD project")
+    if project not in projects:
+        project = select_from_prompt(projects,
+                                     error_msg=f"{cyan(project)} is not an existing MPD project")
 
     if project == config.selected_project():
         tty.info(f"Project {cyan(project)} already selected")
