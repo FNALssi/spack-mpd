@@ -39,7 +39,7 @@ def new_project(name=None, top=None, srcs=None, cwd=None):
             yield mpd("new-project", *arguments)
             new_project_name = config.selected_project_config()["name"]
         finally:
-            if name:
+            if new_project_name:
                 mpd("rm-project", "--force", new_project_name)
             if old_project:
                 mpd("select", old_project)
@@ -50,7 +50,6 @@ def test_new_project_all_defaults(with_mpd_init, tmp_path):
     cwd_z = tmp_path / "z"
     mpd("ls")
     with new_project(cwd=cwd_z) as out:
-        print(out)
         assert "Creating project: z" in out
         assert f"top     {cwd_z}" in out
         assert f"build   {cwd_z}/build" in out
@@ -64,7 +63,6 @@ def test_new_project_all_default_paths(with_mpd_init, tmp_path):
     cwd_a = tmp_path / "a"
     mpd("ls")
     with new_project(name="a", cwd=cwd_a) as out:
-        print(out)
         assert f"top     {cwd_a}" in out
         assert f"build   {cwd_a}/build" in out
         assert f"local   {cwd_a}/local" in out
