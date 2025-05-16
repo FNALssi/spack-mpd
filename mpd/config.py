@@ -108,12 +108,21 @@ def prepare_project_directories(top_path, srcs_path):
 def ordered_requirement_list(requirements):
     # Assemble things in the right order
     requirement_list = []
-    for variant_name in ("version", "compiler"):
-        if variant := requirements.pop(variant_name, None):
-            requirement_list.append(YamlQuote(variant))
 
-    # We don't care about the order of the remaining variants
+    version = requirements.pop("version", None)
+    compiler = requirements.pop("compiler", None)
+
+    # Version goes first
+    if version:
+        requirement_list.append(YamlQuote(version))
+
+    # We don't care about the order of the remaining variants...
     requirement_list += [YamlQuote(r) for r in requirements.values()]
+
+    # ... except the compiler must go last
+    if compiler:
+        requirement_list.append(YamlQuote(compiler))
+
     return requirement_list
 
 
@@ -311,7 +320,7 @@ def project_config_from_args(args):
     project = ruamel.yaml.comments.CommentedMap()
     top_path = Path(args.top)
     project["name"] = args.name if args.name else top_path.name
-    project["envs"] = args.env
+    project["env"] = args.env
 
     srcs_path = Path(args.srcs) if args.srcs else top_path / "srcs"
 

@@ -39,9 +39,7 @@ def setup_subparser(subparsers):
     new_project.add_argument(
         "-E",
         "--env",
-        default=[],
-        help="environments from which to create project\n(multiple allowed)",
-        action="append",
+        help="environment from which to create project\n(multiple allowed)",
     )
     new_project.add_argument(
         "-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts"

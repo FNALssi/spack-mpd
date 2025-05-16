@@ -13,6 +13,7 @@ from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 import llnl.util.tty as tty
 
 import spack.builder as builder
+import spack.cmd
 import spack.compilers
 import spack.config
 import spack.environment as ev
@@ -128,19 +129,21 @@ def cmake_lists(project_config, dependencies):
 def cmake_presets(project_config, dependencies, view_path):
     # Select compiler
     compilers = []
+    all_compilers = spack.compilers.config.all_compilers()
     if desired_compiler := project_config.get("compiler"):
         desired_compiler = desired_compiler["value"]
-        compilers = spack.compilers.compilers_for_spec(desired_compiler)
+        compilers = [c for c in all_compilers if c.satisfies(desired_compiler)]
+
         if not compilers:
             desired_compiler_variant = project_config["compiler"]["variant"]
             tty.die(f"No compiler found that corresponds to '{desired_compiler_variant}'")
 
         # Most recent version wins
-        compilers.sort(key=lambda x: x.spec.version, reverse=True)
+        compilers.sort(key=lambda spec: spec.version, reverse=True)
 
     # If no compilers specified, find preferred one
     if not compilers:
-        candidates = {c.name: c for c in spack.compilers.all_compilers()}
+        candidates = {c.name: c for c in all_compilers}
         preferred_compilers = spack.config.get("packages:all:compiler", list())
         for c in preferred_compilers:
             if candidate := candidates.get(c):
@@ -153,10 +156,11 @@ def cmake_presets(project_config, dependencies, view_path):
     cxxstd = project_config["cxxstd"]["value"]
     view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
 
+    compiler_paths = compilers[0].extra_attributes["compilers"]
     allCacheVariables = {
         "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
-        "CMAKE_C_COMPILER": {"type": "PATH", "value": compilers[0].cc},
-        "CMAKE_CXX_COMPILER": {"type": "PATH", "value": compilers[0].cxx},
+        "CMAKE_C_COMPILER": {"type": "PATH", "value": compiler_paths["c"]},
+        "CMAKE_CXX_COMPILER": {"type": "PATH", "value": compiler_paths["cxx"]},
         "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
         "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
         "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxxstd},
@@ -314,31 +318,7 @@ def absent_dependencies(env, packages) -> list:
     return sorted(set(absent))
 
 
-# Stolen shamelessly from https://stackoverflow.com/a/60321833/3585575
-def deep_update(original, update):
-    """Recursively update a dict.
-
-    Subdict's won't be overwritten but also updated.
-    """
-    if not isinstance(original, abc.Mapping):
-        return update
-    for key, value in update.items():
-        if isinstance(value, abc.Mapping):
-            original[key] = deep_update(original.get(key, {}), value)
-        else:
-            original[key] = value
-    return original
-
-
 def concretize_project(project_config, yes_to_all):
-    proto_envs = [find_environment(e) for e in project_config["envs"]]
-    package_requirements = {}
-    for penv in proto_envs:
-        penv_config = {}
-        with open(penv.manifest_path, "r") as f:
-            penv_config = syaml.load(f)
-        deep_update(package_requirements, penv_config.mlget(["spack", "packages"], {}))
-
     packages = project_config["packages"]
 
     # Omit ignorable packages
@@ -346,17 +326,18 @@ def concretize_project(project_config, yes_to_all):
         if ignore in packages:
             del packages[ignore]
 
-    new_package_requirements = copy.deepcopy(packages)
-    new_package_requirements.update(project_config["dependencies"])
-    deep_update(package_requirements, new_package_requirements)
+    package_requirements = copy.deepcopy(packages)
+    package_requirements.update(project_config["dependencies"])
 
     print()
     tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
 
-    reuse_block = {"from": [{"type": "local"}, {"type": "external"}]}
+    from_items = [{"type": "local"}, {"type": "external"}]
+    if proto_env := project_config["env"]:
+        from_items += [{"type": "environment", "path": find_environment(proto_env).path}]
+    reuse_block = {"from": from_items}
     view_dict = {"default": dict(root=".spack-env/view", exclude=['gcc-runtime'])}
     full_block = dict(
-        include_concrete=[penv.path for penv in proto_envs],
         specs=list(packages.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
         view=view_dict,
@@ -365,7 +346,7 @@ def concretize_project(project_config, yes_to_all):
 
     # Include compiler as a definition in the environment specification.
     if compiler := project_config.get("compiler"):
-        found_compilers = spack.compilers.find(compiler["value"])
+        found_compilers = spack.cmd.parse_specs(compiler["value"])
         if not found_compilers:
             indent = " " * len("==> Error: ")
             print()
