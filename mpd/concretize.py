@@ -30,15 +30,6 @@ ALIASES = ["n"]
 CMAKE_CACHE_VARIABLE_PATTERN = re.compile(r"-D(.*):(.*)=(.*)")
 
 
-def find_environment(env_str):
-    # Patterned off of the behavior in spack.cmd.find_environment
-    if ev.exists(env_str):
-        return ev.read(env_str)
-    if ev.is_env_dir(env_str):
-        return ev.Environment(env_str)
-    tty.die(f"{env_str} does not correspond to an environment.")
-
-
 def cmake_package_variables(name, cmake_args):
     if not cmake_args:
         return ""
@@ -334,7 +325,7 @@ def concretize_project(project_config, yes_to_all):
 
     from_items = [{"type": "local"}, {"type": "external"}]
     if proto_env := project_config["env"]:
-        from_items += [{"type": "environment", "path": find_environment(proto_env).path}]
+        from_items += [{"type": "environment", "path": proto_env}]
     reuse_block = {"from": from_items}
     view_dict = {"default": dict(root=".spack-env/view", exclude=['gcc-runtime'])}
     full_block = dict(
