@@ -336,6 +336,7 @@ def concretize_project(project_config, yes_to_all):
     )
 
     # Include compiler as a definition in the environment specification.
+    first_order_deps = {"cmake"}
     if compiler := project_config.get("compiler"):
         found_compilers = spack.cmd.parse_specs(compiler["value"])
         if not found_compilers:
@@ -345,7 +346,7 @@ def concretize_project(project_config, yes_to_all):
                     f"{indent}See {cyan('spack compiler list')} for available compilers.\n"
                     f"{indent}Also see {cyan('spack compiler add --help')}.\n")
         compiler_str = [YamlQuote(found_compilers[0])]
-        full_block.update(definitions=[dict(compiler=compiler_str)])
+        first_order_deps.add(compiler_str[0])
 
     local_env_dir = project_config["local"]
     name = project_config["name"]
@@ -395,7 +396,6 @@ def concretize_project(project_config, yes_to_all):
     # Now add the first-order dependencies
     env = ev.Environment(local_env_dir)
     developed_specs = [s for _, s in env.concretized_specs() if s.name in packages]
-    first_order_deps = {"cmake"}
     for s in developed_specs:
         for depth, dep in traverse.traverse_nodes([s], depth=True):
             if depth != 1:
@@ -414,9 +414,6 @@ def concretize_project(project_config, yes_to_all):
 
     tty.info(gray("Finalizing concretization"))
     remove_view(local_env_dir)
-    with env, env.write_transaction():
-        env.concretize()
-        env.write()
 
     # Lastly, remove the developed packages from the environment
     subprocess.run(["spack", "-e", local_env_dir, "rm"] + list(packages.keys()),
