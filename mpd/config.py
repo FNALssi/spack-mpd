@@ -31,7 +31,7 @@ from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
 
 from . import init
-from .util import cyan, gray, magenta, spack_cmd_line, yellow
+from .util import cyan, gray, green, magenta, spack_cmd_line, yellow
 
 
 def _variant_pair(value, variant):
@@ -521,6 +521,9 @@ def print_config_info(config):
 
     if len(ignored_packages):
         print("\n    *" + gray("ignored: repository not registered as a CMake package with Spack"))
+
+    if env := config["env"]:
+        print(f"\n  Reusing dependencies from environment:\n    {green(env)}")
 
     dependencies = config["dependencies"]
     if not dependencies:
