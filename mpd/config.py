@@ -55,6 +55,11 @@ def _process_exists(pid):
     return True
 
 
+def _depends_on_ccxx(pkg):
+    print(pkg, pkg.dependency_names())
+    return "c" in pkg.dependency_names() or "cxx" in pkg.dependency_names()
+
+
 def mpd_config_dir():
     return init.mpd_config_dir()
 
@@ -281,11 +286,12 @@ def handle_variants(project_cfg, variants):
 
         # Check to see if packages support a 'cxxstd' variant
         pkg_requirements["version"] = _DEVELOP_VARIANT["variant"]
-        if compiler := project_cfg.get("compiler"):
+        compiler = project_cfg.get("compiler")
+        if _depends_on_ccxx(pkg) and compiler:
             pkg_requirements["compiler"] = compiler["variant"]
-        maybe_has_variant = getattr(pkg, "has_variant", lambda _: False)
-        if maybe_has_variant("cxxstd") or "cxxstd" in pkg.variants:
-            pkg_requirements["cxxstd"] = cxxstd["variant"]
+            maybe_has_variant = getattr(pkg, "has_variant", lambda _: False)
+            if maybe_has_variant("cxxstd") or "cxxstd" in pkg.variants:
+                pkg_requirements["cxxstd"] = cxxstd["variant"]
         if maybe_has_variant("generator") or "generator" in pkg.variants:
             pkg_requirements["generator"] = generator["variant"]
 
