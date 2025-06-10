@@ -30,6 +30,10 @@ ALIASES = ["n"]
 CMAKE_CACHE_VARIABLE_PATTERN = re.compile(r"-D(.*):(.*)=(.*)")
 
 
+def preset_from_product_deps(preset):
+    return preset["name"] == "from_product_deps"
+
+
 def cmake_package_variables(name, cmake_args):
     if not cmake_args:
         return ""
@@ -174,10 +178,10 @@ def cmake_presets(project_config, dependencies, view_path):
 
         with open(pkg_presets_file, "r") as f:
             pkg_presets = json.load(f)
-            pkg_config_presets = pkg_presets[configurePresets]
-            default_presets = next(
-                filter(lambda s: s["name"] == "from_product_deps", pkg_config_presets)
-            )
+            default_presets = pkg_presets[configurePresets]
+            if any(preset_from_product_deps(s) for s in default_presets):
+                default_presets = next(filter(preset_from_product_deps, default_presets))
+
             for key, value in default_presets[cacheVariables].items():
                 if key.startswith(dep_name):
                     allCacheVariables[key] = value
