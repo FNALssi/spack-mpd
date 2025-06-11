@@ -118,22 +118,44 @@ endmacro()
         )
 
 
-def cmake_lists_preamble(project_name):
+def cmake_lists_preamble(project_name, develop_cetmodules=False):
     date = time.strftime("%Y-%m-%d")
-    return f"""cmake_minimum_required(VERSION 3.18.2 FATAL_ERROR)
+    preamble = """cmake_minimum_required(VERSION 3.31 FATAL_ERROR)
 enable_testing()
+include(develop)
 
+"""
+    if develop_cetmodules:
+        preamble += "develop(cetmodules)\n\n"
+
+    preamble += f"""include(FetchContent)
+FetchContent_Declare(
+  cetmodules
+  GIT_REPOSITORY https://github.com/FNALssi/cetmodules
+  GIT_TAG v4-branch
+  # GIT_TAG fd6ebf45
+  FIND_PACKAGE_ARGS 3.99.00
+  )
+
+FetchContent_MakeAvailable(cetmodules)
 project({project_name}-{date} LANGUAGES NONE)
 
-include(develop.cmake)
 """
+    return preamble
 
 
 def cmake_lists(project_config, dependencies):
     source_path = Path(project_config["source"])
     with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
-        f.write(cmake_lists_preamble(project_config["name"]))
+        f.write(
+            cmake_lists_preamble(
+                project_config["name"],
+                develop_cetmodules=any("cetmodules" in p for p in [d[0] for d in dependencies]),
+            )
+        )
         for d, hash, prefix in dependencies:
+            if d == "cetmodules":
+                continue
             f.write(f"\ndevelop({d})")
         f.write("\n")
 
