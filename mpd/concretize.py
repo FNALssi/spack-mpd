@@ -37,6 +37,10 @@ def preset_from_product_deps(preset):
     return preset["name"] == "from_product_deps"
 
 
+def preset_from_product_deps(preset):
+    return preset["name"] == "default"
+
+
 def cmake_package_variables(name, cmake_args):
     if not cmake_args:
         return ""
@@ -166,18 +170,25 @@ def cmake_presets(project_config, dependencies, view_path):
 
     compiler_paths = compilers[0].extra_attributes["compilers"]
     allCacheVariables = {
-        "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
-        "CMAKE_C_COMPILER": {"type": "PATH", "value": compiler_paths["c"]},
-        "CMAKE_CXX_COMPILER": {"type": "PATH", "value": compiler_paths["cxx"]},
-        "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
-        "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
-        "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxxstd},
-        "CMAKE_INSTALL_RPATH_USE_LINK_PATH": {"type": "BOOL", "value": "ON"},
-        "CMAKE_INSTALL_RPATH": {"type": "STRING", "value": ";".join(view_lib_dirs)},
+        "configurePresets": {
+            "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
+            "CMAKE_C_COMPILER": {"type": "PATH", "value": compiler_paths["c"]},
+            "CMAKE_CXX_COMPILER": {"type": "PATH", "value": compiler_paths["cxx"]},
+            "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
+            "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
+            "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxxstd},
+            "CMAKE_INSTALL_RPATH_USE_LINK_PATH": {"type": "BOOL", "value": "ON"},
+            "CMAKE_INSTALL_RPATH": {"type": "STRING", "value": ";".join(view_lib_dirs)},
+            "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "CetProvideDependency",
+        }
     }
 
     source_path = Path(project_config["source"])
-    configurePresets, cacheVariables = "configurePresets", "cacheVariables"
+    preset_types = [
+        f"{item}Presets" for item in ("configure", "build", "test", "package", "workflow")
+    ]
+    cache_key = "cacheVariables"
+    max_presets_version = 3
 
     # Pull project-specific presets from each dependency.
     for dep_name, dep_hash, dep_prefix in dependencies:
@@ -190,25 +201,34 @@ def cmake_presets(project_config, dependencies, view_path):
 
         with open(pkg_presets_file, "r") as f:
             pkg_presets = json.load(f)
-            default_presets = pkg_presets[configurePresets]
-            if any(preset_from_product_deps(s) for s in default_presets):
-                default_presets = next(filter(preset_from_product_deps, default_presets))
+            input_presets_version = pkg_presets["version"]
+            if input_presets_version > max_presets_version:
+                max_presets_version = input_presets_version
+            for preset_type in [s for s in preset_types if s in pkg_presets]:
+                presets = pkg_presets[preset_type]
+                preset = next(filter(preset_from_product_deps, presets)) or next(
+                    filter(preset_default, presets)
+                )
+                if cache_key not in preset:
+                    continue
+                for key, value in preset[cache_key].items():
+                    if key.startswith(dep_name):
+                        allCacheVariables[preset_type][key] = value
 
-            for key, value in default_presets[cacheVariables].items():
-                if key.startswith(dep_name):
-                    allCacheVariables[key] = value
-
-    presets = {
-        configurePresets: [
+    presets = {"version": max_presets_version}
+    for preset_type in [s for s in preset_types if s in allCacheVariables]:
+        presets.update(
             {
-                cacheVariables: allCacheVariables,
-                "description": "Configuration settings as created by 'spack mpd new-project'",
-                "displayName": "Configuration from mpd new-project",
-                "name": "default",
+                preset_type: [
+                    {
+                        cache_key: allCacheVariables[preset_type],
+                        "description": "settings as created by 'spack mpd new-project'",
+                        "displayName": "settings from mpd new-project",
+                        "name": "default",
+                    }
+                ]
             }
-        ],
-        "version": 3,
-    }
+        )
 
     with open((source_path / "CMakePresets.json").absolute(), "w") as f:
         json.dump(presets, f, indent=4)
