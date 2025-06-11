@@ -17,6 +17,7 @@ except ImportError:
 import spack.builder as builder
 import spack.cmd
 import spack.compilers
+import spack.compilers.config
 import spack.config
 import spack.environment as ev
 import spack.llnl.util.tty as tty
