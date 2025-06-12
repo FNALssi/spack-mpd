@@ -33,12 +33,11 @@ ALIASES = ["n"]
 CMAKE_CACHE_VARIABLE_PATTERN = re.compile(r"-D(.*):(.*)=(.*)")
 
 
-def preset_from_product_deps(preset):
-    return preset["name"] == "from_product_deps"
+def preset_is(name: str):
+    def preset_predicate(preset: dict):
+        return preset["name"] == name
 
-
-def preset_from_product_deps(preset):
-    return preset["name"] == "default"
+    return preset_predicate
 
 
 def cmake_package_variables(name, cmake_args):
@@ -146,12 +145,10 @@ project({project_name}-{date} LANGUAGES NONE)
 
 def cmake_lists(project_config, dependencies):
     source_path = Path(project_config["source"])
+    develop_cetmodules = any("cetmodules" in p for p in [d[0] for d in dependencies])
     with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
         f.write(
-            cmake_lists_preamble(
-                project_config["name"],
-                develop_cetmodules=any("cetmodules" in p for p in [d[0] for d in dependencies]),
-            )
+            cmake_lists_preamble(project_config["name"], develop_cetmodules=develop_cetmodules)
         )
         for d, hash, prefix in dependencies:
             if d == "cetmodules":
@@ -228,10 +225,11 @@ def cmake_presets(project_config, dependencies, view_path):
                 max_presets_version = input_presets_version
             for preset_type in [s for s in preset_types if s in pkg_presets]:
                 presets = pkg_presets[preset_type]
-                preset = next(filter(preset_from_product_deps, presets)) or next(
-                    filter(preset_default, presets)
+                preset = next(
+                    filter(preset_is("from_product_deps"), presets),
+                    next(filter(preset_is("default"), presets), None),
                 )
-                if cache_key not in preset:
+                if not (preset and cache_key in preset):
                     continue
                 for key, value in preset[cache_key].items():
                     if key.startswith(dep_name):
