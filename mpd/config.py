@@ -3,14 +3,12 @@ import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-import ruamel
-from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
+import _vendoring.ruamel
+from _vendoring.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import llnl.util.tty as tty
-
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
-from spack.build_systems.cmake import CMakePackage
 
 try:
     from spack.spec_parser import SPLIT_KVP
@@ -29,6 +27,8 @@ except ImportError:
 
 from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
+PATH.repos
+from spack_repo.builtin.build_systems.cmake import CMakePackage
 
 from . import init
 from .util import cyan, gray, green, magenta, spack_cmd_line, yellow
@@ -322,7 +322,7 @@ def handle_variants(project_cfg, variants):
 
 
 def project_config_from_args(args):
-    project = ruamel.yaml.comments.CommentedMap()
+    project = _vendoring.ruamel.yaml.comments.CommentedMap()
     top_path = Path(args.top)
     project["name"] = args.name if args.name else top_path.name
     project["env"] = args.env
