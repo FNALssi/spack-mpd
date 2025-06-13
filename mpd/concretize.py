@@ -8,7 +8,7 @@ import time
 from collections import abc
 from pathlib import Path
 
-from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
+from _vendoring.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import llnl.util.tty as tty
 
