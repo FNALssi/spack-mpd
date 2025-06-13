@@ -27,7 +27,7 @@ except ImportError:
 
 from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
-spack.repo.PATH.repos
+PATH.repos
 from spack_repo.builtin.build_systems.cmake import CMakePackage
 
 from . import init
