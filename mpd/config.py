@@ -7,11 +7,8 @@ import _vendoring.ruamel
 from _vendoring.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import llnl.util.tty as tty
-import spack.repo
-spack.repo.PATH.repos
 import spack.environment as ev
 import spack.util.spack_yaml as syaml
-from spack_repo.builtin.build_systems.cmake import CMakePackage
 
 try:
     from spack.spec_parser import SPLIT_KVP
@@ -30,6 +27,8 @@ except ImportError:
 
 from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
+spack.repo.PATH.repos
+from spack_repo.builtin.build_systems.cmake import CMakePackage
 
 from . import init
 from .util import cyan, gray, green, magenta, spack_cmd_line, yellow
