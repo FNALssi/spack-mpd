@@ -6,7 +6,10 @@ try:
     import _vendoring.ruamel.yaml as ruamel_yaml
 except:
     import ruamel.yaml as ruamel_yaml
-from _vendoring.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
+try:
+    from _vendoring.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
+except:
+    from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import llnl.util.tty as tty
 import spack.environment as ev
