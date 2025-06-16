@@ -7,8 +7,8 @@ import subprocess
 import time
 from collections import abc
 from pathlib import Path
-
-from _vendoring.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
+import _vendoring.ruamel as ruamel
+from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import llnl.util.tty as tty
 
