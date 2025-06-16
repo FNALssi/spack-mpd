@@ -2,9 +2,11 @@ import os
 import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-
-import _vendoring.ruamel as ruamel
-from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
+try:
+    import _vendoring.ruamel.yaml as ruamel_yaml
+except:
+    import ruamel.yaml as ruamel_yaml
+from _vendoring.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import llnl.util.tty as tty
 import spack.environment as ev
@@ -322,7 +324,7 @@ def handle_variants(project_cfg, variants):
 
 
 def project_config_from_args(args):
-    project = ruamel.yaml.comments.CommentedMap()
+    project = ruamel_yaml.comments.CommentedMap()
     top_path = Path(args.top)
     project["name"] = args.name if args.name else top_path.name
     project["env"] = args.env
@@ -359,10 +361,10 @@ def update(project_config, status=None, installed_at=None):
             config = syaml.load(f)
 
     if config is None:
-        config = ruamel.yaml.comments.CommentedMap()
-        config["projects"] = ruamel.yaml.comments.CommentedMap()
+        config = ruamel_yaml.comments.CommentedMap()
+        config["projects"] = ruamel_yaml.comments.CommentedMap()
 
-    yaml_project_config = ruamel.yaml.comments.CommentedMap()
+    yaml_project_config = ruamel_yaml.comments.CommentedMap()
     yaml_project_config.update(project_config)
     if status:
         yaml_project_config.update(status=status)
