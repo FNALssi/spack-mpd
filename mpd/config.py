@@ -32,8 +32,11 @@ except ImportError:
 
 from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
-PATH.repos
-from spack_repo.builtin.build_systems.cmake import CMakePackage
+try:
+    from spack.build_systems.cmake import CMakePackage
+except:
+    PATH.repos
+    from spack_repo.builtin.build_systems.cmake import CMakePackage
 
 from . import init
 from .util import cyan, gray, green, magenta, spack_cmd_line, yellow
