@@ -128,9 +128,8 @@ include(develop)
 FetchContent_Declare(
   cetmodules
   GIT_REPOSITORY https://github.com/FNALssi/cetmodules
-  GIT_TAG v4-branch
-  # GIT_TAG fd6ebf45
-  FIND_PACKAGE_ARGS 3.99.00
+  GIT_TAG 4a5a5881 # v4.00.00
+  FIND_PACKAGE_ARGS 4.00.00
   )
 
 FetchContent_MakeAvailable(cetmodules)
