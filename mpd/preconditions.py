@@ -1,9 +1,8 @@
 from enum import Flag, auto
 
-import llnl.util.tty as tty
-
 import spack.environment as ev
 import spack.environment.shell as ev_shell
+import spack.llnl.util.tty as tty
 
 from . import config, init
 from .util import bold, cyan, gray, green
@@ -47,8 +46,10 @@ def check_selected(conditions):
     selected_project = config.selected_project()
     project_is_selected = selected_project is not None
     if project_is_selected and not should_be_selected:
-        return (f"An MPD project must {bold('not')} be selected "
-                f"({cyan(selected_project)} currently selected)")
+        return (
+            f"An MPD project must {bold('not')} be selected "
+            f"({cyan(selected_project)} currently selected)"
+        )
     if not project_is_selected and should_be_selected:
         return "An MPD project must be selected"
     return None
@@ -101,8 +102,10 @@ def check_active(conditions):
     # In this case, an active environment is allowed so long as it's different
     # from the development environment of the selected project.
     if not should_be_active and active_env_name == project_env_name:
-        return (f"The Spack environment {cyan(ev.active_environment().name)} "
-                f"must {bold('not')} be active")
+        return (
+            f"The Spack environment {cyan(ev.active_environment().name)} "
+            f"must {bold('not')} be active"
+        )
 
     # In this case, the active environment must be the same as the development
     # environment of the project.

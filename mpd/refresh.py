@@ -1,8 +1,7 @@
 from pathlib import Path
 
-import llnl.util.tty as tty
-
 import spack.environment as ev
+import spack.llnl.util.tty as tty
 
 from . import config
 from .concretize import concretize_project
@@ -19,9 +18,9 @@ def setup_subparser(subparsers):
         description="refresh project using current source directory and specified variants",
         help="refresh project",
     )
-    refresh.add_argument("-y", "--yes-to-all",
-                         action="store_true",
-                         help="Answer yes/default to all prompts")
+    refresh.add_argument(
+        "-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts"
+    )
     refresh.add_argument("variants", nargs="*", help="variants to apply to developed packages")
     refresh.add_argument(
         "-f",

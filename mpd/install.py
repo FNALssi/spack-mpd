@@ -1,9 +1,8 @@
 import subprocess
 from datetime import datetime
 
-import llnl.util.tty as tty
-
 import spack.environment as ev
+import spack.llnl.util.tty as tty
 
 from .config import selected_project_config, update
 from .preconditions import State, activate_development_environment, preconditions

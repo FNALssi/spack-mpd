@@ -1,6 +1,5 @@
-import llnl.util.tty as tty
-
 import spack.environment as ev
+import spack.llnl.util.tty as tty
 
 from . import config
 from .preconditions import State, preconditions
@@ -36,8 +35,10 @@ def process(args):
 
     selected = config.project_config(selected_name, missing_ok=True)
     if not selected:
-        tty.info(f"Selected project {bold(selected_name)} not yet configured " +
-                 gray("(an error must have occurred while executing the new-project command)"))
+        tty.info(
+            f"Selected project {bold(selected_name)} not yet configured "
+            + gray("(an error must have occurred while executing the new-project command)")
+        )
         return
 
     name = selected["name"]

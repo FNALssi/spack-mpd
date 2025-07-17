@@ -2,17 +2,19 @@ import os
 import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+
 try:
-    import _vendoring.ruamel.yaml as ruamel_yaml
+    from spack.vendor.ruamel.yaml import comments
 except:
-    import ruamel.yaml as ruamel_yaml
+    from ruamel.yaml import comments
+
 try:
-    from _vendoring.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
+    from spack.vendor.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 except:
     from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
-import llnl.util.tty as tty
 import spack.environment as ev
+import spack.llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
 
 try:
@@ -32,6 +34,7 @@ except ImportError:
 
 from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
+
 try:
     from spack.build_systems.cmake import CMakePackage
 except:
@@ -111,10 +114,12 @@ def prepare_project_directories(top_path, srcs_path):
         path.mkdir(exist_ok=True)
         return str(path.absolute())
 
-    return {"top": _create_dir(top_path),
-            "source": _create_dir(srcs_path),
-            "build": _create_dir(top_path / "build"),
-            "local": _create_dir(top_path / "local")}
+    return {
+        "top": _create_dir(top_path),
+        "source": _create_dir(srcs_path),
+        "build": _create_dir(top_path / "build"),
+        "local": _create_dir(top_path / "local"),
+    }
 
 
 def ordered_requirement_list(requirements):
@@ -229,8 +234,7 @@ def handle_variants(project_cfg, variants):
     if "compiler" in general_variant_map:
         project_cfg["compiler"] = general_variant_map.pop("compiler")
     elif "compiler" not in project_cfg:
-        tty.warn("No compiler spec specified in the variants list " +
-                 gray("(will use default)"))
+        tty.warn("No compiler spec specified in the variants list " + gray("(will use default)"))
 
     # CXX standard
     if "cxxstd" in general_variant_map:
@@ -330,7 +334,7 @@ def handle_variants(project_cfg, variants):
 
 
 def project_config_from_args(args):
-    project = ruamel_yaml.comments.CommentedMap()
+    project = comments.CommentedMap()
     top_path = Path(args.top)
     project["name"] = args.name if args.name else top_path.name
     project["env"] = args.env
@@ -367,10 +371,10 @@ def update(project_config, status=None, installed_at=None):
             config = syaml.load(f)
 
     if config is None:
-        config = ruamel_yaml.comments.CommentedMap()
-        config["projects"] = ruamel_yaml.comments.CommentedMap()
+        config = comments.CommentedMap()
+        config["projects"] = comments.CommentedMap()
 
-    yaml_project_config = ruamel_yaml.comments.CommentedMap()
+    yaml_project_config = comments.CommentedMap()
     yaml_project_config.update(project_config)
     if status:
         yaml_project_config.update(status=status)

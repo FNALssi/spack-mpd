@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import llnl.util.tty as tty
+import spack.llnl.util.tty as tty
 
 from . import config
 from .preconditions import State, preconditions
@@ -26,12 +26,12 @@ This can be done in one of three ways:
         SUBCOMMAND, description=select_description, help="select MPD project"
     )
     select = select.add_mutually_exclusive_group()
-    select.add_argument("directory",
-                        nargs="?",
-                        help="can specify top-level directory of the project")
-    select.add_argument("-p", "--project",
-                        metavar="<project name>",
-                        help="select project with name")
+    select.add_argument(
+        "directory", nargs="?", help="can specify top-level directory of the project"
+    )
+    select.add_argument(
+        "-p", "--project", metavar="<project name>", help="select project with name"
+    )
 
 
 def select_from_prompt(projects, error_msg=None):
@@ -88,16 +88,16 @@ def process(args):
 
     # Project name specified
     if project not in projects:
-        project = select_from_prompt(projects,
-                                     error_msg=f"{cyan(project)} is not an existing MPD project")
+        project = select_from_prompt(
+            projects, error_msg=f"{cyan(project)} is not an existing MPD project"
+        )
 
     if project == config.selected_project():
         tty.info(f"Project {cyan(project)} already selected")
         return
 
     if project in config.selected_projects():
-        tty.warn(f"Project {cyan(project)} selected in another shell.  "
-                 "Use with caution.")
+        tty.warn(f"Project {cyan(project)} selected in another shell.  " "Use with caution.")
 
     config.selected_project_token().write_text(project)
     tty.info(f"Project {cyan(project)} selected")

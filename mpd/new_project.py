@@ -1,8 +1,7 @@
 from pathlib import Path
 
-import llnl.util.tty as tty
-
 import spack.environment as ev
+import spack.llnl.util.tty as tty
 
 from .concretize import concretize_project
 from .config import mpd_project_exists, print_config_info, project_config_from_args, select, update
@@ -37,9 +36,7 @@ def setup_subparser(subparsers):
         "-f", "--force", action="store_true", help="overwrite existing project with same name"
     )
     new_project.add_argument(
-        "-E",
-        "--env",
-        help="environment from which to create project\n(multiple allowed)",
+        "-E", "--env", help="environment from which to create project\n(multiple allowed)"
     )
     new_project.add_argument(
         "-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts"

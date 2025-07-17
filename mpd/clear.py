@@ -1,4 +1,4 @@
-import llnl.util.tty as tty
+import spack.llnl.util.tty as tty
 
 from . import config
 from .preconditions import State, preconditions

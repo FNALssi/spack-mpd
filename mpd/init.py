@@ -1,10 +1,9 @@
 import shutil
 from pathlib import Path
 
-import llnl.util.filesystem as fs
-import llnl.util.tty as tty
-
 import spack.config
+import spack.llnl.util.filesystem as fs
+import spack.llnl.util.tty as tty
 import spack.paths
 
 from .util import gray

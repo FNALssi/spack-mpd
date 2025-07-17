@@ -5,8 +5,7 @@
 import contextlib
 import re
 
-import llnl.util.filesystem as fs
-
+import spack.llnl.util.filesystem as fs
 from spack.extensions.mpd import config
 from spack.main import SpackCommand
 

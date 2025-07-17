@@ -7,9 +7,8 @@ import sys
 import urllib
 from enum import Enum, auto
 
-import llnl.util.filesystem as fs
-import llnl.util.tty as tty
-
+import spack.llnl.util.filesystem as fs
+import spack.llnl.util.tty as tty
 import spack.util.git
 from spack.util import executable
 
@@ -280,13 +279,7 @@ _supported_suites = [
     Suite(
         "larsoftobj",
         gh_org_name="LArSoft",
-        repos=[
-            "larcorealg",
-            "larcoreobj",
-            "lardataalg",
-            "lardataobj",
-            "larvecutils",
-        ],
+        repos=["larcorealg", "larcoreobj", "lardataalg", "lardataobj", "larvecutils"],
     ),
     Suite(
         "nu",
@@ -573,9 +566,7 @@ def process(args):
             for repo_spec in args.repos:
                 repo = repos.get(repo_spec, SimpleGitRepo(repo_spec))
                 repos_to_clone[repo.name()] = repo
-            if clone_repos(
-                repos_to_clone, should_fork, config["source"], config["local"]
-            ):
+            if clone_repos(repos_to_clone, should_fork, config["source"], config["local"]):
                 changed_srcs_dir = True
 
         if args.suites:
@@ -594,7 +585,7 @@ def process(args):
                     preamble += " and forking"
                 tty.msg(f"{preamble} suite {bold(s)}:\n")
                 if clone_repos(
-                        suite.repositories(), should_fork, config["source"], config["local"]
+                    suite.repositories(), should_fork, config["source"], config["local"]
                 ):
                     changed_srcs_dir = True
 

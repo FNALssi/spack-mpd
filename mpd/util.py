@@ -1,8 +1,7 @@
 import sys
 from pathlib import Path
 
-import llnl.util.tty as tty
-
+import spack.llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
 
 

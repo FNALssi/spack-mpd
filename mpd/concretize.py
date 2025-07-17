@@ -7,17 +7,20 @@ import subprocess
 import time
 from collections import abc
 from pathlib import Path
+
+import spack.compilers.config
+
 try:
-    from _vendoring.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
+    from spack.vendor.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 except:
     from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
-import llnl.util.tty as tty
 
 import spack.builder as builder
 import spack.cmd
 import spack.compilers
 import spack.config
 import spack.environment as ev
+import spack.llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
 from spack import traverse
 from spack.spec import InstallStatus
@@ -70,8 +73,16 @@ def cmake_package_variables(name, cmake_args):
     unset({variable} CACHE)
   endif()
 """
-    return begin_set_macro(name) + set_contents + end() + "\n" + \
-        begin_unset_macro(name) + unset_contents + end() + "\n"
+    return (
+        begin_set_macro(name)
+        + set_contents
+        + end()
+        + "\n"
+        + begin_unset_macro(name)
+        + unset_contents
+        + end()
+        + "\n"
+    )
 
 
 def cmake_develop(project_config, package_cmake_args):
@@ -81,7 +92,8 @@ def cmake_develop(project_config, package_cmake_args):
     with open((source_path / "develop.cmake").absolute(), "w") as out:
         for name, args in package_cmake_args.items():
             out.write(f"# {name} variables\n" + cmake_package_variables(name, args))
-        out.write(f"""set(CWD "{file_dir}")
+        out.write(
+            f"""set(CWD "{file_dir}")
 macro(develop pkg)
   install(CODE "execute_process(COMMAND spack python ensure-install-directory.py\\
                                         {project_name} ${{${{pkg}}_HASH}}\\
@@ -99,7 +111,8 @@ macro(develop pkg)
                                         {project_name} ${{${{pkg}}_HASH}}\\
                                 WORKING_DIRECTORY ${{CWD}})")
 endmacro()
-""")
+"""
+        )
 
 
 def cmake_lists_preamble(project_name):
@@ -161,8 +174,7 @@ def cmake_presets(project_config, dependencies, view_path):
         "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
         "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxxstd},
         "CMAKE_INSTALL_RPATH_USE_LINK_PATH": {"type": "BOOL", "value": "ON"},
-        "CMAKE_INSTALL_RPATH": {"type": "STRING",
-                                "value": ";".join(view_lib_dirs)},
+        "CMAKE_INSTALL_RPATH": {"type": "STRING", "value": ";".join(view_lib_dirs)},
     }
 
     source_path = Path(project_config["source"])
@@ -211,7 +223,7 @@ def make_cmake_files(project_config, cmake_args, dependencies, view_path):
 
 def remove_view(local_env_dir):
     spack_env = Path(local_env_dir) / ".spack-env"
-    view_path = (spack_env / "view")
+    view_path = spack_env / "view"
     if view_path.is_symlink():
         view_path.unlink()
     else:
@@ -268,8 +280,9 @@ def ordered_roots(env, package_requirements):
     for s in env.all_specs():
         if s.name not in package_requirements:
             continue
-        parent_children[s.name] = [d.name for d in s.traverse(order="topo", root=False)
-                                   if d.name in packages]
+        parent_children[s.name] = [
+            d.name for d in s.traverse(order="topo", root=False) if d.name in packages
+        ]
         install_prefixes[s.name] = (s.name, s.dag_hash(), s.prefix)
 
     sorted_packages = toposort_packages(parent_children)
@@ -332,7 +345,7 @@ def concretize_project(project_config, yes_to_all):
     if proto_env := project_config["env"]:
         from_items += [{"type": "environment", "path": proto_env}]
     reuse_block = {"from": from_items}
-    view_dict = {"default": dict(root=".spack-env/view", exclude=['gcc-runtime'])}
+    view_dict = {"default": dict(root=".spack-env/view", exclude=["gcc-runtime"])}
     full_block = dict(
         specs=list(packages.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
@@ -347,9 +360,11 @@ def concretize_project(project_config, yes_to_all):
         if not found_compilers:
             indent = " " * len("==> Error: ")
             print()
-            tty.die(f"The compiler {bold(compiler['value'])} is not available.\n"
-                    f"{indent}See {cyan('spack compiler list')} for available compilers.\n"
-                    f"{indent}Also see {cyan('spack compiler add --help')}.\n")
+            tty.die(
+                f"The compiler {bold(compiler['value'])} is not available.\n"
+                f"{indent}See {cyan('spack compiler list')} for available compilers.\n"
+                f"{indent}Also see {cyan('spack compiler add --help')}.\n"
+            )
         compiler_str = [YamlQuote(found_compilers[0])]
         first_order_deps.add(compiler_str[0])
 
@@ -386,10 +401,9 @@ def concretize_project(project_config, yes_to_all):
             cmake_args[s.name] = cmake_args_method()
 
     # Create properly ordered CMake file
-    make_cmake_files(project_config,
-                     cmake_args,
-                     ordered_roots(env, packages),
-                     Path(env.view_path_default))
+    make_cmake_files(
+        project_config, cmake_args, ordered_roots(env, packages), Path(env.view_path_default)
+    )
 
     # Make development environment from initial environment
     #   - Then remove the embedded '.spack-env/view' subdirectory, which will induce a
@@ -413,17 +427,21 @@ def concretize_project(project_config, yes_to_all):
     for dep in sorted(first_order_deps):
         new_roots += f"\n    - {dep}"
     tty.msg(gray(new_roots))
-    subprocess.run(["spack", "-e", local_env_dir, "add"] + list(first_order_deps),
-                   stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ["spack", "-e", local_env_dir, "add"] + list(first_order_deps),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
     tty.info(gray("Finalizing concretization"))
     remove_view(local_env_dir)
 
     # Lastly, remove the developed packages from the environment
-    subprocess.run(["spack", "-e", local_env_dir, "rm"] + list(packages.keys()),
-                   stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ["spack", "-e", local_env_dir, "rm"] + list(packages.keys()),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     with env, env.write_transaction():
         env.concretize()
         env.write()
@@ -431,6 +449,7 @@ def concretize_project(project_config, yes_to_all):
     update(project_config, status="concretized")
 
     if absent := absent_dependencies(env, packages):
+
         def _parens_number(i):
             return f"({i})"
 
@@ -468,11 +487,13 @@ def concretize_project(project_config, yes_to_all):
     tty.msg(gray("Installing development environment\n"))
     # As of Spack 0.23, an environment should be explicitly activated before invoking
     # install (i.e. don't use 'spack -e <env> install').
-    result = subprocess.run(f"spack env activate {local_env_dir}; spack install -j{ncores}",
-                            shell=True)
+    result = subprocess.run(
+        f"spack env activate {local_env_dir}; spack install -j{ncores}", shell=True
+    )
 
     if result.returncode == 0:
         print()
         update(project_config, status="ready")
-        tty.msg(f"{bold(name)} is ready for development "
-                f"(e.g type {cyan('spack mpd build ...')})\n")
+        tty.msg(
+            f"{bold(name)} is ready for development " f"(e.g type {cyan('spack mpd build ...')})\n"
+        )

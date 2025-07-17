@@ -1,11 +1,9 @@
 import subprocess
 from pathlib import Path
 
-import llnl.util.filesystem as fs
-import llnl.util.tty as tty
-
 import spack
-import spack.compilers
+import spack.llnl.util.filesystem as fs
+import spack.llnl.util.tty as tty
 
 from .config import selected_project_config
 from .preconditions import State, activate_development_environment, preconditions
@@ -55,7 +53,7 @@ def configure_cmake_project(project_config):
         "-B",
         project_config["build"],
         "-G",
-        _generator_value(project_config)
+        _generator_value(project_config),
     ]
 
     printed_configure_list = []

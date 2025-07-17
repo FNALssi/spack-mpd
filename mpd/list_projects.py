@@ -1,5 +1,4 @@
-import llnl.util.tty as tty
-
+import spack.llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
 
 from . import config
@@ -21,10 +20,12 @@ and the status of their corresponding Spack environments."""
     lst.add_argument(
         "project", metavar="<project name>", nargs="*", help="print details of the MPD project"
     )
-    lst.add_argument("--raw",
-                     action="store_true",
-                     help="print YAML configuration of the MPD project\n"
-                          "(used only when project name is provided)")
+    lst.add_argument(
+        "--raw",
+        action="store_true",
+        help="print YAML configuration of the MPD project\n"
+        "(used only when project name is provided)",
+    )
     lst_path = lst.add_mutually_exclusive_group()
     lst_path.add_argument(
         "-t", "--top", metavar="<project name>", help="print top-level directory for project"
@@ -97,7 +98,7 @@ def list_projects():
         indicator, color_code, warning = format_fields(key, selected)
         msg += maybe_with_color(
             color_code,
-            f"\n {indicator} {key:<{name_width}}    {value['source']:<{location_width}} {warning}"
+            f"\n {indicator} {key:<{name_width}}    {value['source']:<{location_width}} {warning}",
         )
     msg += f"\n\nType {cyan('spack mpd ls <project name>')} for more details about a project.\n"
     print()

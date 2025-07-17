@@ -1,6 +1,5 @@
-import llnl.util.filesystem as fs
-
 import spack.environment as ev
+import spack.llnl.util.filesystem as fs
 import spack.package_base
 
 from .config import UNINSTALLED, selected_project_config, update
