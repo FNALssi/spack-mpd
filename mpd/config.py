@@ -5,39 +5,25 @@ from tempfile import NamedTemporaryFile
 
 try:
     from spack.vendor.ruamel.yaml import comments
-except:
+except ImportError:
     from ruamel.yaml import comments
 
 try:
     from spack.vendor.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
-except:
+except ImportError:
     from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
+import spack.compilers.config as compilers_config
 import spack.environment as ev
 import spack.llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
-
-try:
-    from spack.spec_parser import SPLIT_KVP
-except ImportError:
-    from spack.parser import SPLIT_KVP
-
-try:
-    from spack.spec_parser import SpecParser
-except ImportError:
-    from spack.parser import SpecParser
-
-try:
-    from spack.spec_parser import SpecTokens
-except ImportError:
-    from spack.parser import TokenType as SpecTokens
-
 from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
+from spack.spec_parser import SPLIT_KVP, SpecParser, SpecTokens
 
 try:
     from spack.build_systems.cmake import CMakePackage
-except:
+except ImportError:
     PATH.repos
     from spack_repo.builtin.build_systems.cmake import CMakePackage
 
@@ -131,10 +117,10 @@ def ordered_requirement_list(requirements):
 
     # Version goes first
     if version:
-        requirement_list.append(YamlQuote(version))
+        requirement_list.append(version)
 
     # We don't care about the order of the remaining variants...
-    requirement_list += [YamlQuote(r) for r in requirements.values()]
+    requirement_list += [r for r in requirements.values()]
 
     # ... except the compiler must go last
     if compiler:
@@ -143,10 +129,11 @@ def ordered_requirement_list(requirements):
     return requirement_list
 
 
+def matching_compiler(token):
+    return any(str(c).startswith(token.value) for c in compilers_config.all_compilers())
+
+
 def handle_variant(token):
-    # Last specification wins (this behavior may need to be massaged)
-    if token.kind in (SpecTokens.COMPILER, SpecTokens.COMPILER_AND_VERSION):
-        return "compiler", _variant_pair(token.value[1:], token.value)
     if token.kind in (SpecTokens.KEY_VALUE_PAIR, SpecTokens.PROPAGATED_KEY_VALUE_PAIR):
         match = SPLIT_KVP.match(token.value)
         name, _, value = match.groups()
@@ -198,12 +185,19 @@ def handle_variants(project_cfg, variants):
     package_variant_map = {}
     dependency_variant_map = {}
     virtual_package = None
+    # FIXME: Not sure virtual dependencies are handled correctly
+    #       (can use ^[...] OR %[...] notation)
     virtual_dependency = False
     virtual_dependencies = {}
     concrete_package_expected = False
+    compiler_string = None
     dependency = False
     variant_map = general_variant_map
     for token in tokens_from_str:
+        if compiler_string and token.kind == SpecTokens.VERSION:
+            # Add version onto compiler string
+            compiler_string = compiler_string + token.value
+            continue
         if token.kind == SpecTokens.DEPENDENCY:
             dependency = True
             continue
@@ -219,6 +213,10 @@ def handle_variants(project_cfg, variants):
                 virtual_dependencies.setdefault(virtual_package, []).append(token.value)
                 virtual_package = None
                 concrete_package_expected = False
+            elif dependency and matching_compiler(token):
+                dependency = False
+                compiler_string = token.value
+                continue
             else:
                 parent_map = dependency_variant_map if dependency else package_variant_map
                 variant_map = parent_map.setdefault(token.value, dict())
@@ -229,6 +227,9 @@ def handle_variants(project_cfg, variants):
             virtual_package = variant_pair["value"]
         else:
             variant_map[name] = variant_pair
+
+    if compiler_string:
+        general_variant_map["compiler"] = _variant_pair(compiler_string, "%" + compiler_string)
 
     # Compiler
     if "compiler" in general_variant_map:

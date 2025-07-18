@@ -416,12 +416,12 @@ def concretize_project(project_config, yes_to_all):
     env = ev.Environment(local_env_dir)
     developed_specs = [s for _, s in env.concretized_specs() if s.name in packages]
     for s in developed_specs:
-        for depth, dep in traverse.traverse_nodes([s], depth=True):
+        for depth, dep in traverse.traverse_edges([s], cover="edges", depth=True):
             if depth != 1:
                 continue
-            if dep.name in packages:
+            if dep.spec.name in packages:
                 continue
-            first_order_deps.add(dep.name)
+            first_order_deps.add(dep.spec.name)
 
     new_roots = "Adding the following packages as top-level dependencies:"
     for dep in sorted(first_order_deps):
