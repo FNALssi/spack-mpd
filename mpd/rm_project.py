@@ -29,9 +29,11 @@ Removing a project will:
 
 
 def rm_project(name, config):
-    subprocess.run(["spack", "env", "rm", "-y", config["local"]],
-                   stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ["spack", "env", "rm", "-y", config["local"]],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     shutil.rmtree(config["build"], ignore_errors=True)
     rm_config(name)
 

@@ -5,14 +5,13 @@ import re
 import shutil
 import subprocess
 import time
-from collections import abc
 from pathlib import Path
 
 import spack.compilers.config
 
 try:
     from spack.vendor.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
-except:
+except ImportError:
     from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import spack.builder as builder
@@ -21,7 +20,6 @@ import spack.compilers
 import spack.config
 import spack.environment as ev
 import spack.llnl.util.tty as tty
-import spack.util.spack_yaml as syaml
 from spack import traverse
 from spack.spec import InstallStatus
 

@@ -18,7 +18,7 @@ subcommands = [
     "new_project",
     "refresh",
     "rm_project",
-    "cmd_select", # prefix with cmd_ to avoid collision with standard library select
+    "cmd_select",  # prefix with cmd_ to avoid collision with standard library select
     "status",
     "test",
     "zap",

@@ -1,7 +1,6 @@
 import subprocess
 from pathlib import Path
 
-import spack
 import spack.llnl.util.filesystem as fs
 import spack.llnl.util.tty as tty
 
