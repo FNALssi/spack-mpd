@@ -430,6 +430,9 @@ def concretize_project(project_config, yes_to_all):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    with env, env.write_transaction():
+        env.concretize()
+        env.write()
 
     tty.info(gray("Finalizing concretization"))
     remove_view(local_env_dir)
