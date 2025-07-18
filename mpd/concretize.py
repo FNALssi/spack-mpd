@@ -413,9 +413,14 @@ def concretize_project(project_config, yes_to_all):
     for dep in sorted(first_order_deps):
         new_roots += f"\n    - {dep}"
     tty.msg(gray(new_roots))
-    subprocess.run(["spack", "-e", local_env_dir, "add"] + list(first_order_deps),
-                   stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ["spack", "-e", local_env_dir, "add"] + list(first_order_deps),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    with env, env.write_transaction():
+        env.concretize()
+        env.write()
 
     tty.info(gray("Finalizing concretization"))
     remove_view(local_env_dir)
