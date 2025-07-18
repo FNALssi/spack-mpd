@@ -292,7 +292,25 @@ def handle_variants(project_cfg, variants):
         existing_pkg_requirements = packages.get(p, {}).get("require", [])
         existing_pkg_requirements_str = " ".join(existing_pkg_requirements)
         pkg_requirements = {}
+        compiler_string = None
+        # We have to parse the specifications for the packages, too.  And because (e.g.) %gcc
+        # is now parsed as more than one token, we have to deal with it specially.  In this
+        # case, though, we simply create the 'compiler_string' and don't use it.  We should
+        # do something more intelligent.
         for token in SpecParser(existing_pkg_requirements_str).tokens():
+            if compiler_string and token.kind == SpecTokens.VERSION:
+                # Add version onto compiler string
+                compiler_string = compiler_string + token.value
+                continue
+            if token.kind == SpecTokens.DEPENDENCY:
+                dependency = True
+                continue
+            if token.kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
+                if dependency and matching_compiler(token):
+                    dependency = False
+                    compiler_string = token.value
+                    continue
+
             name, variant = handle_variant(token)
             pkg_requirements[name] = variant["variant"]
 
