@@ -24,7 +24,7 @@ from spack import traverse
 from spack.spec import InstallStatus
 
 from .config import update
-from .util import bold, cyan, get_number, gray, make_yaml_file
+from .util import bold, cyan, get_number, gray, make_yaml_file, yellow
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n"]
@@ -288,13 +288,24 @@ def ordered_roots(env, package_requirements):
 
 
 def verify_no_missing_intermediate_deps(env, packages) -> None:
+    direct_dependents = {}
     missing_intermediate_deps = {}
+
     for n in env.all_specs():
+        all_dep_names = [p.name for p in n.dependencies()]
+        if not all_dep_names:
+            continue
+
+        # Map to look up dependents from dependencies
+        for d in all_dep_names:
+            direct_dependents.setdefault(d, list()).append(n.name)
+
         # Skip the packages under development
         if n.name in packages:
             continue
 
-        checked_out_deps = [p.name for p in n.dependencies() if p.name in packages]
+        # Package that is not under development but should be
+        checked_out_deps = [name for name in all_dep_names if name in packages]
         if checked_out_deps:
             missing_intermediate_deps[n.name] = checked_out_deps
 
@@ -305,9 +316,11 @@ def verify_no_missing_intermediate_deps(env, packages) -> None:
             f"{indent}currently cloned packages and must also be cloned:\n"
         )
         for pkg_name, checked_out_deps in sorted(missing_intermediate_deps.items()):
+            direct_dependents_str = ", ".join(direct_dependents.get(pkg_name, []))
             checked_out_deps_str = ", ".join(checked_out_deps)
             error_msg += "\n - " + bold(pkg_name)
-            error_msg += f" (depends on {checked_out_deps_str})"
+            error_msg += f"\n     required by: {yellow(direct_dependents_str)}"
+            error_msg += f"\n     depends on:  {yellow(checked_out_deps_str)}"
         print()
         tty.die(error_msg + "\n")
 
