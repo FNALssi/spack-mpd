@@ -119,7 +119,7 @@ endmacro()
 
 def cmake_lists_preamble(project_name, develop_cetmodules=False):
     date = time.strftime("%Y-%m-%d")
-    preamble = """cmake_minimum_required(VERSION 3.31 FATAL_ERROR)
+    preamble = """cmake_minimum_required(VERSION 3.24...4.1 FATAL_ERROR)
 enable_testing()
 include(develop.cmake)
 
