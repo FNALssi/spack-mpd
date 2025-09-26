@@ -27,6 +27,14 @@ def setup_subparser(subparsers):
         help="specify number of threads for parallel build",
     )
     build.add_argument(
+        "-D",
+        "--define-variable",
+        dest="cmake_defines",
+        action="append",
+        help="CMake variable definition (e.g. -DFOO:STRING=bar)",
+        metavar="<var>:<type>=<value>",
+    )
+    build.add_argument(
         "generator_options",
         metavar="-- <generator options>",
         nargs="*",
@@ -43,7 +51,7 @@ def _generator_value(project_config):
     tty.die(f"Only 'make' and 'ninja' generators are allowed (specified {value}).")
 
 
-def configure_cmake_project(project_config):
+def configure_cmake_project(project_config, cmake_defines=None):
     configure_list = [
         "cmake",
         "--preset",
@@ -54,6 +62,9 @@ def configure_cmake_project(project_config):
         "-G",
         _generator_value(project_config),
     ]
+
+    if cmake_defines:
+        configure_list.extend([f"-D{define}" for define in cmake_defines])
 
     printed_configure_list = []
     for arg in configure_list:
@@ -69,10 +80,10 @@ def configure_cmake_project(project_config):
     return subprocess.run(configure_list)
 
 
-def build(project_config, parallel, generator_options):
+def build(project_config, parallel, generator_options, cmake_defines=None):
     build_area = project_config["build"]
     if not (Path(build_area) / "CMakeCache.txt").exists():
-        result = configure_cmake_project(project_config)
+        result = configure_cmake_project(project_config, cmake_defines)
         if result.returncode != 0:
             print()
             tty.die("The CMake configure step failed. See above\n")
@@ -102,4 +113,4 @@ def process(args):
         fs.remove_directory_contents(config["build"])
 
     activate_development_environment(config["local"])
-    build(config, args.parallel, args.generator_options)
+    build(config, args.parallel, args.generator_options, args.cmake_defines)
