@@ -443,11 +443,12 @@ def concretize_project(project_config, yes_to_all):
             first_order_deps.add(dep.spec.name)
 
     new_roots = "Adding the following packages as top-level dependencies:"
-    for dep in sorted(first_order_deps):
+    sorted_first_order_deps = sorted(first_order_deps)
+    for dep in sorted_first_order_deps:
         new_roots += f"\n    - {dep}"
     tty.msg(gray(new_roots))
     subprocess.run(
-        ["spack", "-e", local_env_dir, "add"] + list(first_order_deps),
+        ["spack", "-e", local_env_dir, "add"] + list(sorted_first_order_deps),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
