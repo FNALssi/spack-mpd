@@ -352,12 +352,17 @@ def concretize_project(project_config, yes_to_all):
     print()
     tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
 
-    from_items = [{"type": "local"}, {"type": "external"}]
+    from_items = []
     if proto_env := project_config["env"]:
+        # If an external environment is used, we really, really want to use that one.
         from_items += [{"type": "environment", "path": proto_env}]
+    else:
+        from_items += [{"type": "local"}, {"type": "external"}]
+
     reuse_block = {"from": from_items}
     view_dict = {"default": dict(root=".spack-env/view", exclude=["gcc-runtime"])}
     full_block = dict(
+        config=dict(deprecated=True),
         specs=list(packages.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
         view=view_dict,
@@ -431,6 +436,9 @@ def concretize_project(project_config, yes_to_all):
             if depth != 1:
                 continue
             if dep.spec.name in packages:
+                continue
+            if dep.spec.external:
+                # We don't need to (and probably shouldn't) include things like glibc
                 continue
             first_order_deps.add(dep.spec.name)
 
