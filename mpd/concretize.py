@@ -442,6 +442,9 @@ def concretize_project(project_config, yes_to_all):
                 continue
             first_order_deps.add(dep.spec.name)
 
+    # gcc-runtime is a build-time dependency that will be built if needed.
+    first_order_deps.discard("gcc-runtime")
+
     new_roots = "Adding the following packages as top-level dependencies:"
     sorted_first_order_deps = sorted(first_order_deps)
     for dep in sorted_first_order_deps:
