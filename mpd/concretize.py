@@ -20,6 +20,7 @@ import spack.compilers
 import spack.config
 import spack.environment as ev
 import spack.llnl.util.tty as tty
+import spack.util.spack_yaml as syaml
 from spack import traverse
 from spack.spec import InstallStatus
 
@@ -149,6 +150,7 @@ def cmake_presets(project_config, dependencies, view_path):
         compilers.sort(key=lambda spec: spec.version, reverse=True)
 
     # If no compilers specified, find preferred one
+    # FIXME: THIS IS NOT RIGHT
     if not compilers:
         candidates = {c.name: c for c in all_compilers}
         preferred_compilers = spack.config.get("packages:all:compiler", list())
@@ -346,16 +348,49 @@ def concretize_project(project_config, yes_to_all):
         if ignore in packages:
             del packages[ignore]
 
-    package_requirements = copy.deepcopy(packages)
+    # Make sure that all developed-package configurations override any inherited configurations
+    packages_with_overrides = {f"{key}:": value for key, value in packages.items()}
+
+    package_requirements = copy.deepcopy(packages_with_overrides)
     package_requirements.update(project_config["dependencies"])
+
+    # Build the "all" configuration
+    all_config = {
+        "providers": {
+            "libc": ["glibc"],
+            "zlib-api:": ["zlib"],
+        },
+        "variants": ["generator=ninja"],
+        "target": ["x86_64_v3"],
+    }
+
+    # Add compiler preference if available
+    if compiler := project_config.get("compiler"):
+        all_config["prefer"] = [f"%{compiler['value']}"]
+
+    package_requirements["all"] = all_config
 
     print()
     tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
 
     from_items = []
+    include_list = []
     if proto_env := project_config["env"]:
         # If an external environment is used, we really, really want to use that one.
         from_items += [{"type": "environment", "path": proto_env}]
+
+        # Read the proto_env's spack.yaml to extract the include list
+        proto_env_yaml = Path(proto_env) / "spack.yaml"
+        if proto_env_yaml.exists():
+            with open(proto_env_yaml, "r") as f:
+                proto_config = syaml.load(f)
+                if proto_config and "spack" in proto_config:
+                    all_includes = proto_config["spack"].get("include", [])
+                    # Filter to only include files with "_packages" or "-packages" in the name
+                    include_list = [
+                        item for item in all_includes
+                        if "_packages" in str(item) or "-packages" in str(item)
+                    ]
     else:
         from_items += [{"type": "local"}, {"type": "external"}]
 
@@ -369,26 +404,15 @@ def concretize_project(project_config, yes_to_all):
         packages=package_requirements,
     )
 
-    # Include compiler as a definition in the environment specification.
-    first_order_deps = {"cmake"}
-    if compiler := project_config.get("compiler"):
-        found_compilers = spack.cmd.parse_specs(compiler["value"])
-        if not found_compilers:
-            indent = " " * len("==> Error: ")
-            print()
-            tty.die(
-                f"The compiler {bold(compiler['value'])} is not available.\n"
-                f"{indent}See {cyan('spack compiler list')} for available compilers.\n"
-                f"{indent}Also see {cyan('spack compiler add --help')}.\n"
-            )
-        compiler_str = [YamlQuote(found_compilers[0])]
-        first_order_deps.add(compiler_str[0])
+    # Add the include list if it exists
+    if include_list:
+        full_block["include"] = include_list
 
     local_env_dir = project_config["local"]
     name = project_config["name"]
 
     # Always start fresh
-    env_file = make_yaml_file(name, dict(spack=full_block), prefix=local_env_dir)
+    env_file = make_yaml_file("spack", dict(spack=full_block), prefix=local_env_dir)
 
     tty.info(gray("Creating initial environment"))
     if ev.exists(name):
@@ -421,15 +445,25 @@ def concretize_project(project_config, yes_to_all):
         project_config, cmake_args, ordered_roots(env, packages), Path(env.view_path_default)
     )
 
-    # Make development environment from initial environment
-    #   - Then remove the embedded '.spack-env/view' subdirectory, which will induce a
-    #     SpackEnvironmentViewError exception if not removed.
+    # Make development environment starting with initial environment configuration
     tty.info(cyan("Creating local development environment"))
-    shutil.copytree(env.path, local_env_dir, symlinks=True, dirs_exist_ok=True)
-    remove_view(local_env_dir)
 
     # Now add the first-order dependencies
-    env = ev.Environment(local_env_dir)
+    # Include compiler as a definition in the environment specification.
+    first_order_deps = {"cmake"}
+    if compiler := project_config.get("compiler"):
+        found_compilers = spack.cmd.parse_specs(compiler["value"])
+        if not found_compilers:
+            indent = " " * len("==> Error: ")
+            print()
+            tty.die(
+                f"The compiler {bold(compiler['value'])} is not available.\n"
+                f"{indent}See {cyan('spack compiler list')} for available compilers.\n"
+                f"{indent}Also see {cyan('spack compiler add --help')}.\n"
+            )
+        compiler_str = [YamlQuote(found_compilers[0])]
+        first_order_deps.add(compiler_str[0])
+
     developed_specs = [s for _, s in env.concretized_specs() if s.name in packages]
     for s in developed_specs:
         for depth, dep in traverse.traverse_edges([s], cover="edges", depth=True):
@@ -451,10 +485,12 @@ def concretize_project(project_config, yes_to_all):
         new_roots += f"\n    - {dep}"
     tty.msg(gray(new_roots))
     subprocess.run(
-        ["spack", "-e", local_env_dir, "add"] + list(sorted_first_order_deps),
+        ["spack", "-D", local_env_dir, "add"] + list(sorted_first_order_deps),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
+    env = ev.Environment(local_env_dir)
     with env, env.write_transaction():
         env.concretize()
         env.write()
@@ -464,7 +500,7 @@ def concretize_project(project_config, yes_to_all):
 
     # Lastly, remove the developed packages from the environment
     subprocess.run(
-        ["spack", "-e", local_env_dir, "rm"] + list(packages.keys()),
+        ["spack", "-D", local_env_dir, "rm"] + list(packages.keys()),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
