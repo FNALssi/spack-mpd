@@ -136,6 +136,7 @@ FetchContent_Declare(
   )
 
 FetchContent_MakeAvailable(cetmodules)
+find_package(cetmodules 4.01.01 REQUIRED)
 project({project_name}-{date} LANGUAGES NONE)
 
 """
