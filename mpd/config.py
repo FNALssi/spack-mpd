@@ -283,10 +283,21 @@ def handle_variants(project_cfg, variants):
     packages = {key: value for key, value in packages.items() if key in packages_to_develop}
 
     ignored_packages = []
+    languages = set()
     for p, pkg in packages_to_develop.items():
         if not issubclass(type(pkg), CMakePackage):
             ignored_packages.append(p)
             continue
+
+        # Check languages
+        for dependency in pkg.dependencies.values():
+            # Each 'dependency' corresponds to a depends_on(...) directive
+            if "c" in dependency:
+                languages.add("c")
+            if "cxx" in dependency:
+                languages.add("cxx")
+            if "python" in dependency:
+                languages.add("python")
 
         # Start with existing requirements
         existing_pkg_requirements = packages.get(p, {}).get("require", [])
@@ -349,6 +360,7 @@ def handle_variants(project_cfg, variants):
     project_cfg["packages"] = packages
     project_cfg["ignored"] = ignored_packages
     project_cfg["dependencies"] = dependency_requirements
+    project_cfg["languages"] = list(languages)
     return project_cfg
 
 

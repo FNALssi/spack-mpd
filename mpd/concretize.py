@@ -190,19 +190,32 @@ def cmake_presets(project_config, dependencies, view_path):
     view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
 
     compiler_paths = compilers[0].extra_attributes["compilers"]
-    allCacheVariables = {
-        "configurePresets": {
-            "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
-            "CMAKE_C_COMPILER": {"type": "PATH", "value": compiler_paths["c"]},
-            "CMAKE_CXX_COMPILER": {"type": "PATH", "value": compiler_paths["cxx"]},
-            "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
-            "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
-            "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxxstd},
-            "CMAKE_INSTALL_RPATH_USE_LINK_PATH": {"type": "BOOL", "value": "ON"},
-            "CMAKE_INSTALL_RPATH": {"type": "STRING", "value": ";".join(view_lib_dirs)},
-            "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "CetProvideDependency",
-        }
+
+    configure_presets = {
+        "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
+        "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
+        "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
+        "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxxstd},
+        "CMAKE_INSTALL_RPATH_USE_LINK_PATH": {"type": "BOOL", "value": "ON"},
+        "CMAKE_INSTALL_RPATH": {"type": "STRING", "value": ";".join(view_lib_dirs)},
+        "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "CetProvideDependency",
     }
+
+    # Set C/CXX compilers depending on which languages are needed
+    languages = project_config["languages"]
+    if "c" in languages:
+        configure_presets["CMAKE_C_COMPILER"] = {"type": "PATH", "value": compiler_paths["c"]}
+    if "cxx" in languages:
+        configure_presets["CMAKE_CXX_COMPILER"] = {"type": "PATH", "value": compiler_paths["cxx"]}
+    if "python" in languages:
+        # It is sufficient to use the *local* view path for CMake to locate Python
+        local_view_path = Path(project_config["local"]) / ".spack-env" / "view"
+        configure_presets["Python_ROOT"] = {
+            "type": "PATH",
+            "value": local_view_path.resolve().as_posix(),
+        }
+
+    allCacheVariables = {"configurePresets": configure_presets}
 
     source_path = Path(project_config["source"])
     preset_types = [
@@ -397,10 +410,7 @@ def concretize_project(project_config, yes_to_all):
 
     # Build the "all" configuration
     all_config = {
-        "providers": {
-            "libc": ["glibc"],
-            "zlib-api:": ["zlib"],
-        },
+        "providers": {"libc": ["glibc"], "zlib-api:": ["zlib"]},
         "variants": ["generator=ninja"],
         "target": ["x86_64_v3"],
     }
@@ -429,7 +439,8 @@ def concretize_project(project_config, yes_to_all):
                     all_includes = proto_config["spack"].get("include", [])
                     # Filter to only include files with "_packages" or "-packages" in the name
                     include_list = [
-                        item for item in all_includes
+                        item
+                        for item in all_includes
                         if "_packages" in str(item) or "-packages" in str(item)
                     ]
     else:
