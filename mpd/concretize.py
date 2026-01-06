@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 import spack.compilers.config
+import spack.store
 
 try:
     from spack.vendor.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
@@ -32,6 +33,18 @@ SUBCOMMAND = "new-project"
 ALIASES = ["n"]
 
 CMAKE_CACHE_VARIABLE_PATTERN = re.compile(r"-D(.*):(.*)=(.*)")
+
+
+def all_available_compilers():
+    # Pilfered from https://github.com/spack/spack/blob/182c615df98bda5d3c1e26513e3a52c40b4efbec/lib/spack/spack/cmd/compiler.py#L222
+    supported_compilers = spack.compilers.config.supported_compilers()
+
+    def _is_compiler(x):
+        return x.name in supported_compilers and x.package.supported_languages and not x.external
+
+    compilers_from_store = [x for x in spack.store.STORE.db.query() if _is_compiler(x)]
+    compilers_from_yaml = spack.compilers.config.all_compilers(scope=None, init_config=False)
+    return compilers_from_yaml + compilers_from_store
 
 
 def preset_is(name: str):
@@ -161,7 +174,7 @@ def cmake_lists(project_config, dependencies):
 def cmake_presets(project_config, dependencies, view_path):
     # Select compiler
     compilers = []
-    all_compilers = spack.compilers.config.all_compilers()
+    all_compilers = all_available_compilers()
     if desired_compiler := project_config.get("compiler"):
         desired_compiler = desired_compiler["value"]
         compilers = [c for c in all_compilers if c.satisfies(desired_compiler)]
@@ -189,7 +202,18 @@ def cmake_presets(project_config, dependencies, view_path):
     cxxstd = project_config["cxxstd"]["value"]
     view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
 
-    compiler_paths = compilers[0].extra_attributes["compilers"]
+    chosen_compiler = compilers[0]
+
+    # The compiler paths are selected differently depending on whether the compiler is an
+    # external package or an installed one.
+    compiler_paths = {}
+    if chosen_compiler.external:
+        compiler_paths = chosen_compiler.extra_attributes["compilers"]
+    else:
+        if cc := getattr(chosen_compiler.package, "cc", None):
+            compiler_paths["c"] = cc
+        if cxx := getattr(chosen_compiler.package, "cxx", None):
+            compiler_paths["cxx"] = cxx
 
     configure_presets = {
         "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
