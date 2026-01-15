@@ -392,10 +392,6 @@ def concretize_project(project_config, yes_to_all):
         "target": ["x86_64_v3"],
     }
 
-    # Add compiler preference if available
-    if compiler := project_config.get("compiler"):
-        all_config["prefer"] = [f"%{compiler['value']}"]
-
     package_requirements["all"] = all_config
 
     print()
