@@ -1,12 +1,11 @@
 import subprocess
 from pathlib import Path
 
-import spack.llnl.util.filesystem as fs
 import spack.llnl.util.tty as tty
 
 from .config import selected_project_config
 from .preconditions import State, activate_development_environment, preconditions
-from .util import cyan
+from .util import cyan, remove_dir
 
 SUBCOMMAND = "build"
 ALIASES = ["b"]
@@ -110,7 +109,7 @@ def process(args):
 
     config = selected_project_config()
     if args.clean:
-        fs.remove_directory_contents(config["build"])
+        remove_dir(Path(config["build"]))
 
     activate_development_environment(config["local"])
     build(config, args.parallel, args.generator_options, args.cmake_defines)

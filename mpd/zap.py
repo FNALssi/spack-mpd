@@ -1,9 +1,11 @@
+from pathlib import Path
+
 import spack.environment as ev
-import spack.llnl.util.filesystem as fs
 import spack.package_base
 
 from .config import UNINSTALLED, selected_project_config, update
 from .preconditions import State, preconditions
+from .util import remove_dir
 
 SUBCOMMAND = "zap"
 ALIASES = ["z"]
@@ -46,11 +48,11 @@ def process(args):
     # Default is to zap build only
     zap_only = args.zap or not (args.zap_all or args.zap or args.zap_install)
     if zap_only:
-        fs.remove_directory_contents(project_config["build"])
+        remove_dir(Path(project_config["build"]))
         return
 
     if args.zap_all:
-        fs.remove_directory_contents(project_config["build"])
+        remove_dir(Path(project_config["build"]))
 
     packages = project_config["packages"]
     env = ev.read(project_config["name"])

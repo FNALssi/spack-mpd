@@ -171,48 +171,12 @@ def cmake_lists(project_config, dependencies):
 
 
 def cmake_presets(project_config, dependencies, view_path):
-    # Select compiler
-    compilers = []
-    all_compilers = all_available_compilers()
-    if desired_compiler := project_config.get("compiler"):
-        desired_compiler = desired_compiler["value"]
-        compilers = [c for c in all_compilers if c.satisfies(desired_compiler)]
-
-        if not compilers:
-            desired_compiler_variant = project_config["compiler"]["variant"]
-            tty.die(f"No compiler found that corresponds to '{desired_compiler_variant}'")
-
-        # Most recent version wins
-        compilers.sort(key=lambda spec: spec.version, reverse=True)
-
-    # If no compilers specified, find preferred one
-    # FIXME: THIS IS NOT RIGHT
-    if not compilers:
-        candidates = {c.name: c for c in all_compilers}
-        preferred_compilers = spack.config.get("packages:all:compiler", list())
-        for c in preferred_compilers:
-            if candidate := candidates.get(c):
-                compilers.append(candidate)
-                break
-
-    if not compilers:
-        tty.die("No default compiler available--you must specify the compiler (e.g. %gcc@x.y)")
+    # Use the compiler that was already selected and validated in project_config_from_args
+    chosen_compiler = project_config["chosen_compiler"]
+    compiler_paths = project_config["compiler_paths"]
 
     cxxstd = project_config["cxxstd"]["value"]
     view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
-
-    chosen_compiler = compilers[0]
-
-    # The compiler paths are selected differently depending on whether the compiler is an
-    # external package or an installed one.
-    compiler_paths = {}
-    if chosen_compiler.external:
-        compiler_paths = chosen_compiler.extra_attributes["compilers"]
-    else:
-        if cc := getattr(chosen_compiler.package, "cc", None):
-            compiler_paths["c"] = cc
-        if cxx := getattr(chosen_compiler.package, "cxx", None):
-            compiler_paths["cxx"] = cxx
 
     configure_presets = {
         "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},

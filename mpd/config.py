@@ -13,9 +13,12 @@ try:
 except ImportError:
     from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
+import spack.compilers
 import spack.compilers.config as compilers_config
+import spack.config
 import spack.environment as ev
 import spack.llnl.util.tty as tty
+import spack.store
 import spack.util.spack_yaml as syaml
 from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
@@ -129,8 +132,16 @@ def ordered_requirement_list(requirements):
     return requirement_list
 
 
-def matching_compiler(token):
-    return any(str(c).startswith(token.value) for c in compilers_config.all_compilers())
+def all_available_compilers():
+    # Pilfered from https://github.com/spack/spack/blob/182c615df98bda5d3c1e26513e3a52c40b4efbec/lib/spack/spack/cmd/compiler.py#L222
+    supported_compilers = spack.compilers.config.supported_compilers()
+
+    def _is_compiler(x):
+        return x.name in supported_compilers and x.package.supported_languages and not x.external
+
+    compilers_from_store = [x for x in spack.store.STORE.db.query() if _is_compiler(x)]
+    compilers_from_yaml = spack.compilers.config.all_compilers(scope=None, init_config=False)
+    return compilers_from_yaml + compilers_from_store
 
 
 def handle_variant(token):
@@ -349,6 +360,49 @@ def project_config_from_args(args):
         project["compiler"] = _variant_pair(compiler_arg, "%" + compiler_arg)
     else:
         tty.warn("No compiler spec specified " + gray("(will use default)"))
+
+    # Select and validate compiler
+    compilers = []
+    all_compilers = all_available_compilers()
+    if desired_compiler := project.get("compiler"):
+        desired_compiler_value = desired_compiler["value"]
+        compilers = [c for c in all_compilers if c.satisfies(desired_compiler_value)]
+
+        if not compilers:
+            desired_compiler_variant = project["compiler"]["variant"]
+            tty.die(f"No compiler found that corresponds to '{desired_compiler_variant}'")
+
+        # Most recent version wins
+        compilers.sort(key=lambda spec: spec.version, reverse=True)
+
+    # If no compilers specified, find preferred one
+    # FIXME: THIS IS NOT RIGHT
+    if not compilers:
+        candidates = {c.name: c for c in all_compilers}
+        preferred_compilers = spack.config.get("packages:all:compiler", list())
+        for c in preferred_compilers:
+            if candidate := candidates.get(c):
+                compilers.append(candidate)
+                break
+
+    if not compilers:
+        tty.die("No default compiler available--you must specify the compiler (e.g. %gcc@x.y)")
+
+    chosen_compiler = compilers[0]
+
+    # The compiler paths are selected differently depending on whether the compiler is an
+    # external package or an installed one.
+    compiler_paths = {}
+    if chosen_compiler.external:
+        compiler_paths = chosen_compiler.extra_attributes["compilers"]
+    else:
+        if cc := getattr(chosen_compiler.package, "cc", None):
+            compiler_paths["c"] = cc
+        if cxx := getattr(chosen_compiler.package, "cxx", None):
+            compiler_paths["cxx"] = cxx
+
+    project["chosen_compiler"] = str(chosen_compiler)
+    project["compiler_paths"] = compiler_paths
 
     return handle_variants(project, args.variants)
 

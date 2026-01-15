@@ -83,6 +83,38 @@ def spack_cmd_line():
     return f"spack {' '.join(sys.argv[1:])}"
 
 
+def remove_dir(dir_path):
+    """Remove a directory with retry logic for macOS .DS_Store issues."""
+    # On macOS, retry removal due to .DS_Store file issues
+    max_attempts = 3 if sys.platform == "darwin" else 1
+
+    for attempt in range(max_attempts):
+        # First remove .DS_Store files that macOS creates
+        if sys.platform == "darwin":
+            subprocess.run(
+                ["find", str(dir_path), "-name", ".DS_Store", "-delete"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        # Now remove the directory
+        subprocess.run(
+            ["rm", "-rf", str(dir_path)],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Check if removal succeeded
+        if not dir_path.exists():
+            break
+
+        # Wait before retry (only on non-final attempts)
+        if attempt < max_attempts - 1:
+            time.sleep(0.1)
+
+
 def remove_view(local_env_dir):
     spack_env = Path(local_env_dir) / ".spack-env"
     view_path = spack_env / "view"
@@ -94,31 +126,4 @@ def remove_view(local_env_dir):
 
     # Remove ._view directory
     if dotview_path.exists():
-        # On macOS, retry removal due to .DS_Store file issues
-        max_attempts = 3 if sys.platform == "darwin" else 1
-
-        for attempt in range(max_attempts):
-            # First remove .DS_Store files that macOS creates
-            if sys.platform == "darwin":
-                subprocess.run(
-                    ["find", str(dotview_path), "-name", ".DS_Store", "-delete"],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-
-            # Now remove the directory
-            subprocess.run(
-                ["rm", "-rf", str(dotview_path)],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-
-            # Check if removal succeeded
-            if not dotview_path.exists():
-                break
-
-            # Wait before retry (only on non-final attempts)
-            if attempt < max_attempts - 1:
-                time.sleep(0.1)
+        remove_dir(dotview_path)
