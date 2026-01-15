@@ -190,14 +190,9 @@ def handle_variants(project_cfg, variants):
     virtual_dependency = False
     virtual_dependencies = {}
     concrete_package_expected = False
-    compiler_string = None
     dependency = False
     variant_map = general_variant_map
     for token in tokens_from_str:
-        if compiler_string and token.kind == SpecTokens.VERSION:
-            # Add version onto compiler string
-            compiler_string = compiler_string + token.value
-            continue
         if token.kind == SpecTokens.DEPENDENCY:
             dependency = True
             continue
@@ -213,10 +208,6 @@ def handle_variants(project_cfg, variants):
                 virtual_dependencies.setdefault(virtual_package, []).append(token.value)
                 virtual_package = None
                 concrete_package_expected = False
-            elif dependency and matching_compiler(token):
-                dependency = False
-                compiler_string = token.value
-                continue
             else:
                 parent_map = dependency_variant_map if dependency else package_variant_map
                 variant_map = parent_map.setdefault(token.value, dict())
@@ -227,15 +218,6 @@ def handle_variants(project_cfg, variants):
             virtual_package = variant_pair["value"]
         else:
             variant_map[name] = variant_pair
-
-    if compiler_string:
-        general_variant_map["compiler"] = _variant_pair(compiler_string, "%" + compiler_string)
-
-    # Compiler
-    if "compiler" in general_variant_map:
-        project_cfg["compiler"] = general_variant_map.pop("compiler")
-    elif "compiler" not in project_cfg:
-        tty.warn("No compiler spec specified in the variants list " + gray("(will use default)"))
 
     # CXX standard
     if "cxxstd" in general_variant_map:
@@ -303,24 +285,10 @@ def handle_variants(project_cfg, variants):
         existing_pkg_requirements = packages.get(p, {}).get("require", [])
         existing_pkg_requirements_str = " ".join(existing_pkg_requirements)
         pkg_requirements = {}
-        compiler_string = None
-        # We have to parse the specifications for the packages, too.  And because (e.g.) %gcc
-        # is now parsed as more than one token, we have to deal with it specially.  In this
-        # case, though, we simply create the 'compiler_string' and don't use it.  We should
-        # do something more intelligent.
         for token in SpecParser(existing_pkg_requirements_str).tokens():
-            if compiler_string and token.kind == SpecTokens.VERSION:
-                # Add version onto compiler string
-                compiler_string = compiler_string + token.value
-                continue
             if token.kind == SpecTokens.DEPENDENCY:
                 dependency = True
                 continue
-            if token.kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
-                if dependency and matching_compiler(token):
-                    dependency = False
-                    compiler_string = token.value
-                    continue
 
             name, variant = handle_variant(token)
             pkg_requirements[name] = variant["variant"]
@@ -374,6 +342,14 @@ def project_config_from_args(args):
 
     directories = prepare_project_directories(top_path, srcs_path)
     project.update(directories)
+
+    # Handle explicit --compiler argument
+    compiler_arg = getattr(args, "compiler", None)
+    if compiler_arg:
+        project["compiler"] = _variant_pair(compiler_arg, "%" + compiler_arg)
+    else:
+        tty.warn("No compiler spec specified " + gray("(will use default)"))
+
     return handle_variants(project, args.variants)
 
 

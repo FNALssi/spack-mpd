@@ -6,7 +6,7 @@ import spack.llnl.util.tty as tty
 from .concretize import concretize_project
 from .config import mpd_project_exists, print_config_info, project_config_from_args, select, update
 from .preconditions import State, preconditions
-from .util import bold, gray
+from .util import bold, gray, remove_view
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n"]
@@ -41,6 +41,9 @@ def setup_subparser(subparsers):
     new_project.add_argument(
         "-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts"
     )
+    new_project.add_argument(
+        "-C", "--compiler", help="compiler to use (e.g., gcc@13.2.0, clang@15.0.0)"
+    )
     new_project.add_argument("variants", nargs="*", help="variants to apply to developed packages")
 
 
@@ -56,6 +59,7 @@ def process(args):
             tty.info(f"Overwriting existing MPD project {bold(name)}")
             local_env_dir = project_config["local"]
             if ev.is_env_dir(local_env_dir):
+                remove_view(local_env_dir)
                 ev.Environment(local_env_dir).destroy()
                 tty.info(gray(f"Removed existing environment at {project_config['local']}"))
             Path(local_env_dir).mkdir(exist_ok=True)

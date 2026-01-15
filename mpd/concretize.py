@@ -2,7 +2,6 @@ import copy
 import json
 import os
 import re
-import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -27,7 +26,7 @@ from spack import traverse
 from spack.spec import InstallStatus
 
 from .config import update
-from .util import bold, cyan, get_number, gray, make_yaml_file, yellow
+from .util import bold, cyan, get_number, gray, make_yaml_file, remove_view, yellow
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n"]
@@ -299,16 +298,6 @@ def make_cmake_files(project_config, cmake_args, dependencies, view_path):
     cmake_presets(project_config, dependencies, view_path)
 
 
-def remove_view(local_env_dir):
-    spack_env = Path(local_env_dir) / ".spack-env"
-    view_path = spack_env / "view"
-    if view_path.is_symlink():
-        view_path.unlink()
-    else:
-        shutil.rmtree(view_path, ignore_errors=True)
-    shutil.rmtree(spack_env / "._view", ignore_errors=True)
-
-
 def no_dependents(packages):
     no_incoming_edges = []
     for pkg in packages.keys():
@@ -572,7 +561,6 @@ def concretize_project(project_config, yes_to_all):
         env.write()
 
     tty.info(gray("Finalizing concretization"))
-    remove_view(local_env_dir)
 
     # Lastly, remove the developed packages from the environment
     subprocess.run(
@@ -582,6 +570,7 @@ def concretize_project(project_config, yes_to_all):
     )
     with env, env.write_transaction():
         env.concretize()
+        remove_view(local_env_dir)
         env.write()
 
     update(project_config, status="concretized")
