@@ -363,7 +363,10 @@ def project_config_from_args(args):
     if compiler_arg:
         project["compiler"] = _variant_pair(compiler_arg, "%" + compiler_arg)
     else:
-        tty.warn("No compiler spec specified " + gray("(will use default)"))
+        tty.warn(
+            "No compiler spec specified "
+            + gray("(will attempt to use default; project creation will fail if none is available)")
+        )
 
     # Select and validate compiler
     compilers = []
