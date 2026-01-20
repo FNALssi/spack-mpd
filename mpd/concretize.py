@@ -18,7 +18,6 @@ import spack.builder as builder
 import spack.cmd
 import spack.compilers
 import spack.compilers.config
-import spack.config
 import spack.environment as ev
 import spack.llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
@@ -172,7 +171,6 @@ def cmake_lists(project_config, dependencies):
 
 def cmake_presets(project_config, dependencies, view_path):
     # Use the compiler that was already selected and validated in project_config_from_args
-    chosen_compiler = project_config["chosen_compiler"]
     compiler_paths = project_config["compiler_paths"]
 
     cxxstd = project_config["cxxstd"]["value"]
@@ -420,7 +418,13 @@ def concretize_project(project_config, yes_to_all):
         from_items += [{"type": "local"}, {"type": "external"}]
 
     reuse_block = {"from": from_items}
-    view_dict = {"default": dict(root=".spack-env/view", exclude=["gcc-runtime"])}
+    view_dict = {
+        "default": dict(
+            root=".spack-env/view",
+            # FIXME: Should not exclude hard-coded packages!
+            exclude=["gcc-runtime", "zstd"],
+        )
+    }
     full_block = dict(
         config=dict(deprecated=True),
         specs=list(packages.keys()),

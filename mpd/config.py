@@ -3,6 +3,8 @@ import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+import spack.compilers.config
+
 try:
     from spack.vendor.ruamel.yaml import comments
 except ImportError:
@@ -14,7 +16,6 @@ except ImportError:
     from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import spack.compilers
-import spack.compilers.config as compilers_config
 import spack.config
 import spack.environment as ev
 import spack.llnl.util.tty as tty
@@ -299,6 +300,9 @@ def handle_variants(project_cfg, variants):
         for token in SpecParser(existing_pkg_requirements_str).tokens():
             if token.kind == SpecTokens.DEPENDENCY:
                 dependency = True
+                continue
+            if dependency and token.kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
+                dependency = False
                 continue
 
             name, variant = handle_variant(token)
