@@ -18,11 +18,12 @@ import spack.builder as builder
 import spack.cmd
 import spack.compilers
 import spack.compilers.config
+import spack.concretize
 import spack.environment as ev
 import spack.llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
 from spack import traverse
-from spack.spec import InstallStatus
+from spack.spec import InstallStatus, Spec
 
 from .config import update
 from .util import bold, cyan, get_number, gray, make_yaml_file, remove_view, yellow
@@ -418,18 +419,27 @@ def concretize_project(project_config, yes_to_all):
         from_items += [{"type": "local"}, {"type": "external"}]
 
     reuse_block = {"from": from_items}
-    view_dict = {
-        "default": dict(
-            root=".spack-env/view",
-            # FIXME: Should not exclude hard-coded packages!
-            exclude=["gcc-runtime", "zstd"],
-        )
-    }
+
+    # Omit compiler(s) used to build the "chosen" compiler
+    cspec = spack.concretize.concretize_one(Spec(project_config["chosen_compiler"]))
+    exclude_clauses = set()
+    if not cspec.external:
+        for d in cspec.dependencies():
+            dcompiler = getattr(d.package, "compiler", None)
+            if dcompiler:
+                exclude_clauses.update(
+                    f"%{c.name}@{c.version}" for c in dcompiler.compilers.values()
+                )
+
+    default_view_dict = dict(root=".spack-env/view")
+    if exclude_clauses:
+        default_view_dict["exclude"] = list(exclude_clauses)
+
     full_block = dict(
         config=dict(deprecated=True),
         specs=list(packages.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
-        view=view_dict,
+        view=dict(default=default_view_dict),
         packages=package_requirements,
     )
 
