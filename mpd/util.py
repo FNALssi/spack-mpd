@@ -116,9 +116,9 @@ def remove_dir(dir_path):
 
     # If the directory still exists after all attempts, log a warning
     if dir_path.exists():
-        tty.warn(
-            f"Failed to remove directory {dir_path} after {max_attempts} attempts"
-        )
+        tty.warn(f"Failed to remove directory {dir_path} after {max_attempts} attempts")
+
+
 def remove_view(local_env_dir):
     spack_env = Path(local_env_dir) / ".spack-env"
     view_path = spack_env / "view"

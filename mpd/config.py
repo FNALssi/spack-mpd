@@ -365,7 +365,9 @@ def project_config_from_args(args):
     else:
         tty.warn(
             "No compiler spec specified "
-            + gray("(will attempt to use default; project creation will fail if none is available)")
+            + gray(
+                "(will attempt to use default; project creation will fail if none is available)"
+            )
         )
 
     # Select and validate compiler
