@@ -1,4 +1,6 @@
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import spack.llnl.util.tty as tty
@@ -79,3 +81,53 @@ def spack_cmd_line():
     # We specify 'spack' instead of using argv[0], which can include
     # the entire path of the executable.
     return f"spack {' '.join(sys.argv[1:])}"
+
+
+def remove_dir(dir_path):
+    """Remove a directory with retry logic for macOS .DS_Store issues."""
+    # On macOS, retry removal due to .DS_Store file issues
+    max_attempts = 3 if sys.platform == "darwin" else 1
+
+    for attempt in range(max_attempts):
+        # First remove .DS_Store files that macOS creates
+        if sys.platform == "darwin":
+            subprocess.run(
+                ["find", str(dir_path), "-name", ".DS_Store", "-delete"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        # Now remove the directory
+        subprocess.run(
+            ["rm", "-rf", str(dir_path)],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Check if removal succeeded
+        if not dir_path.exists():
+            break
+
+        # Wait before retry (only on non-final attempts)
+        if attempt < max_attempts - 1:
+            time.sleep(0.1)
+
+    # If the directory still exists after all attempts, log a warning
+    if dir_path.exists():
+        tty.warn(f"Failed to remove directory {dir_path} after {max_attempts} attempts")
+
+
+def remove_view(local_env_dir):
+    spack_env = Path(local_env_dir) / ".spack-env"
+    view_path = spack_env / "view"
+    dotview_path = spack_env / "._view"
+
+    # Remove view symlink
+    if view_path.is_symlink():
+        view_path.unlink()
+
+    # Remove ._view directory
+    if dotview_path.exists():
+        remove_dir(dotview_path)

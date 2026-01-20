@@ -2,7 +2,6 @@ import copy
 import json
 import os
 import re
-import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -18,16 +17,15 @@ except ImportError:
 import spack.builder as builder
 import spack.cmd
 import spack.compilers
-import spack.compilers.config
-import spack.config
+import spack.concretize
 import spack.environment as ev
 import spack.llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
 from spack import traverse
-from spack.spec import InstallStatus
+from spack.spec import InstallStatus, Spec
 
 from .config import update
-from .util import bold, cyan, get_number, gray, make_yaml_file, yellow
+from .util import bold, cyan, get_number, gray, make_yaml_file, remove_view, yellow
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n"]
@@ -172,48 +170,11 @@ def cmake_lists(project_config, dependencies):
 
 
 def cmake_presets(project_config, dependencies, view_path):
-    # Select compiler
-    compilers = []
-    all_compilers = all_available_compilers()
-    if desired_compiler := project_config.get("compiler"):
-        desired_compiler = desired_compiler["value"]
-        compilers = [c for c in all_compilers if c.satisfies(desired_compiler)]
-
-        if not compilers:
-            desired_compiler_variant = project_config["compiler"]["variant"]
-            tty.die(f"No compiler found that corresponds to '{desired_compiler_variant}'")
-
-        # Most recent version wins
-        compilers.sort(key=lambda spec: spec.version, reverse=True)
-
-    # If no compilers specified, find preferred one
-    # FIXME: THIS IS NOT RIGHT
-    if not compilers:
-        candidates = {c.name: c for c in all_compilers}
-        preferred_compilers = spack.config.get("packages:all:compiler", list())
-        for c in preferred_compilers:
-            if candidate := candidates.get(c):
-                compilers.append(candidate)
-                break
-
-    if not compilers:
-        tty.die("No default compiler available--you must specify the compiler (e.g. %gcc@x.y)")
+    # Use the compiler that was already selected and validated in project_config_from_args
+    compiler_paths = project_config["compiler_paths"]
 
     cxxstd = project_config["cxxstd"]["value"]
     view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
-
-    chosen_compiler = compilers[0]
-
-    # The compiler paths are selected differently depending on whether the compiler is an
-    # external package or an installed one.
-    compiler_paths = {}
-    if chosen_compiler.external:
-        compiler_paths = chosen_compiler.extra_attributes["compilers"]
-    else:
-        if cc := getattr(chosen_compiler.package, "cc", None):
-            compiler_paths["c"] = cc
-        if cxx := getattr(chosen_compiler.package, "cxx", None):
-            compiler_paths["cxx"] = cxx
 
     configure_presets = {
         "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
@@ -297,16 +258,6 @@ def make_cmake_files(project_config, cmake_args, dependencies, view_path):
     cmake_develop(project_config, cmake_args)
     cmake_lists(project_config, dependencies)
     cmake_presets(project_config, dependencies, view_path)
-
-
-def remove_view(local_env_dir):
-    spack_env = Path(local_env_dir) / ".spack-env"
-    view_path = spack_env / "view"
-    if view_path.is_symlink():
-        view_path.unlink()
-    else:
-        shutil.rmtree(view_path, ignore_errors=True)
-    shutil.rmtree(spack_env / "._view", ignore_errors=True)
 
 
 def no_dependents(packages):
@@ -439,10 +390,6 @@ def concretize_project(project_config, yes_to_all):
         "target": ["x86_64_v3"],
     }
 
-    # Add compiler preference if available
-    if compiler := project_config.get("compiler"):
-        all_config["prefer"] = [f"%{compiler['value']}"]
-
     package_requirements["all"] = all_config
 
     print()
@@ -471,12 +418,27 @@ def concretize_project(project_config, yes_to_all):
         from_items += [{"type": "local"}, {"type": "external"}]
 
     reuse_block = {"from": from_items}
-    view_dict = {"default": dict(root=".spack-env/view", exclude=["gcc-runtime"])}
+
+    # Omit compiler(s) used to build the "chosen" compiler
+    cspec = spack.concretize.concretize_one(Spec(project_config["chosen_compiler"]))
+    exclude_clauses = set()
+    if not cspec.external:
+        for d in cspec.dependencies():
+            dcompiler = getattr(d.package, "compiler", None)
+            if dcompiler:
+                exclude_clauses.update(
+                    f"%{c.name}@{c.version}" for c in dcompiler.compilers.values()
+                )
+
+    default_view_dict = dict(root=".spack-env/view")
+    if exclude_clauses:
+        default_view_dict["exclude"] = list(exclude_clauses)
+
     full_block = dict(
         config=dict(deprecated=True),
         specs=list(packages.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
-        view=view_dict,
+        view=dict(default=default_view_dict),
         packages=package_requirements,
     )
 
@@ -572,7 +534,6 @@ def concretize_project(project_config, yes_to_all):
         env.write()
 
     tty.info(gray("Finalizing concretization"))
-    remove_view(local_env_dir)
 
     # Lastly, remove the developed packages from the environment
     subprocess.run(
@@ -582,6 +543,7 @@ def concretize_project(project_config, yes_to_all):
     )
     with env, env.write_transaction():
         env.concretize()
+        remove_view(local_env_dir)
         env.write()
 
     update(project_config, status="concretized")
