@@ -9,10 +9,7 @@ from pathlib import Path
 import spack.compilers.config
 import spack.store
 
-try:
-    from spack.vendor.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
-except ImportError:
-    from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
+from spack.vendor.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import spack.builder as builder
 import spack.cmd
@@ -25,7 +22,7 @@ from spack import traverse
 from spack.spec import InstallStatus, Spec
 
 from .config import update
-from .util import bold, cyan, get_number, gray, make_yaml_file, remove_view, yellow
+from .util import bold, cyan, get_number, gray, make_yaml_file, yellow
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n"]
@@ -402,18 +399,17 @@ def concretize_project(project_config, yes_to_all):
         from_items += [{"type": "environment", "path": proto_env}]
 
         # Read the proto_env's spack.yaml to extract the include list
-        proto_env_yaml = Path(proto_env) / "spack.yaml"
+        proto_env_yaml = None
+        if ev.exists(proto_env):
+            proto_env_yaml = Path(ev.read(proto_env).manifest_path)
+        else:
+            proto_env_yaml = Path(proto_env) / "spack.yaml"
+
         if proto_env_yaml.exists():
             with open(proto_env_yaml, "r") as f:
                 proto_config = syaml.load(f)
                 if proto_config and "spack" in proto_config:
-                    all_includes = proto_config["spack"].get("include", [])
-                    # Filter to only include files with "_packages" or "-packages" in the name
-                    include_list = [
-                        item
-                        for item in all_includes
-                        if "_packages" in str(item) or "-packages" in str(item)
-                    ]
+                    include_list = proto_config["spack"].get("include", [])
     else:
         from_items += [{"type": "local"}, {"type": "external"}]
 
@@ -459,11 +455,13 @@ def concretize_project(project_config, yes_to_all):
     update(project_config, status="created")
 
     tty.info(gray("Concretizing initial environment"))
-    with env, env.write_transaction():
-        env.concretize()
-        env.write(regenerate=False)
+    subprocess.run(
+        ["spack", "-e", name, "concretize"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
     verify_no_missing_intermediate_deps(env, packages)
+
+    env = ev.read(name)
 
     # Handle package-specific CMake args as provided by the Spack package
     cmake_args = {}
@@ -528,10 +526,11 @@ def concretize_project(project_config, yes_to_all):
         stderr=subprocess.DEVNULL,
     )
 
-    env = ev.Environment(local_env_dir)
-    with env, env.write_transaction():
-        env.concretize()
-        env.write()
+    subprocess.run(
+        ["spack", "-D", local_env_dir, "concretize"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
     tty.info(gray("Finalizing concretization"))
 
@@ -541,13 +540,14 @@ def concretize_project(project_config, yes_to_all):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    with env, env.write_transaction():
-        env.concretize()
-        remove_view(local_env_dir)
-        env.write()
-
+    subprocess.run(
+        ["spack", "-D", local_env_dir, "concretize"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     update(project_config, status="concretized")
 
+    env = ev.Environment(local_env_dir)
     if absent := absent_dependencies(env, packages):
 
         def _parens_number(i):
