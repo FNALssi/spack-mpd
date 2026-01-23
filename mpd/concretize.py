@@ -6,17 +6,16 @@ import subprocess
 import time
 from pathlib import Path
 
-import spack.compilers.config
-import spack.store
-
 from spack.vendor.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import spack.builder as builder
 import spack.cmd
 import spack.compilers
+import spack.compilers.config
 import spack.concretize
 import spack.environment as ev
 import spack.llnl.util.tty as tty
+import spack.store
 import spack.util.spack_yaml as syaml
 from spack import traverse
 from spack.spec import InstallStatus, Spec
@@ -455,13 +454,10 @@ def concretize_project(project_config, yes_to_all):
     update(project_config, status="created")
 
     tty.info(gray("Concretizing initial environment"))
-    subprocess.run(
-        ["spack", "-e", name, "concretize"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
-
-    verify_no_missing_intermediate_deps(env, packages)
+    subprocess.run(["spack", "-e", name, "concretize"], capture_output=True).check_returncode()
 
     env = ev.read(name)
+    verify_no_missing_intermediate_deps(env, packages)
 
     # Handle package-specific CMake args as provided by the Spack package
     cmake_args = {}
@@ -521,30 +517,23 @@ def concretize_project(project_config, yes_to_all):
         new_roots += f"\n    - {dep}"
     tty.msg(gray(new_roots))
     subprocess.run(
-        ["spack", "-D", local_env_dir, "add"] + list(sorted_first_order_deps),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+        ["spack", "-D", local_env_dir, "add"] + list(sorted_first_order_deps), capture_output=True
+    ).check_returncode()
 
     subprocess.run(
-        ["spack", "-D", local_env_dir, "concretize"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+        ["spack", "-D", local_env_dir, "concretize"], capture_output=True
+    ).check_returncode()
 
     tty.info(gray("Finalizing concretization"))
 
     # Lastly, remove the developed packages from the environment
     subprocess.run(
-        ["spack", "-D", local_env_dir, "rm"] + list(packages.keys()),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+        ["spack", "-D", local_env_dir, "rm"] + list(packages.keys()), capture_output=True
+    ).check_returncode()
     subprocess.run(
-        ["spack", "-D", local_env_dir, "concretize"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+        ["spack", "-D", local_env_dir, "concretize"], capture_output=True
+    ).check_returncode()
+
     update(project_config, status="concretized")
 
     env = ev.Environment(local_env_dir)
