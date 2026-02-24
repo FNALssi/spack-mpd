@@ -421,22 +421,14 @@ def concretize_project(project_config, yes_to_all):
 
     reuse_block = {"from": from_items}
 
-    # Omit compiler(s) used to build the "chosen" compiler
-    cspec = spack.concretize.concretize_one(Spec(project_config["chosen_compiler"]))
-    exclude_clauses = set()
-    if not cspec.external:
-        for d in cspec.dependencies():
-            dcompiler = getattr(d.package, "compiler", None)
-            if dcompiler:
-                exclude_clauses.update(
-                    f"%{c.name}@{c.version}" for c in dcompiler.compilers.values()
-                )
+    # Specify the subdirectory path(s) of the chosen compiler
+    compiler_dir_paths = set(str(Path(p).parent) for p in project_config["compiler_paths"].values())
+    prepend_dirs = dict(PATH=":".join(compiler_dir_paths))
 
-    default_view_dict = dict(root=".spack-env/view")
-    if exclude_clauses:
-        default_view_dict["exclude"] = list(exclude_clauses)
+    default_view_dict = dict(root=".spack-env/view", exclude=["gcc-runtime"])
 
     full_block = dict(
+        env_vars=dict(prepend_path=prepend_dirs),
         config=dict(deprecated=True),
         specs=list(packages.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
@@ -485,6 +477,8 @@ def concretize_project(project_config, yes_to_all):
     # Now add the first-order dependencies
     # Include compiler as a definition in the environment specification.
     first_order_deps = {"cmake"}
+
+    chosen_compiler = None
     if compiler := project_config.get("compiler"):
         found_compilers = spack.cmd.parse_specs(compiler["value"])
         if not found_compilers:
@@ -495,8 +489,7 @@ def concretize_project(project_config, yes_to_all):
                 f"{indent}See {cyan('spack compiler list')} for available compilers.\n"
                 f"{indent}Also see {cyan('spack compiler add --help')}.\n"
             )
-        compiler_str = [YamlQuote(found_compilers[0])]
-        first_order_deps.add(compiler_str[0])
+        chosen_compiler = found_compilers[0]
 
     # Cetmodules 4 is used by default
     cetmodules4 = True
@@ -504,15 +497,21 @@ def concretize_project(project_config, yes_to_all):
     for s in developed_specs:
         for depth, dep in traverse.traverse_edges([s], cover="edges", depth=True):
             if depth != 1:
-                continue
-            if dep.spec.name == "cetmodules":
-                # Do not use cetmodules4 if one of the dependencies does not use version 4
-                cetmodules4 = cetmodules4 and dep.spec.version.up_to(1) == 4
+                # Only the first-order dependencies are added to the development environment
                 continue
             if dep.spec.name in packages:
+                # Some packages under development may depend on other packages under development.
+                # We remove such dependencies here.
+                continue
+            if dep.spec.satisfies(chosen_compiler):
+                # The development environment should not include the compiler as a root spec.
+                continue
+            if dep.spec.name == "cetmodules":
+                # Do not use cetmodules4 if one of the dependencies does not use version 4.
+                cetmodules4 = cetmodules4 and dep.spec.version.up_to(1) == 4
                 continue
             if dep.spec.external:
-                # We don't need to (and probably shouldn't) include things like glibc
+                # We don't need to (and probably shouldn't) include things like glibc.
                 continue
             first_order_deps.add(dep.spec.name)
 
