@@ -137,12 +137,12 @@ include(develop.cmake)
 FetchContent_Declare(
   cetmodules
   GIT_REPOSITORY https://github.com/FNALssi/cetmodules
-  GIT_TAG 39f03b11 # v4.01.01
-  FIND_PACKAGE_ARGS 4.01.01
+  GIT_TAG 8269cc9 # v4.02.00
+  FIND_PACKAGE_ARGS 4.02.00
   )
 
 FetchContent_MakeAvailable(cetmodules)
-find_package(cetmodules 4.01.01 REQUIRED)
+find_package(cetmodules 4.02.00 REQUIRED)
 """
 
     preamble += f"project({project_name}-{date} LANGUAGES NONE)\n\n"
