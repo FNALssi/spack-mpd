@@ -125,7 +125,7 @@ endmacro()
         )
 
 
-def cmake_lists_preamble(project_name, develop_cetmodules=False):
+def cmake_lists_preamble(project_name, develop_cetmodules, cetmodules4):
     date = time.strftime("%Y-%m-%d")
     preamble = """cmake_minimum_required(VERSION 3.24...4.1 FATAL_ERROR)
 enable_testing()
@@ -135,7 +135,8 @@ include(develop.cmake)
     if develop_cetmodules:
         preamble += "develop(cetmodules)\n\n"
 
-    preamble += f"""include(FetchContent)
+    if cetmodules4:
+        preamble += """include(FetchContent)
 FetchContent_Declare(
   cetmodules
   GIT_REPOSITORY https://github.com/FNALssi/cetmodules
@@ -145,18 +146,22 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(cetmodules)
 find_package(cetmodules 4.01.01 REQUIRED)
-project({project_name}-{date} LANGUAGES NONE)
-
 """
+
+    preamble += f"project({project_name}-{date} LANGUAGES NONE)\n\n"
     return preamble
 
 
-def cmake_lists(project_config, dependencies):
+def cmake_lists(project_config, dependencies, cetmodules4):
     source_path = Path(project_config["source"])
     develop_cetmodules = any("cetmodules" in p for p in [d[0] for d in dependencies])
     with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
         f.write(
-            cmake_lists_preamble(project_config["name"], develop_cetmodules=develop_cetmodules)
+            cmake_lists_preamble(
+                project_config["name"],
+                develop_cetmodules=develop_cetmodules,
+                cetmodules4=cetmodules4,
+            )
         )
         for d, hash, prefix in dependencies:
             if d == "cetmodules":
@@ -165,7 +170,7 @@ def cmake_lists(project_config, dependencies):
         f.write("\n")
 
 
-def cmake_presets(project_config, dependencies, view_path):
+def cmake_presets(project_config, dependencies, cetmodules4, view_path):
     # Use the compiler that was already selected and validated in project_config_from_args
     compiler_paths = project_config["compiler_paths"]
 
@@ -179,8 +184,10 @@ def cmake_presets(project_config, dependencies, view_path):
         "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxxstd},
         "CMAKE_INSTALL_RPATH_USE_LINK_PATH": {"type": "BOOL", "value": "ON"},
         "CMAKE_INSTALL_RPATH": {"type": "STRING", "value": ";".join(view_lib_dirs)},
-        "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "CetProvideDependency",
     }
+
+    if cetmodules4:
+        configure_presets["CMAKE_PROJECT_TOP_LEVEL_INCLUDES"] = "CetProvideDependency"
 
     # Set C/CXX compilers depending on which languages are needed
     languages = project_config["languages"]
@@ -250,10 +257,10 @@ def cmake_presets(project_config, dependencies, view_path):
         json.dump(presets, f, indent=4)
 
 
-def make_cmake_files(project_config, cmake_args, dependencies, view_path):
+def make_cmake_files(project_config, cmake_args, dependencies, cetmodules4, view_path):
     cmake_develop(project_config, cmake_args)
-    cmake_lists(project_config, dependencies)
-    cmake_presets(project_config, dependencies, view_path)
+    cmake_lists(project_config, dependencies, cetmodules4)
+    cmake_presets(project_config, dependencies, cetmodules4, view_path)
 
 
 def no_dependents(packages):
@@ -472,11 +479,6 @@ def concretize_project(project_config, yes_to_all):
         if cmake_args_method := getattr(pkg_builder, "cmake_args", False):
             cmake_args[s.name] = cmake_args_method()
 
-    # Create properly ordered CMake file
-    make_cmake_files(
-        project_config, cmake_args, ordered_roots(env, packages), Path(env.view_path_default)
-    )
-
     # Make development environment starting with initial environment configuration
     tty.info(cyan("Creating local development environment"))
 
@@ -496,10 +498,16 @@ def concretize_project(project_config, yes_to_all):
         compiler_str = [YamlQuote(found_compilers[0])]
         first_order_deps.add(compiler_str[0])
 
+    # Cetmodules 4 is used by default
+    cetmodules4 = True
     developed_specs = [s for _, s in env.concretized_specs() if s.name in packages]
     for s in developed_specs:
         for depth, dep in traverse.traverse_edges([s], cover="edges", depth=True):
             if depth != 1:
+                continue
+            if dep.spec.name == "cetmodules":
+                # Do not use cetmodules4 if one of the dependencies does not use version 4
+                cetmodules4 = cetmodules4 and dep.spec.version.up_to(1) == 4
                 continue
             if dep.spec.name in packages:
                 continue
@@ -510,6 +518,15 @@ def concretize_project(project_config, yes_to_all):
 
     # gcc-runtime is a build-time dependency that will be built if needed.
     first_order_deps.discard("gcc-runtime")
+
+    # Create properly ordered CMake file
+    make_cmake_files(
+        project_config,
+        cmake_args,
+        ordered_roots(env, packages),
+        cetmodules4,
+        Path(env.view_path_default),
+    )
 
     new_roots = "Adding the following packages as top-level dependencies:"
     sorted_first_order_deps = sorted(first_order_deps)
