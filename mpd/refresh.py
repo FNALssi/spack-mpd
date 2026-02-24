@@ -21,6 +21,16 @@ def setup_subparser(subparsers):
     refresh.add_argument(
         "-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts"
     )
+    refresh.add_argument(
+        "-d",
+        "--dependency",
+        nargs="+",
+        action="append",
+        dest="dependencies",
+        metavar=("SPEC", "CONSTRAINT"),
+        help="specify a package with constraints (e.g., root %%gcc@11, foo ^bar@x.y.z)\n"
+        "(can be specified multiple times)",
+    )
     refresh.add_argument("variants", nargs="*", help="variants to apply to developed packages")
     refresh.add_argument(
         "-f",
@@ -57,7 +67,11 @@ def process(args):
 
     current_config = selected_project_config()
     name = current_config["name"]
-    new_config = config.refresh(name, args.variants)
+    # Join dependency token lists into strings
+    dependencies = getattr(args, "dependencies", None)
+    if dependencies:
+        dependencies = [" ".join(dep_tokens) for dep_tokens in dependencies]
+    new_config = config.refresh(name, args.variants, dependencies)
     if current_config == new_config and not args.force:
         tty.msg(f"Project {bold(name)} is up-to-date")
         return

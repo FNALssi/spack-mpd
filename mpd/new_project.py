@@ -44,6 +44,16 @@ def setup_subparser(subparsers):
     new_project.add_argument(
         "-C", "--compiler", help="compiler to use (e.g., gcc@13.2.0, clang@15.0.0)"
     )
+    new_project.add_argument(
+        "-d",
+        "--dependency",
+        nargs="+",
+        action="append",
+        dest="dependencies",
+        metavar=("SPEC", "CONSTRAINT"),
+        help="specify a package with constraints (e.g., root %%gcc@11, foo ^bar@x.y.z)\n"
+        "(can be specified multiple times)",
+    )
     new_project.add_argument("variants", nargs="*", help="variants to apply to developed packages")
 
 

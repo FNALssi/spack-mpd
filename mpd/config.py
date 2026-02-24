@@ -190,24 +190,122 @@ def spack_packages(srcs_dir):
     return packages_to_develop
 
 
-def handle_variants(project_cfg, variants):
+def parse_dependency_spec(dependency_spec):
+    """
+    Parse a dependency specification like 'root%gcc@11' or 'foo ^bar@x.y.z'.
+    Returns (package_name, list_of_constraint_strings).
+    """
+    tokens = list(SpecParser(dependency_spec).tokens())
+    if not tokens:
+        return None, []
+
+    # First token should be the package name
+    if tokens[0].kind != SpecTokens.UNQUALIFIED_PACKAGE_NAME:
+        tty.die(f"Dependency spec must start with a package name: '{dependency_spec}'")
+
+    package_name = tokens[0].value
+    constraints = []
+
+    # Process remaining tokens to build constraint strings
+    i = 1
+    while i < len(tokens):
+        token = tokens[i]
+
+        if token.kind == SpecTokens.DEPENDENCY:
+            # Next token should be a package name for the dependency
+            if i + 1 >= len(tokens):
+                tty.die(f"Incomplete dependency specification in '{dependency_spec}'")
+
+            # Build dependency constraint: ^package + any following constraints
+            dep_constraint = "^" + tokens[i + 1].value
+            i += 2
+
+            # Collect any version/variant info for this dependency
+            while i < len(tokens) and tokens[i].kind != SpecTokens.DEPENDENCY:
+                if tokens[i].kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
+                    # Another package name without ^ means something is wrong
+                    break
+                dep_constraint += tokens[i].value
+                i += 1
+
+            constraints.append(dep_constraint)
+        else:
+            # Regular constraint (version, variant, compiler, etc.)
+            if token.kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
+                tty.die(
+                    f"Unexpected package name '{token.value}' in dependency "
+                    f"spec '{dependency_spec}'. Did you mean to use '^' before it?"
+                )
+            constraints.append(token.value)
+            i += 1
+
+    return package_name, constraints
+
+
+def categorize_constraints(constraints):
+    """
+    Categorize constraint strings into a map for ordered_requirement_list.
+    Takes constraint strings like '%gcc@11', '^bar@x.y.z', '@1.2.3', 'cxxstd=20', etc.
+    Returns a dictionary mapping constraint names to variant pairs.
+    """
+    constraint_map = {}
+    for constraint_str in constraints:
+        # Categorize the constraint based on its first character
+        if constraint_str.startswith("^"):
+            # Dependency constraint: extract dependency name as key
+            # e.g., "^bar@x.y.z" -> key="bar", value="^bar@x.y.z"
+            dep_name = (
+                constraint_str.split("@")[0].split("%")[0].split("+")[0].split("~")[0][1:]
+            )  # Remove ^
+            constraint_map[dep_name] = _variant_pair(dep_name, constraint_str)
+        elif constraint_str.startswith("%"):
+            # Compiler constraint
+            constraint_map["compiler"] = _variant_pair(constraint_str[1:], constraint_str)
+        elif constraint_str.startswith("@"):
+            # Version constraint
+            constraint_map["version"] = _variant_pair(constraint_str[1:], constraint_str)
+        else:
+            # Other constraints (variants, etc.)
+            # Try to extract a name from the constraint
+            if "=" in constraint_str:
+                name = constraint_str.split("=")[0]
+            elif constraint_str.startswith("+") or constraint_str.startswith("~"):
+                name = constraint_str[1:]
+            else:
+                name = constraint_str
+            constraint_map[name] = _variant_pair(name, constraint_str)
+
+    return constraint_map
+
+
+def parse_general_variants(variants):
+    """
+    Parse general variants (positional args) and categorize them.
+    Returns tuple: (general_variant_map, package_variant_map, virtual_dependencies)
+
+    - general_variant_map: variants that apply to all packages (e.g., cxxstd=20)
+    - package_variant_map: package-specific variants (e.g., root +variant)
+    - virtual_dependencies: virtual package providers (e.g., [virtuals=mpi])
+    """
     variant_str = " ".join(variants)
     tokens_from_str = SpecParser(variant_str).tokens()
     general_variant_map = {}
     package_variant_map = {}
-    dependency_variant_map = {}
     virtual_package = None
-    # FIXME: Not sure virtual dependencies are handled correctly
-    #       (can use ^[...] OR %[...] notation)
     virtual_dependency = False
     virtual_dependencies = {}
     concrete_package_expected = False
-    dependency = False
     variant_map = general_variant_map
+
     for token in tokens_from_str:
         if token.kind == SpecTokens.DEPENDENCY:
-            dependency = True
-            continue
+            # ^ character found in variants - this is no longer supported for creating dependencies
+            tty.die(
+                "Using '^' in variants to specify dependencies is no longer supported.\\n"
+                "Please use the --dependency flag instead, e.g.:\\n"
+                "  spack mpd refresh --dependency 'package ^dep@version'\\n"
+                "  spack mpd new-project --dependency 'package ^dep@version'"
+            )
         if token.kind == SpecTokens.START_EDGE_PROPERTIES:
             virtual_dependency = True
             continue
@@ -221,8 +319,8 @@ def handle_variants(project_cfg, variants):
                 virtual_package = None
                 concrete_package_expected = False
             else:
-                parent_map = dependency_variant_map if dependency else package_variant_map
-                variant_map = parent_map.setdefault(token.value, dict())
+                # Package name in variants - this is for package-specific variants
+                variant_map = package_variant_map.setdefault(token.value, dict())
             continue
 
         name, variant_pair = handle_variant(token)
@@ -231,6 +329,11 @@ def handle_variants(project_cfg, variants):
         else:
             variant_map[name] = variant_pair
 
+    return general_variant_map, package_variant_map, virtual_dependencies
+
+
+def apply_project_defaults(project_cfg, general_variant_map, variants):
+    """Extract and apply project-level defaults from general variant map."""
     # CXX standard
     if "cxxstd" in general_variant_map:
         cxxstd_variant = general_variant_map.pop("cxxstd")
@@ -248,12 +351,9 @@ def handle_variants(project_cfg, variants):
     if variants:
         project_cfg["variants"] = " ".join(variants)
 
-    packages_to_develop = spack_packages(project_cfg["source"])
-    cxxstd = project_cfg["cxxstd"]
-    generator = project_cfg["generator"]
-    packages = project_cfg.get("packages", {})
 
-    # Ensure that specified packages are actually cloned
+def validate_package_variants(package_variant_map, packages_to_develop):
+    """Ensure that packages in package_variant_map are actually cloned."""
     not_cloned = []
     for k, v in package_variant_map.items():
         if k not in packages_to_develop:
@@ -270,17 +370,73 @@ def handle_variants(project_cfg, variants):
                 requirements = " " + requirements
             err_msg += f"\n - {k}{requirements}"
         err_msg += "\n\nThe packages should either be cloned, or if they are intended to be\n"
-        err_msg += "constaints, they should be prefaced with the caret (^)."
+        err_msg += (
+            "constraints on dependencies, they should be specified with the --dependency flag."
+        )
         tty.die(err_msg)
 
+
+def build_package_requirements(
+    pkg_name, pkg, packages, cxxstd, generator, compiler, general_variant_map, package_variant_map
+):
+    """Build requirements for a single package."""
+    # Start with existing requirements
+    existing_pkg_requirements = packages.get(pkg_name, {}).get("require", [])
+    existing_pkg_requirements_str = " ".join(existing_pkg_requirements)
+    pkg_requirements = {}
+    dependency = False  # Track dependency context when parsing existing requirements
+    for token in SpecParser(existing_pkg_requirements_str).tokens():
+        if token.kind == SpecTokens.DEPENDENCY:
+            dependency = True
+            continue
+        if dependency and token.kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
+            dependency = False
+            continue
+
+        name, variant = handle_variant(token)
+        pkg_requirements[name] = variant["variant"]
+
+    # Check to see if packages support a 'cxxstd' variant
+    pkg_requirements["version"] = _DEVELOP_VARIANT["variant"]
+    maybe_has_variant = getattr(pkg, "has_variant", lambda _: False)
+    if _depends_on_ccxx(pkg) and compiler:
+        pkg_requirements["compiler"] = compiler["variant"]
+        if maybe_has_variant("cxxstd") or "cxxstd" in pkg.variants:
+            pkg_requirements["cxxstd"] = cxxstd["variant"]
+    if maybe_has_variant("generator") or "generator" in pkg.variants:
+        pkg_requirements["generator"] = generator["variant"]
+
+    # Go through remaining general variants
+    for name, value in general_variant_map.items():
+        if not maybe_has_variant(name) and name not in pkg.variants:
+            continue
+
+        pkg_requirements[name] = value["variant"]
+
+    only_variants = {k: v["variant"] for k, v in package_variant_map.get(pkg_name, {}).items()}
+    pkg_requirements.update(only_variants)
+
+    return dict(require=ordered_requirement_list(pkg_requirements))
+
+
+def build_all_package_requirements(
+    packages_to_develop, project_cfg, general_variant_map, package_variant_map
+):
+    """Build package requirements for all packages to develop."""
+    packages = project_cfg.get("packages", {})
     # We need to make sure that the packages cached in the configuration file still exist
     packages = {key: value for key, value in packages.items() if key in packages_to_develop}
 
+    cxxstd = project_cfg["cxxstd"]
+    generator = project_cfg["generator"]
+    compiler = project_cfg.get("compiler")
+
     ignored_packages = []
     languages = set()
-    for p, pkg in packages_to_develop.items():
+
+    for pkg_name, pkg in packages_to_develop.items():
         if not issubclass(type(pkg), CMakePackage):
-            ignored_packages.append(p)
+            ignored_packages.append(pkg_name)
             continue
 
         # Check languages
@@ -293,44 +449,22 @@ def handle_variants(project_cfg, variants):
             if "python" in dependency:
                 languages.add("python")
 
-        # Start with existing requirements
-        existing_pkg_requirements = packages.get(p, {}).get("require", [])
-        existing_pkg_requirements_str = " ".join(existing_pkg_requirements)
-        pkg_requirements = {}
-        for token in SpecParser(existing_pkg_requirements_str).tokens():
-            if token.kind == SpecTokens.DEPENDENCY:
-                dependency = True
-                continue
-            if dependency and token.kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
-                dependency = False
-                continue
+        packages[pkg_name] = build_package_requirements(
+            pkg_name,
+            pkg,
+            packages,
+            cxxstd,
+            generator,
+            compiler,
+            general_variant_map,
+            package_variant_map,
+        )
 
-            name, variant = handle_variant(token)
-            pkg_requirements[name] = variant["variant"]
+    return packages, ignored_packages, languages
 
-        # Check to see if packages support a 'cxxstd' variant
-        pkg_requirements["version"] = _DEVELOP_VARIANT["variant"]
-        compiler = project_cfg.get("compiler")
-        maybe_has_variant = getattr(pkg, "has_variant", lambda _: False)
-        if _depends_on_ccxx(pkg) and compiler:
-            pkg_requirements["compiler"] = compiler["variant"]
-            if maybe_has_variant("cxxstd") or "cxxstd" in pkg.variants:
-                pkg_requirements["cxxstd"] = cxxstd["variant"]
-        if maybe_has_variant("generator") or "generator" in pkg.variants:
-            pkg_requirements["generator"] = generator["variant"]
 
-        # Go through remaining general variants
-        for name, value in general_variant_map.items():
-            if not maybe_has_variant(name) and name not in pkg.variants:
-                continue
-
-            pkg_requirements[name] = value["variant"]
-
-        only_variants = {k: v["variant"] for k, v in package_variant_map.get(p, {}).items()}
-        pkg_requirements.update(only_variants)
-
-        packages[p] = dict(require=ordered_requirement_list(pkg_requirements))
-
+def build_dependency_requirements(dependency_variant_map, virtual_dependencies, project_cfg):
+    """Build dependency requirements from dependency_variant_map and virtual_dependencies."""
     dependency_requirements = project_cfg.get("dependencies", {})
     for name, requirements in dependency_variant_map.items():
         only_variants = {key: value["variant"] for key, value in requirements.items()}
@@ -340,10 +474,58 @@ def handle_variants(project_cfg, variants):
     if virtual_dependencies:
         dependency_requirements["all"] = dict(providers=virtual_dependencies)
 
+    return dependency_requirements
+
+
+def handle_variants(project_cfg, variants, dependencies=None):
+    """
+    Process variants and dependencies, updating project configuration.
+
+    Args:
+        project_cfg: Project configuration dictionary
+        variants: List of general variant strings (positional args)
+        dependencies: List of dependency spec strings (from --dependency flag)
+
+    Returns:
+        Updated project_cfg dictionary
+    """
+    # Process explicit dependencies (new --dependency flag)
+    dependency_variant_map = {}
+    if dependencies:
+        for dep_spec in dependencies:
+            pkg_name, constraints = parse_dependency_spec(dep_spec)
+            if not pkg_name:
+                continue
+            dependency_variant_map[pkg_name] = categorize_constraints(constraints)
+
+    # Parse general variants (positional args)
+    general_variant_map, package_variant_map, virtual_dependencies = parse_general_variants(
+        variants
+    )
+
+    # Apply project-level defaults (cxxstd, generator)
+    apply_project_defaults(project_cfg, general_variant_map, variants)
+
+    # Get packages to develop and validate package_variant_map
+    packages_to_develop = spack_packages(project_cfg["source"])
+    validate_package_variants(package_variant_map, packages_to_develop)
+
+    # Build package requirements
+    packages, ignored_packages, languages = build_all_package_requirements(
+        packages_to_develop, project_cfg, general_variant_map, package_variant_map
+    )
+
+    # Build dependency requirements
+    dependency_requirements = build_dependency_requirements(
+        dependency_variant_map, virtual_dependencies, project_cfg
+    )
+
+    # Update project configuration
     project_cfg["packages"] = packages
     project_cfg["ignored"] = ignored_packages
     project_cfg["dependencies"] = dependency_requirements
     project_cfg["languages"] = list(languages)
+
     return project_cfg
 
 
@@ -425,7 +607,11 @@ def project_config_from_args(args):
     project["chosen_compiler"] = str(chosen_compiler)
     project["compiler_paths"] = compiler_paths
 
-    return handle_variants(project, args.variants)
+    # Join dependency token lists into strings
+    dependencies = getattr(args, "dependencies", None)
+    if dependencies:
+        dependencies = [" ".join(dep_tokens) for dep_tokens in dependencies]
+    return handle_variants(project, args.variants, dependencies)
 
 
 def mpd_project_exists(project_name):
@@ -470,7 +656,7 @@ def update(project_config, status=None, installed_at=None):
         shutil.copy(f.name, config_file)
 
 
-def refresh(project_name, new_variants):
+def refresh(project_name, new_variants, new_dependencies=None):
     config_file = mpd_config_file()
     if config_file.exists():
         with open(config_file, "r") as f:
@@ -485,7 +671,7 @@ def refresh(project_name, new_variants):
     srcs_path = Path(project_cfg["source"])
 
     prepare_project_directories(top_path, srcs_path)
-    config["projects"][project_name] = handle_variants(project_cfg, new_variants)
+    config["projects"][project_name] = handle_variants(project_cfg, new_variants, new_dependencies)
     with NamedTemporaryFile() as f:
         syaml.dump(config, stream=f)
         shutil.copy(f.name, config_file)
