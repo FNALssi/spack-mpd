@@ -561,7 +561,10 @@ def select_compiler(desired_compiler):
                 break
 
     if not compilers:
-        tty.die("No default compiler available--you must specify the compiler (e.g. %gcc@x.y)")
+        tty.die(
+            "No default compiler available--you must specify the compiler "
+            "(e.g. --compiler gcc@x.y)"
+        )
 
     chosen_compiler = compilers[0]
     return chosen_compiler
