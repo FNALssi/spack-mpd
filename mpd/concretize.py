@@ -6,19 +6,16 @@ import subprocess
 import time
 from pathlib import Path
 
-from spack.vendor.ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
-
 import spack.builder as builder
 import spack.cmd
 import spack.compilers
 import spack.compilers.config
-import spack.concretize
 import spack.environment as ev
 import spack.llnl.util.tty as tty
 import spack.store
 import spack.util.spack_yaml as syaml
 from spack import traverse
-from spack.spec import InstallStatus, Spec
+from spack.spec import InstallStatus
 
 from .config import update
 from .util import bold, cyan, get_number, gray, make_yaml_file, yellow
@@ -372,7 +369,12 @@ def absent_dependencies(env, packages) -> list:
     return sorted(set(absent))
 
 
-def concretize_project(project_config, yes_to_all):
+def prepare_package_requirements(project_config):
+    """Prepare package requirements for environment creation.
+
+    Returns:
+        tuple: (packages, package_requirements) where packages excludes ignored packages
+    """
     packages = project_config["packages"]
 
     # Omit ignorable packages
@@ -394,10 +396,15 @@ def concretize_project(project_config, yes_to_all):
     }
 
     package_requirements["all"] = all_config
+    return packages, package_requirements
 
-    print()
-    tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
 
+def setup_environment_items(project_config):
+    """Setup environment items and include list from proto environment if specified.
+
+    Returns:
+        tuple: (from_items, include_list)
+    """
     from_items = []
     include_list = []
     if proto_env := project_config["env"]:
@@ -419,9 +426,15 @@ def concretize_project(project_config, yes_to_all):
     else:
         from_items += [{"type": "local"}, {"type": "external"}]
 
-    reuse_block = {"from": from_items}
+    return from_items, include_list
 
-    # Specify the subdirectory path(s) of the chosen compiler
+
+def setup_compiler_symlinks(project_config):
+    """Create compiler symlinks directory for the environment.
+
+    Returns:
+        Path: Path to the compiler symlinks directory
+    """
     local_env_dir = project_config["local"]
     compiler_symlinks_dir = Path(local_env_dir) / "compilers"
     compiler_symlinks_dir.mkdir()
@@ -431,7 +444,22 @@ def concretize_project(project_config, yes_to_all):
         compiler_symlink = compiler_symlinks_dir / compiler_path.name
         compiler_symlink.symlink_to(compiler_path)
 
+    return compiler_symlinks_dir
+
+
+def create_initial_environment(
+    project_config, packages, package_requirements, from_items, include_list, compiler_symlinks_dir
+):
+    """Create and concretize the initial Spack environment.
+
+    Returns:
+        ev.Environment: The concretized initial environment
+    """
+    name = project_config["name"]
+    local_env_dir = project_config["local"]
+
     default_view_dict = dict(root=".spack-env/view", exclude=["gcc-runtime"])
+    reuse_block = {"from": from_items}
 
     full_block = dict(
         env_vars=dict(prepend_path=dict(PATH=str(compiler_symlinks_dir))),
@@ -446,24 +474,27 @@ def concretize_project(project_config, yes_to_all):
     if include_list:
         full_block["include"] = include_list
 
-    name = project_config["name"]
-
     # Always start fresh
     env_file = make_yaml_file("spack", dict(spack=full_block), prefix=local_env_dir)
 
     tty.info(gray("Creating initial environment"))
     if ev.exists(name):
         ev.read(name).destroy()
-    env = ev.create(name, init_file=env_file)
+    ev.create(name, init_file=env_file)
     update(project_config, status="created")
 
     tty.info(gray("Concretizing initial environment"))
     subprocess.run(["spack", "-e", name, "concretize"], capture_output=True).check_returncode()
 
-    env = ev.read(name)
-    verify_no_missing_intermediate_deps(env, packages)
+    return ev.read(name)
 
-    # Handle package-specific CMake args as provided by the Spack package
+
+def extract_cmake_args(env, packages):
+    """Extract package-specific CMake arguments from the environment.
+
+    Returns:
+        dict: Mapping of package names to their CMake arguments
+    """
     cmake_args = {}
     for s in env.concrete_roots():
         if s.name not in packages:
@@ -476,11 +507,15 @@ def concretize_project(project_config, yes_to_all):
         if cmake_args_method := getattr(pkg_builder, "cmake_args", False):
             cmake_args[s.name] = cmake_args_method()
 
-    # Make development environment starting with initial environment configuration
-    tty.info(cyan("Creating local development environment"))
+    return cmake_args
 
-    # Now add the first-order dependencies
-    # Include compiler as a definition in the environment specification.
+
+def collect_first_order_dependencies(env, packages, project_config):
+    """Collect first-order dependencies for the development environment.
+
+    Returns:
+        tuple: (first_order_deps set, cetmodules4 bool)
+    """
     first_order_deps = {"cmake"}
 
     chosen_compiler = None
@@ -523,14 +558,16 @@ def concretize_project(project_config, yes_to_all):
     # gcc-runtime is a build-time dependency that will be built if needed.
     first_order_deps.discard("gcc-runtime")
 
-    # Create properly ordered CMake file
-    make_cmake_files(
-        project_config,
-        cmake_args,
-        ordered_roots(env, packages),
-        cetmodules4,
-        Path(env.view_path_default),
-    )
+    return first_order_deps, cetmodules4
+
+
+def finalize_environment(project_config, packages, first_order_deps):
+    """Add first-order dependencies and finalize the environment.
+
+    Returns:
+        ev.Environment: The finalized environment
+    """
+    local_env_dir = project_config["local"]
 
     new_roots = "Adding the following packages as top-level dependencies:"
     sorted_first_order_deps = sorted(first_order_deps)
@@ -556,8 +593,18 @@ def concretize_project(project_config, yes_to_all):
     ).check_returncode()
 
     update(project_config, status="concretized")
+    return ev.Environment(local_env_dir)
 
-    env = ev.Environment(local_env_dir)
+
+def handle_installation(project_config, env, packages, yes_to_all):
+    """Handle the installation process with user prompts and execution.
+
+    Returns:
+        None
+    """
+    name = project_config["name"]
+    local_env_dir = project_config["local"]
+
     if absent := absent_dependencies(env, packages):
 
         def _parens_number(i):
@@ -607,3 +654,43 @@ def concretize_project(project_config, yes_to_all):
         tty.msg(
             f"{bold(name)} is ready for development " f"(e.g type {cyan('spack mpd build ...')})\n"
         )
+
+
+def concretize_project(project_config, yes_to_all):
+    packages, package_requirements = prepare_package_requirements(project_config)
+
+    print()
+    tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
+
+    # Setup environment items from proto environment if specified
+    from_items, include_list = setup_environment_items(project_config)
+
+    compiler_symlinks_dir = setup_compiler_symlinks(project_config)
+
+    # Create and concretize initial environment
+    env = create_initial_environment(
+        project_config,
+        packages,
+        package_requirements,
+        from_items,
+        include_list,
+        compiler_symlinks_dir,
+    )
+
+    verify_no_missing_intermediate_deps(env, packages)
+
+    cmake_args = extract_cmake_args(env, packages)
+
+    tty.info(cyan("Creating local development environment"))
+
+    first_order_deps, cetmodules4 = collect_first_order_dependencies(env, packages, project_config)
+    make_cmake_files(
+        project_config,
+        cmake_args,
+        ordered_roots(env, packages),
+        cetmodules4,
+        Path(env.view_path_default),
+    )
+
+    env = finalize_environment(project_config, packages, first_order_deps)
+    handle_installation(project_config, env, packages, yes_to_all)
