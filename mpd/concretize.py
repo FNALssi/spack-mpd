@@ -422,13 +422,19 @@ def concretize_project(project_config, yes_to_all):
     reuse_block = {"from": from_items}
 
     # Specify the subdirectory path(s) of the chosen compiler
-    compiler_dir_paths = set(str(Path(p).parent) for p in project_config["compiler_paths"].values())
-    prepend_dirs = dict(PATH=":".join(compiler_dir_paths))
+    local_env_dir = project_config["local"]
+    compiler_symlinks_dir = Path(local_env_dir) / "compilers"
+    compiler_symlinks_dir.mkdir()
+
+    for p in project_config["compiler_paths"].values():
+        compiler_path = Path(p)
+        compiler_symlink = compiler_symlinks_dir / compiler_path.name
+        compiler_symlink.symlink_to(compiler_path)
 
     default_view_dict = dict(root=".spack-env/view", exclude=["gcc-runtime"])
 
     full_block = dict(
-        env_vars=dict(prepend_path=prepend_dirs),
+        env_vars=dict(prepend_path=dict(PATH=str(compiler_symlinks_dir))),
         config=dict(deprecated=True),
         specs=list(packages.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
@@ -440,7 +446,6 @@ def concretize_project(project_config, yes_to_all):
     if include_list:
         full_block["include"] = include_list
 
-    local_env_dir = project_config["local"]
     name = project_config["name"]
 
     # Always start fresh
