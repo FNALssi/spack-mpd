@@ -16,7 +16,6 @@ except ImportError:
     from ruamel.yaml.scalarstring import SingleQuotedScalarString as YamlQuote
 
 import spack.compilers
-import spack.config
 import spack.environment as ev
 import spack.llnl.util.tty as tty
 import spack.store
@@ -551,23 +550,17 @@ def select_compiler(desired_compiler):
         # Most recent version wins
         compilers.sort(key=lambda spec: spec.version, reverse=True)
 
-    # If no compilers specified, find preferred one
-    if not compilers:
-        candidates = {c.name: c for c in all_compilers}
-        preferred_compilers = spack.config.get("packages:all:compiler", list())
-        for c in preferred_compilers:
-            if candidate := candidates.get(c):
-                compilers.append(candidate)
-                break
+    if compilers:
+        return compilers[0]
 
-    if not compilers:
-        tty.die(
-            "No default compiler available--you must specify the compiler "
-            "(e.g. --compiler gcc@x.y)"
-        )
+    # If no compilers specified, pick first compiler in the all_available_compilers list (which
+    # combines compilers from config.yaml and compilers detected in the store)
+    if len(all_compilers) > 0:
+        return all_compilers[0]
 
-    chosen_compiler = compilers[0]
-    return chosen_compiler
+    tty.die(
+        "No default compiler available--you must specify the compiler (e.g. --compiler gcc@x.y)"
+    )
 
 
 def project_config_from_args(args):

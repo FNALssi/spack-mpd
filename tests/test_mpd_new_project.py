@@ -41,7 +41,7 @@ def new_project(name=None, top=None, srcs=None, cwd=None):
             if new_project_name:
                 mpd("rm-project", "--force", new_project_name)
             if old_project:
-                mpd("select", old_project)
+                mpd("select", "-p", old_project)
 
 
 def test_new_project_all_defaults(with_mpd_init, tmp_path):
