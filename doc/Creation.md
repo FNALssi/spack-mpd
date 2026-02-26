@@ -19,7 +19,8 @@ Both approaches are supported through the `spack mpd new-project` command:
 
 ```console
 $ spack mpd new-project --help
-usage: spack mpd new-project [-hfy] --name NAME [-T TOP] [-S SRCS] [-E ENV] [variants ...]
+usage: spack mpd new-project [-hCdfy] [--name NAME] [-T TOP] [-S SRCS] [-E ENV]
+                             [-C COMPILER] [-d SPEC [CONSTRAINT ...]] [variants ...]
 
 create MPD development area
 
@@ -27,13 +28,18 @@ positional arguments:
   variants              variants to apply to developed packages
 
 optional arguments:
-  --name NAME           (required)
-  -E ENV, --env ENV     environments from which to create project
+  --name NAME           (required if --top not specified)
+  -C COMPILER, --compiler COMPILER
+                        compiler to use (e.g., gcc@13.2.0, clang@15.0.0)
+  -E ENV, --env ENV     environment from which to create project
                         (multiple allowed)
   -S SRCS, --srcs SRCS  directory containing repositories to develop
                         (default: <top-level directory>/srcs)
   -T TOP, --top TOP     top-level directory for MPD area
                         (default: /scratch/knoepfel/art-devel)
+  -d SPEC [CONSTRAINT ...], --dependency SPEC [CONSTRAINT ...]
+                        specify a package with constraints (e.g., root %gcc@11, foo ^bar@x.y.z)
+                        (can be specified multiple times)
   -f, --force           overwrite existing project with same name
   -h, --help            show this help message and exit
   -y, --yes-to-all      Answer yes/default to all prompts
@@ -41,10 +47,9 @@ optional arguments:
 
 A few observations:
 
-- The only required program option is `--name` which, because of
-  quirks of the `argparse` technology that parses Spack commands, is
-  listed either as an "optional argument" or an "option".  The other
-  program options are not mandated as defaults are provided by MPD.
+- `--name` is required unless `--top` is specified, in which case the
+  project name defaults to the name of the top-level directory.  All
+  other program options have defaults provided by MPD.
 
 - The default top-level directory of your MPD project is the current
   working directory (the one in which you invoke `spack mpd
@@ -53,19 +58,20 @@ A few observations:
 
 ## Variant support
 
-Three categories of variants can be specified:
+Two categories of positional variants can be specified:
 
 1. _general variants_, which are not prefaced with a package name, but
    are applied to any developed package that supports them
-   (e.g. `cxxstd=20`, `generator=ninja`, `%gcc@14`)
+   (e.g. `cxxstd=20`, `generator=ninja`)
 2. _developed-package variants_, which apply to a specific developed
    package and are of the form `<pkg>[@version] +var1 var2=val ...`
-3. _dependency variants_, which are of the standard Spack form
-   `^dep@...` and are used to further constrain the concretizer when
-   forming the MPD project's environments.
 
-Currently supported variants are @-prefixed version strings, compiler
-specifications, Boolean variants, and key-value pair variants. Also
+Compilers are specified separately via the `-C`/`--compiler` option
+(e.g. `-C gcc@14.1.0`).  Dependency constraints are specified via the
+`-d`/`--dependency` option (e.g. `--dependency 'root %gcc@11'`).
+
+Currently supported positional variants are @-prefixed version strings,
+Boolean variants, and key-value pair variants. Also
 supported are propagated variants, where two syntactic tokens are
 specified instead of one (e.g. `++var1` and `cxxstd==20` vs. `+var1`
 and `cxxstd=20`).  In addition, it is possible to specify virtual
@@ -88,30 +94,32 @@ The entries in `srcs` are the repositories I wish to develop.  I then
 create an MPD project in the `test-devel` directory by invoking:
 
 ```console
-$ spack mpd new-project --name test -E gcc-14-1 cxxstd=20 %gcc@14.1.0
+$ spack mpd new-project --name test -E gcc-14-1 -C gcc@14.1.0 cxxstd=20
 
 ==> Creating project: test
 
-Using build area: /scratch/knoepfel/test-devel/build
-Using local area: /scratch/knoepfel/test-devel/local
-Using sources area: /scratch/knoepfel/test-devel/srcs
+  Project directories:
+    top     /scratch/knoepfel/test-devel
+    build   /scratch/knoepfel/test-devel/build
+    local   /scratch/knoepfel/test-devel/local
+    sources /scratch/knoepfel/test-devel/srcs
 
-  Will develop:
-    - cetlib@develop %gcc@14.1.0 cxxstd=20 generator=make
-    - cetlib-except@develop %gcc@14.1.0 cxxstd=20 generator=make
-    - hep-concurrency@develop %gcc@14.1.0 cxxstd=20 generator=make
+  Packages to develop:
+    cetlib @develop cxxstd=20 generator=make %gcc@14.1.0
+    cetlib-except @develop cxxstd=20 generator=make %gcc@14.1.0
+    hep-concurrency @develop cxxstd=20 generator=make %gcc@14.1.0
 ```
 
 The command-line variant `cxxstd=20` has been applied to any package
-under development that supports it.  The command-line compiler
-`%gcc@14.1.0` has also been applied to each package as has the default
+under development that supports it.  The compiler specified via `-C
+gcc@14.1.0` has also been applied to each package, as has the default
 generator `make`.
 
 > [!NOTE]
 > The expression
 >
 > ```console
->     - cetlib@develop %gcc@14.1.0 cxxstd=20 generator=make
+>     cetlib@develop cxxstd=20 generator=make %gcc@14.1.0
 > ```
 >
 > is a specification that Spack **assumes** when creating and
@@ -191,17 +199,19 @@ directory, you can still create an MPD project:
 ```console
 $ ls srcs/
 (empty)
-$ spack mpd new-project --name test cxxstd=20 %gcc@13.2.0
+$ spack mpd new-project --name test -C gcc@14.1.0 cxxstd=20
 
 ==> Creating project: test
 
-Using build area: /scratch/knoepfel/test-devel/build
-Using local area: /scratch/knoepfel/test-devel/local
-Using sources area: /scratch/knoepfel/test-devel/srcs
+  Project directories:
+    top     /scratch/knoepfel/test-devel
+    build   /scratch/knoepfel/test-devel/build
+    local   /scratch/knoepfel/test-devel/local
+    sources /scratch/knoepfel/test-devel/srcs
 
 ==> You can clone repositories for development by invoking
 
-  spack mpd git-clone --suite <suite name>
+  > spack mpd git-clone --suites <suite name>
 
   (or type 'spack mpd git-clone --help' for more options)
 ```

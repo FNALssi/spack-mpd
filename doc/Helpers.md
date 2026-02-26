@@ -57,7 +57,7 @@ optional arguments:
 
 A `repo spec` can be:
 
-- any repository name listed by the `spack mpd --help-repos` option, or
+- any repository name listed by the `spack mpd git-clone --help-repos` option, or
 - any URL to a Git repository.
 
 > [!WARNING]
@@ -77,17 +77,19 @@ You can list the existing MPD projects by invoking `spack mpd list`:
 
 ```console
 $ spack mpd list -h
-usage: spack mpd list [-h] [-t <project name> | -b <project name> | -s <project name>] [<project name> ...]
+usage: spack mpd list [-h] [--raw] [-t <project name> | -b <project name> | -s <project name>] [<project name> ...]
 
 list MPD projects
 
 When no arguments are specified, prints a list of existing MPD projects
-and the status of their corresponding Spack environments.
+and their corresponding sources directories.
 
 positional arguments:
   <project name>        print details of the MPD project
 
 optional arguments:
+  --raw                 print YAML configuration of the MPD project
+                        (used only when project name is provided)
   -b <project name>, --build <project name>
                         print build-level directory for project
   -h, --help            show this help message and exit
@@ -98,18 +100,17 @@ optional arguments:
 ```
 
 As stated in the help text, invoking `spack mpd list` with no options
-prints a table of existing projects with the status of their
-corresponding environments:
+prints a table of existing projects with their sources directories:
 
 ```console
 $ spack mpd ls
 
 ==> Existing MPD projects:
 
-   Project name    Environment    Deployed environment
-   ------------    -----------    --------------------
-   meld-devel      installed      (none)
- ▶ test            installed      (none)
+   Project name    Sources directory
+   ------------    -----------------
+   meld-devel      /scratch/knoepfel/meld-devel/srcs
+ ▶ test            /scratch/knoepfel/test-devel/srcs
 
 ```
 
@@ -122,10 +123,10 @@ $ spack mpd ls
 
 ==> Existing MPD projects:
 
-   Project name    Environment    Deployed environment
-   ------------    -----------    --------------------
-   meld-devel      installed      (none)
- ◀ test            installed      (none)
+   Project name    Sources directory
+   ------------    -----------------
+   meld-devel      /scratch/knoepfel/meld-devel/srcs
+ ◀ test            /scratch/knoepfel/test-devel/srcs
 
 ```
 
@@ -143,10 +144,10 @@ $ spack mpd ls
 
 ==> Existing MPD projects:
 
-   Project name    Environment    Deployed environment
-   ------------    -----------    --------------------
-   meld-devel      installed      (none)
- ▶ test            installed      (none)               Warning: used by more than one shell
+   Project name    Sources directory
+   ------------    -----------------
+   meld-devel      /scratch/knoepfel/meld-devel/srcs
+ ▶ test            /scratch/knoepfel/test-devel/srcs               Warning: used by more than one shell
 
 ```
 
@@ -159,7 +160,7 @@ Details of a specific project will be printed to the screen if the
 project name is provided as a positional argument:
 
 ```console
-$ spack mpd list test
+$ spack mpd list --raw test
 
 ==> Details for test
 

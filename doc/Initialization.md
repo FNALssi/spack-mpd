@@ -22,8 +22,7 @@ At this point, you may safely use any MPD subcommand.
 
 ### Reinitialization
 
-Reinitialization of MPD on a given system is not yet natively
-supported.  If you execute `spack mpd init` again on a system that you
+If you execute `spack mpd init` again on a system that you
 have already initialized, you will see something like:
 
 ``` console

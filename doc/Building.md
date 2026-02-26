@@ -19,12 +19,13 @@ reason, the MPD build interface does not allow the specification of a
 generator—the generator used during the concretization of the project
 will be used during the build.
 
-The build command does support a parallelism argument (`-j<ncores>`),
+The build command supports a parallelism argument (`-j<ncores>`), an
+option to pass CMake variable definitions (`-D<var>:<type>=<value>`),
 and the command also allows the specification of generator commands
 after the double hyphen (`--`):
 
 ```console
-$ spack mpd build -j12 -- <generator commands> ...
+$ spack mpd build -j12 -D<var>:<type>=<value> -- <generator commands> ...
 ```
 
 It is also possible to *clean* the build area before running the build step:
@@ -41,9 +42,7 @@ development environment_:
 
 ```console
 $ spack env activate <mpd project local directory>
-$ cmake --preset default <srcs dir> -B <build dir> -G <generator> \
-    -DCMAKE_C_COMPILER=<path to C compiler> \
-    -DCMAKE_CXX_COMPILER=<path to C++ compiler>
+$ cmake --preset default <srcs dir> -B <build dir> -G <generator>
 $ cmake --build <build dir> -- <generator commands> ...
 $ spack env deactivate
 ```
