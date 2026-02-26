@@ -105,7 +105,7 @@ macro(develop pkg)
   install(CODE "execute_process(COMMAND spack python ensure-install-directory.py\\
                                         {project_name} ${{${{pkg}}_HASH}}\\
                                 WORKING_DIRECTORY ${{CWD}})")
-  install(CODE "set(CMAKE_INSTALL_PREFIX ${{${{pkg}}_INSTALL_PREFIX}})")
+  set(CMAKE_INSTALL_PREFIX ${{${{pkg}}_INSTALL_PREFIX}})
   string(REPLACE "-" "_" pkg_with_underscores ${{pkg}})
   if (COMMAND set_${{pkg_with_underscores}}_variables)
     cmake_language(CALL "set_${{pkg_with_underscores}}_variables")
@@ -212,8 +212,8 @@ def cmake_presets(project_config, dependencies, cetmodules4, view_path):
 
     # Pull project-specific presets from each dependency.
     for dep_name, dep_hash, dep_prefix in dependencies:
-        allCacheVariables[f"{dep_name}_HASH"] = dep_hash
-        allCacheVariables[f"{dep_name}_INSTALL_PREFIX"] = dep_prefix
+        allCacheVariables["configurePresets"][f"{dep_name}_HASH"] = dep_hash
+        allCacheVariables["configurePresets"][f"{dep_name}_INSTALL_PREFIX"] = dep_prefix
 
         pkg_presets_file = source_path / dep_name / "CMakePresets.json"
         if not pkg_presets_file.exists():

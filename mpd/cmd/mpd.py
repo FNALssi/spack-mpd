@@ -63,7 +63,7 @@ def _check_for_multiple_subcommands(args):
         if not isinstance(value, list):
             continue
         for item in value:
-            if item in tokens:
+            if isinstance(item, str) and item in tokens:
                 extra.append(item)
 
     if extra:
