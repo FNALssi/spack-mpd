@@ -1,5 +1,7 @@
 import importlib
 
+import spack.llnl.util.tty as tty
+
 from .. import config
 
 description = "develop multiple packages using Spack for external software"
@@ -39,7 +41,43 @@ def setup_parser(subparser):
         m.setup_subparser(subparsers)
 
 
+def _all_subcommand_tokens():
+    tokens = set()
+    for m in subcommand_modules.values():
+        tokens.add(m.SUBCOMMAND)
+        tokens.update(getattr(m, "ALIASES", []))
+    return tokens
+
+
+def _check_for_multiple_subcommands(args):
+    if not args.mpd_subcommand:
+        return
+
+    tokens = _all_subcommand_tokens()
+    extra = []
+    for value in vars(args).values():
+        # Only check list-type arguments for now.  This is a kludgy way of looking for positional
+        # arguments to the MPD subcommands, which are currently the only way to specify multiple
+        # subcommands at once.  If we later add options that can also be used to specify multiple
+        # subcommands, we may want to revisit this logic.
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if item in tokens:
+                extra.append(item)
+
+    if extra:
+        extra_str = ", ".join(f"'{e}'" for e in extra)
+        tty.die(
+            f"Only one subcommand may be specified at a time."
+            f" The following are known MPD subcommands, not arguments to"
+            f" '{args.mpd_subcommand}': {extra_str}"
+        )
+
+
 def mpd(parser, args):
+    _check_for_multiple_subcommands(args)
+
     is_initialized = subcommand_modules["init"].initialized()
     for m in subcommand_modules.values():
         scmds = [m.SUBCOMMAND] + getattr(m, "ALIASES", [])
