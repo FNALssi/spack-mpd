@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import spack.environment as ev
@@ -72,7 +73,13 @@ def process(args):
     if dependencies:
         dependencies = [" ".join(dep_tokens) for dep_tokens in dependencies]
     new_config = config.refresh(name, args.variants, dependencies)
-    if current_config == new_config and not args.force:
+
+    # Normalize configs for comparison (convert OrderedDict to dict, sort lists)
+    def normalize(cfg):
+        return json.loads(json.dumps(cfg, sort_keys=True))
+
+    if normalize(current_config) == normalize(new_config) and not args.force:
         tty.msg(f"Project {bold(name)} is up-to-date")
         return
+
     refresh_project(name, new_config, args.yes_to_all)
