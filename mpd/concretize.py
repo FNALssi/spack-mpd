@@ -138,6 +138,7 @@ FetchContent_Declare(
   cetmodules
   GIT_REPOSITORY https://github.com/FNALssi/cetmodules
   GIT_TAG 8269cc9 # v4.02.00
+  EXCLUDE_FROM_ALL # Do not install
   FIND_PACKAGE_ARGS 4.02.00
   )
 
