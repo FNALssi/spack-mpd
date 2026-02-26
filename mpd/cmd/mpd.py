@@ -8,7 +8,7 @@ description = "develop multiple packages using Spack for external software"
 section = "developer"
 level = "long"
 
-_VERSION = "0.3.0"
+_VERSION = "0.3.1"
 
 subcommands = [
     "build",
