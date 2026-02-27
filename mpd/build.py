@@ -20,6 +20,9 @@ def setup_subparser(subparsers):
     )
     build.add_argument("--clean", action="store_true", help="clean build area before building")
     build.add_argument(
+        "--configure-only", action="store_true", help="run CMake configuration only, do not build"
+    )
+    build.add_argument(
         "-j",
         dest="parallel",
         metavar="<number>",
@@ -79,14 +82,15 @@ def configure_cmake_project(project_config, cmake_defines=None):
     return subprocess.run(configure_list)
 
 
-def build(project_config, parallel, generator_options, cmake_defines=None):
-    build_area = project_config["build"]
-    if not (Path(build_area) / "CMakeCache.txt").exists():
-        result = configure_cmake_project(project_config, cmake_defines)
-        if result.returncode != 0:
-            print()
-            tty.die("The CMake configure step failed. See above\n")
+def configure(project_config, cmake_defines=None):
+    result = configure_cmake_project(project_config, cmake_defines)
+    if result.returncode != 0:
+        print()
+        tty.die("The CMake configure step failed. See above\n")
 
+
+def build(project_config, parallel, generator_options):
+    build_area = project_config["build"]
     generator_list = []
     if parallel:
         generator_list.append(f"-j{parallel}")
@@ -112,4 +116,10 @@ def process(args):
         remove_dir(Path(config["build"]))
 
     activate_development_environment(config["local"])
-    build(config, args.parallel, args.generator_options, args.cmake_defines)
+
+    build_area = config["build"]
+    if not (Path(build_area) / "CMakeCache.txt").exists():
+        configure(config, args.cmake_defines)
+
+    if not args.configure_only:
+        build(config, args.parallel, args.generator_options)
