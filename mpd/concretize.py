@@ -107,6 +107,7 @@ macro(develop pkg)
                                 WORKING_DIRECTORY ${{CWD}})")
   set(CMAKE_INSTALL_PREFIX ${{${{pkg}}_INSTALL_PREFIX}})
   string(REPLACE "-" "_" pkg_with_underscores ${{pkg}})
+  string(TOLOWER "${{pkg_with_underscores}}" pkg_with_underscores)
   if (COMMAND set_${{pkg_with_underscores}}_variables)
     cmake_language(CALL "set_${{pkg_with_underscores}}_variables")
   endif()
@@ -164,7 +165,8 @@ def cmake_lists(project_config, dependencies, cetmodules4):
         for d, hash, prefix in dependencies:
             if d == "cetmodules":
                 continue
-            f.write(f"\ndevelop({d})")
+            srcs_name = project_config["srcs"][d]
+            f.write(f"\ndevelop({srcs_name})")
         f.write("\n")
 
 
@@ -319,7 +321,7 @@ def ordered_roots(env, package_requirements):
     return [install_prefixes[p] for p in sorted_packages]
 
 
-def verify_no_missing_intermediate_deps(env, packages) -> None:
+def verify_no_missing_intermediate_deps(env, packages, ignored_packages) -> None:
     direct_dependents = {}
     missing_intermediate_deps = {}
 
@@ -334,6 +336,10 @@ def verify_no_missing_intermediate_deps(env, packages) -> None:
 
         # Skip the packages under development
         if n.name in packages:
+            continue
+
+        # Skip ignored packages (e.g. bundles)
+        if n.name in ignored_packages:
             continue
 
         # Package that is not under development but should be
@@ -357,11 +363,15 @@ def verify_no_missing_intermediate_deps(env, packages) -> None:
         tty.die(error_msg + "\n")
 
 
-def absent_dependencies(env, packages) -> list:
+def absent_dependencies(env, packages, ignored_packages) -> list:
     absent = []
     for n in env.all_specs():
         # Skip the packages under development
         if n.name in packages:
+            continue
+
+        # Skip ignored packages (e.g. bundles)
+        if n.name in ignored_packages:
             continue
 
         if n.install_status() == InstallStatus.absent:
@@ -606,7 +616,7 @@ def handle_installation(project_config, env, packages, yes_to_all):
     name = project_config["name"]
     local_env_dir = project_config["local"]
 
-    if absent := absent_dependencies(env, packages):
+    if absent := absent_dependencies(env, packages, project_config["ignored"]):
 
         def _parens_number(i):
             return f"({i})"
@@ -678,7 +688,7 @@ def concretize_project(project_config, yes_to_all):
         compiler_symlinks_dir,
     )
 
-    verify_no_missing_intermediate_deps(env, packages)
+    verify_no_missing_intermediate_deps(env, packages, project_config["ignored"])
 
     cmake_args = extract_cmake_args(env, packages)
 
