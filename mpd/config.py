@@ -172,7 +172,8 @@ def spack_packages(srcs_dir):
     unknown_packages = []
     packages_to_develop = {}
     for p in srcs_repos:
-        spec = Spec(p)
+        spec_name = p.lower()
+        spec = Spec(spec_name)
         try:
             pkg_cls = PATH.get_pkg_class(spec.name)
             packages_to_develop[p] = pkg_cls(spec)
@@ -433,9 +434,9 @@ def build_all_package_requirements(
     ignored_packages = []
     languages = set()
 
-    for pkg_name, pkg in packages_to_develop.items():
+    for srcs_name, pkg in packages_to_develop.items():
         if not issubclass(type(pkg), CMakePackage):
-            ignored_packages.append(pkg_name)
+            ignored_packages.append(srcs_name)
             continue
 
         # Check languages
@@ -448,8 +449,8 @@ def build_all_package_requirements(
             if "python" in dependency:
                 languages.add("python")
 
-        packages[pkg_name] = build_package_requirements(
-            pkg_name,
+        packages[pkg.name] = build_package_requirements(
+            pkg.name,
             pkg,
             packages,
             cxxstd,
@@ -509,6 +510,17 @@ def handle_variants(project_cfg, variants, dependencies=None):
     packages_to_develop = spack_packages(project_cfg["source"])
     validate_package_variants(package_variant_map, packages_to_develop)
 
+    # Check source directory names against packages
+    pkg_to_srcs_map = {}
+    for srcs_name, pkg in packages_to_develop.items():
+        if pkg.name in pkg_to_srcs_map.keys():
+            tty.die(
+                f"Multiple source directories correspond to the same Spack package '{pkg.name}':\n"
+                f" - {pkg_to_srcs_map[pkg.name]}\n"
+                f" - {srcs_name}\n\n"
+            )
+        pkg_to_srcs_map[pkg.name] = srcs_name
+
     # Build package requirements
     packages, ignored_packages, languages = build_all_package_requirements(
         packages_to_develop, project_cfg, general_variant_map, package_variant_map
@@ -521,6 +533,7 @@ def handle_variants(project_cfg, variants, dependencies=None):
 
     # Update project configuration
     project_cfg["packages"] = packages
+    project_cfg["srcs"] = pkg_to_srcs_map
     project_cfg["ignored"] = ignored_packages
     project_cfg["dependencies"] = dependency_requirements
     project_cfg["languages"] = list(languages)
