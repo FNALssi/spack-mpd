@@ -83,8 +83,12 @@ def spack_cmd_line():
     return f"spack {' '.join(sys.argv[1:])}"
 
 
-def remove_dir(dir_path):
-    """Remove a directory with retry logic for macOS .DS_Store issues."""
+def remove_dir(dir_path, keep_dir=False):
+    """Remove a directory with retry logic for macOS .DS_Store issues.
+
+    If `keep_dir` is True, keep the top-level directory but remove all of its
+    contents. Retries on macOS to work around .DS_Store locking issues.
+    """
     # On macOS, retry removal due to .DS_Store file issues
     max_attempts = 3 if sys.platform == "darwin" else 1
 
@@ -98,25 +102,54 @@ def remove_dir(dir_path):
                 stderr=subprocess.DEVNULL,
             )
 
-        # Now remove the directory
-        subprocess.run(
-            ["rm", "-rf", str(dir_path)],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        # Now remove either the directory or only its contents
+        if keep_dir:
+            if not dir_path.exists():
+                break
+            for child in list(dir_path.iterdir()):
+                subprocess.run(
+                    ["rm", "-rf", str(child)],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+        else:
+            subprocess.run(
+                ["rm", "-rf", str(dir_path)],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
         # Check if removal succeeded
-        if not dir_path.exists():
-            break
+        if keep_dir:
+            # Success when directory exists and is empty, or when it no longer exists
+            if not dir_path.exists():
+                break
+            try:
+                next(dir_path.iterdir())
+                # Has children, not yet successful
+                success = False
+            except StopIteration:
+                success = True
+
+            if success:
+                break
+        else:
+            if not dir_path.exists():
+                break
 
         # Wait before retry (only on non-final attempts)
         if attempt < max_attempts - 1:
             time.sleep(0.1)
 
-    # If the directory still exists after all attempts, log a warning
-    if dir_path.exists():
-        tty.warn(f"Failed to remove directory {dir_path} after {max_attempts} attempts")
+    # If removal didn't reach the intended state after attempts, log a warning
+    if keep_dir:
+        if dir_path.exists() and any(dir_path.iterdir()):
+            tty.warn(f"Failed to remove contents of directory {dir_path} after {max_attempts} attempts")
+    else:
+        if dir_path.exists():
+            tty.warn(f"Failed to remove directory {dir_path} after {max_attempts} attempts")
 
 
 def remove_view(local_env_dir):

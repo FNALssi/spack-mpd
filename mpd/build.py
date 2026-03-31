@@ -113,7 +113,9 @@ def process(args):
 
     config = selected_project_config()
     if args.clean:
-        remove_dir(Path(config["build"]))
+        build_path = Path(config["build"])
+        in_cwd = build_path.resolve() == Path.cwd().resolve()
+        remove_dir(build_path, keep_dir=in_cwd)
 
     activate_development_environment(config["local"])
 
