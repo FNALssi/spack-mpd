@@ -26,6 +26,16 @@ ALIASES = ["n"]
 CMAKE_CACHE_VARIABLE_PATTERN = re.compile(r"-D(.*):(.*)=(.*)")
 
 
+def _run(cmd):
+    """Run cmd, capturing output. On failure, print stderr then raise."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        if result.stderr:
+            print(result.stderr, end="")
+        result.check_returncode()
+    return result
+
+
 def all_available_compilers():
     # Pilfered from https://github.com/spack/spack/blob/182c615df98bda5d3c1e26513e3a52c40b4efbec/lib/spack/spack/cmd/compiler.py#L222
     supported_compilers = spack.compilers.config.supported_compilers()
@@ -495,7 +505,7 @@ def create_initial_environment(
     update(project_config, status="created")
 
     tty.info(gray("Concretizing initial environment"))
-    subprocess.run(["spack", "-e", name, "concretize"], capture_output=True).check_returncode()
+    _run(["spack", "-e", name, "concretize"])
 
     return ev.read(name)
 
@@ -585,23 +595,15 @@ def finalize_environment(project_config, packages, first_order_deps):
     for dep in sorted_first_order_deps:
         new_roots += f"\n    - {dep}"
     tty.msg(gray(new_roots))
-    subprocess.run(
-        ["spack", "-D", local_env_dir, "add"] + list(sorted_first_order_deps), capture_output=True
-    ).check_returncode()
+    _run(["spack", "-D", local_env_dir, "add"] + list(sorted_first_order_deps))
 
-    subprocess.run(
-        ["spack", "-D", local_env_dir, "concretize"], capture_output=True
-    ).check_returncode()
+    _run(["spack", "-D", local_env_dir, "concretize"])
 
     tty.info(gray("Finalizing concretization"))
 
     # Lastly, remove the developed packages from the environment
-    subprocess.run(
-        ["spack", "-D", local_env_dir, "rm"] + list(packages.keys()), capture_output=True
-    ).check_returncode()
-    subprocess.run(
-        ["spack", "-D", local_env_dir, "concretize"], capture_output=True
-    ).check_returncode()
+    _run(["spack", "-D", local_env_dir, "rm"] + list(packages.keys()))
+    _run(["spack", "-D", local_env_dir, "concretize"])
 
     update(project_config, status="concretized")
     return ev.Environment(local_env_dir)
