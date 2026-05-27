@@ -8,9 +8,11 @@ from pathlib import Path
 
 import spack.builder as builder
 import spack.cmd
+import spack.config
 import spack.compilers
 import spack.compilers.config
 import spack.environment as ev
+import spack.environment.shell as ev_shell
 import spack.llnl.util.tty as tty
 import spack.store
 import spack.util.spack_yaml as syaml
@@ -655,18 +657,31 @@ def handle_installation(project_config, env, packages, yes_to_all):
         ncores = get_number("Specify number of cores to use", default=ncores)
 
     tty.msg(gray("Installing development environment\n"))
-    # As of Spack 0.23, an environment should be explicitly activated before invoking
-    # install (i.e. don't use 'spack -e <env> install').
-    result = subprocess.run(
-        f"spack env activate {local_env_dir}; spack install -j{ncores}", shell=True
-    )
 
-    if result.returncode == 0:
-        print()
+    # As of Spack 0.23, an environment should be explicitly activated before invoking
+    # install (i.e. don't use 'spack -e <env> install').  However, we have to do this without
+    # using a shell-dependent activation and installation method (we don't know which shell
+    # the user will use).
+    result_code = 1
+    development_env = ev.Environment(local_env_dir)
+    try:
+        ev_shell.activate(development_env).apply_modifications()
+        spack.config.set("config:build_jobs", ncores, scope="command_line")
+        development_env.install_all()
+        result_code = 0
+    except Exception:
+        result_code = 1
+    finally:
+        ev_shell.deactivate().apply_modifications()
+
+    print()
+    if result_code == 0:
         update(project_config, status="ready")
         tty.msg(
             f"{bold(name)} is ready for development " f"(e.g type {cyan('spack mpd build ...')})\n"
         )
+    else:
+        tty.die("Installation failed. Please review the error messages above and try again.\n")
 
 
 def concretize_project(project_config, yes_to_all):
