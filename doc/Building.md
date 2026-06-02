@@ -21,12 +21,24 @@ will be used during the build.
 
 The build command supports a parallelism argument (`-j<ncores>`), an
 option to pass CMake variable definitions (`-D<var>:<type>=<value>`),
+an option to build only selected checked-out packages (`--packages <pkg> ...`),
 and the command also allows the specification of generator commands
 after the double hyphen (`--`):
 
 ```console
 $ spack mpd build -j12 -D<var>:<type>=<value> -- <generator commands> ...
 ```
+
+To build only targets for specific checked-out packages, specify them with `--packages`:
+
+```console
+$ spack mpd build --packages phlex phlex-examples
+```
+
+Each package name must correspond to a repository checked out in the project's
+source directory. MPD translates each package into a CMake directory target,
+building `<package>/all` (for example, `phlex/all`) so all targets from that
+repository are built without building all repositories.
 
 It is also possible to *clean* the build area before running the build step:
 

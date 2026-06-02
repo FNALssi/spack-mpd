@@ -37,6 +37,12 @@ def setup_subparser(subparsers):
         metavar="<var>:<type>=<value>",
     )
     build.add_argument(
+        "--packages",
+        nargs="+",
+        metavar="<package>",
+        help="build only targets for the specified checked-out packages",
+    )
+    build.add_argument(
         "generator_options",
         metavar="-- <generator options>",
         nargs="*",
@@ -89,7 +95,61 @@ def configure(project_config, cmake_defines=None):
         tty.die("The CMake configure step failed. See above\n")
 
 
-def build(project_config, parallel, generator_options):
+def source_directories(project_config):
+    source_path = Path(project_config["source"])
+    return sorted(f.name for f in source_path.iterdir() if not f.name.startswith(".") and f.is_dir())
+
+
+def package_directory_target(project_config, package_source_directory):
+    generator = project_config["generator"]["value"]
+    if generator in ("ninja", "make"):
+        return f"{package_source_directory}/all"
+
+    tty.die(f"Only 'make' and 'ninja' generators are allowed (specified {generator}).")
+
+
+def build_targets_from_packages(project_config, package_names):
+    if not package_names:
+        return []
+
+    available_src_dirs = source_directories(project_config)
+    available_src_set = set(available_src_dirs)
+
+    package_to_src = {
+        package_name: src_dir
+        for package_name, src_dir in project_config.get("srcs", {}).items()
+        if src_dir in available_src_set
+    }
+
+    # Accept either a Spack package name or the checked-out repository name.
+    known_packages = {**{src: src for src in available_src_dirs}, **package_to_src}
+
+    missing_packages = []
+    targets = []
+    for package_name in package_names:
+        if package_name not in known_packages:
+            missing_packages.append(package_name)
+            continue
+
+        target = package_directory_target(project_config, known_packages[package_name])
+        if target not in targets:
+            targets.append(target)
+
+    if missing_packages:
+        msg = "The following packages are not checked out in the selected project:\n"
+        for package_name in missing_packages:
+            msg += f"\n - {package_name}"
+
+        msg += "\n\nAvailable checked-out package repositories:\n"
+        for package_name in available_src_dirs:
+            msg += f"\n - {package_name}"
+
+        tty.die(msg + "\n")
+
+    return targets
+
+
+def build(project_config, parallel, generator_options, targets=None):
     build_area = project_config["build"]
     generator_list = []
     if parallel:
@@ -100,7 +160,10 @@ def build(project_config, parallel, generator_options):
     if generator_list:
         generator_list.insert(0, "--")
 
-    all_arguments = ["cmake", "--build", build_area] + generator_list
+    all_arguments = ["cmake", "--build", build_area]
+    if targets:
+        all_arguments += ["--target"] + targets
+    all_arguments += generator_list
     all_arguments_str = " ".join(all_arguments)
     print()
     tty.msg("Building with command:\n\n" + cyan(all_arguments_str) + "\n")
@@ -124,4 +187,5 @@ def process(args):
         configure(config, args.cmake_defines)
 
     if not args.configure_only:
-        build(config, args.parallel, args.generator_options)
+        targets = build_targets_from_packages(config, args.packages)
+        build(config, args.parallel, args.generator_options, targets)
