@@ -294,6 +294,7 @@ _supported_suites = [
             "icarusalg",
             "icaruscode",
             "icarusutil",
+            "sbnalg",
             "sbnanaobj",
             "sbnci",
             "sbncode",
