@@ -611,6 +611,38 @@ def finalize_environment(project_config, packages, first_order_deps):
     return ev.Environment(local_env_dir)
 
 
+def cmake_workaround_for_py_torch(development_env, local_env_dir):
+    """If py-torch is a root spec, prepend CMAKE_PREFIX_PATH with its site-packages path.
+
+    Returns:
+        ev.Environment: The environment, reloaded from disk if spack.yaml was modified.
+    """
+    py_torch_spec = next(
+        (s for s in development_env.concrete_roots() if s.name == "py-torch"),
+        None,
+    )
+    if py_torch_spec is None:
+        return development_env
+
+    try:
+        # Form site-packages path based on py-torch's prefix and Python version.
+        py_ver = f"python{py_torch_spec['python'].version.up_to(2)}"
+        site_packages = str(Path(py_torch_spec.prefix) / "lib" / py_ver / "site-packages")
+    except KeyError:
+        return development_env
+
+    env_yaml_path = Path(local_env_dir) / "spack.yaml"
+    with open(env_yaml_path, "r") as f:
+        env_config = syaml.load(f)
+
+    env_config["spack"]["env_vars"]["prepend_path"]["CMAKE_PREFIX_PATH"] = site_packages
+
+    with open(env_yaml_path, "w") as f:
+        syaml.dump(env_config, stream=f, default_flow_style=False)
+
+    return ev.Environment(local_env_dir)
+
+
 def handle_installation(project_config, env, packages, yes_to_all):
     """Handle the installation process with user prompts and execution.
 
@@ -664,6 +696,8 @@ def handle_installation(project_config, env, packages, yes_to_all):
     # the user will use).
     result_code = 1
     development_env = ev.Environment(local_env_dir)
+    development_env = cmake_workaround_for_py_torch(development_env, local_env_dir)
+
     try:
         ev_shell.activate(development_env).apply_modifications()
         spack.config.set("config:build_jobs", ncores, scope="command_line")
