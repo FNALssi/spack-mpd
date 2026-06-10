@@ -308,12 +308,12 @@ _supported_suites = [
         gh_org_name="SBNSoftware",
         repos=[
             "sbndaq",
-            "sbndaq_artdaq",
-            "sbndaq_artdaq_core",
-            "sbndaq_decode",
-            "sbndaq_minargon",
-            "sbndaq_online",
-            "sbndaq_xporter",
+            "sbndaq-artdaq",
+            "sbndaq-artdaq-core",
+            "sbndaq-decode",
+            "sbndaq-minargon",
+            "sbndaq-online",
+            "sbndaq-xporter",
         ],
     ),
     Suite(
@@ -387,7 +387,7 @@ def _known_dune_specs():
 def _known_sbn_specs():
     suite = suite_for("sbn")
     known_specs = suite.repositories()
-    others = ["sbnana", "sbndata", "sbndqm", "sbndaq_artdaq_core"]
+    others = ["sbnana", "sbndata", "sbndqm"]
     known_specs.update({p: suite.org.repo(p) for p in others})
     # sbncode needs special instructions:
     #  ["sbncode", { github => ["$sbn_github/sbncode", git_args => [ qw(--recurse-submodules) ]] }]
