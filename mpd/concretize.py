@@ -471,7 +471,7 @@ def setup_compiler_symlinks(project_config):
 
 
 def create_initial_environment(
-    project_config, packages, package_requirements, from_items, include_list, compiler_symlinks_dir
+    project_config, packages, package_requirements, from_items, include_list
 ):
     """Create and concretize the initial Spack environment.
 
@@ -485,7 +485,6 @@ def create_initial_environment(
     reuse_block = {"from": from_items}
 
     full_block = dict(
-        env_vars=dict(prepend_path=dict(PATH=str(compiler_symlinks_dir))),
         config=dict(deprecated=True),
         specs=list(packages.keys()),
         concretizer=dict(unify=True, reuse=reuse_block),
@@ -643,7 +642,16 @@ def cmake_workaround_for_py_torch(development_env, local_env_dir):
     return ev.Environment(local_env_dir)
 
 
-def handle_installation(project_config, env, packages, yes_to_all):
+def _add_compiler_env_vars(local_env_dir, compiler_symlinks_dir):
+    env_yaml_path = Path(local_env_dir) / "spack.yaml"
+    with open(env_yaml_path, "r") as f:
+        env_config = syaml.load(f)
+    env_config["spack"]["env_vars"] = dict(prepend_path=dict(PATH=str(compiler_symlinks_dir)))
+    with open(env_yaml_path, "w") as f:
+        syaml.dump(env_config, stream=f, default_flow_style=False)
+
+
+def handle_installation(project_config, env, packages, yes_to_all, compiler_symlinks_dir):
     """Handle the installation process with user prompts and execution.
 
     Returns:
@@ -696,7 +704,6 @@ def handle_installation(project_config, env, packages, yes_to_all):
     # the user will use).
     result_code = 1
     development_env = ev.Environment(local_env_dir)
-    development_env = cmake_workaround_for_py_torch(development_env, local_env_dir)
 
     try:
         ev_shell.activate(development_env).apply_modifications()
@@ -710,6 +717,8 @@ def handle_installation(project_config, env, packages, yes_to_all):
 
     print()
     if result_code == 0:
+        _add_compiler_env_vars(local_env_dir, compiler_symlinks_dir)
+        cmake_workaround_for_py_torch(development_env, local_env_dir)
         update(project_config, status="ready")
         tty.msg(
             f"{bold(name)} is ready for development " f"(e.g type {cyan('spack mpd build ...')})\n"
@@ -736,7 +745,6 @@ def concretize_project(project_config, yes_to_all):
         package_requirements,
         from_items,
         include_list,
-        compiler_symlinks_dir,
     )
 
     verify_no_missing_intermediate_deps(env, packages, project_config["ignored"])
@@ -755,4 +763,4 @@ def concretize_project(project_config, yes_to_all):
     )
 
     env = finalize_environment(project_config, packages, first_order_deps)
-    handle_installation(project_config, env, packages, yes_to_all)
+    handle_installation(project_config, env, packages, yes_to_all, compiler_symlinks_dir)
