@@ -709,6 +709,7 @@ def handle_installation(project_config, env, packages, yes_to_all, compiler_syml
         ev_shell.activate(development_env).apply_modifications()
         spack.config.set("config:build_jobs", ncores, scope="command_line")
         development_env.install_all()
+        development_env.write()
         result_code = 0
     except Exception:
         result_code = 1
