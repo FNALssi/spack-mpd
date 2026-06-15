@@ -8,9 +8,9 @@ from pathlib import Path
 
 import spack.builder as builder
 import spack.cmd
-import spack.config
 import spack.compilers
 import spack.compilers.config
+import spack.config
 import spack.environment as ev
 import spack.environment.shell as ev_shell
 import spack.llnl.util.tty as tty
@@ -610,31 +610,37 @@ def finalize_environment(project_config, packages, first_order_deps):
     return ev.Environment(local_env_dir)
 
 
-def cmake_workaround_for_py_torch(development_env, local_env_dir):
-    """If py-torch is a root spec, prepend CMAKE_PREFIX_PATH with its site-packages path.
+def _cmake_workaround_for_python_package(
+    development_env, local_env_dir, pkg_name, env_section, var_name, subpath=None
+):
+    """If pkg_name is a root spec, update env_vars in spack.yaml with its site-packages path.
+
+    Args:
+        pkg_name: Spack package name to look for among concrete roots.
+        env_section: Key under env_vars to update (e.g. 'prepend_path' or 'set').
+        var_name: Environment variable name to set.
+        subpath: Optional subdirectory to append to the site-packages path.
 
     Returns:
         ev.Environment: The environment, reloaded from disk if spack.yaml was modified.
     """
-    py_torch_spec = next(
-        (s for s in development_env.concrete_roots() if s.name == "py-torch"),
-        None,
-    )
-    if py_torch_spec is None:
+    spec = next((s for s in development_env.concrete_roots() if s.name == pkg_name), None)
+    if spec is None:
         return development_env
 
     try:
-        # Form site-packages path based on py-torch's prefix and Python version.
-        py_ver = f"python{py_torch_spec['python'].version.up_to(2)}"
-        site_packages = str(Path(py_torch_spec.prefix) / "lib" / py_ver / "site-packages")
+        py_ver = f"python{spec['python'].version.up_to(2)}"
+        site_packages = Path(spec.prefix) / "lib" / py_ver / "site-packages"
     except KeyError:
         return development_env
+
+    path_value = str(site_packages / subpath if subpath else site_packages)
 
     env_yaml_path = Path(local_env_dir) / "spack.yaml"
     with open(env_yaml_path, "r") as f:
         env_config = syaml.load(f)
 
-    env_config["spack"]["env_vars"]["prepend_path"]["CMAKE_PREFIX_PATH"] = site_packages
+    env_config["spack"]["env_vars"].setdefault(env_section, {})[var_name] = path_value
 
     with open(env_yaml_path, "w") as f:
         syaml.dump(env_config, stream=f, default_flow_style=False)
@@ -719,7 +725,12 @@ def handle_installation(project_config, env, packages, yes_to_all, compiler_syml
     print()
     if result_code == 0:
         _add_compiler_env_vars(local_env_dir, compiler_symlinks_dir)
-        cmake_workaround_for_py_torch(development_env, local_env_dir)
+        _cmake_workaround_for_python_package(
+            development_env, local_env_dir, "py-torch", "prepend_path", "CMAKE_PREFIX_PATH"
+        )
+        _cmake_workaround_for_python_package(
+            development_env, local_env_dir, "py-tensorflow", "set", "TENSORFLOW_DIR", "tensorflow"
+        )
         update(project_config, status="ready")
         tty.msg(
             f"{bold(name)} is ready for development " f"(e.g type {cyan('spack mpd build ...')})\n"
@@ -741,11 +752,7 @@ def concretize_project(project_config, yes_to_all):
 
     # Create and concretize initial environment
     env = create_initial_environment(
-        project_config,
-        packages,
-        package_requirements,
-        from_items,
-        include_list,
+        project_config, packages, package_requirements, from_items, include_list
     )
 
     verify_no_missing_intermediate_deps(env, packages, project_config["ignored"])
