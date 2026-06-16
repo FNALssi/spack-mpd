@@ -568,13 +568,14 @@ def collect_first_order_dependencies(env, packages, project_config):
             if dep.spec.satisfies(chosen_compiler):
                 # The development environment should not include the compiler as a root spec.
                 continue
-            if dep.spec.name == "cetmodules":
-                # Do not use cetmodules4 if one of the dependencies does not use version 4.
-                cetmodules4 = cetmodules4 and str(dep.spec.version.up_to(1)) == "4"
-                continue
             if dep.spec.external:
                 # We don't need to (and probably shouldn't) include things like glibc.
                 continue
+
+            if dep.spec.name == "cetmodules":
+                # Do not use cetmodules4 if one of the dependencies does not use version 4.
+                cetmodules4 = cetmodules4 and str(dep.spec.version.up_to(1)) == "4"
+
             first_order_deps.add(dep.spec.name)
 
     # gcc-runtime is a build-time dependency that will be built if needed.
