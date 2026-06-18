@@ -226,11 +226,13 @@ _supported_suites = [
         gh_org_name="DUNE",
         repos=[
             "duneana",
+            "duneanaobj"
             "dunecalib",
             "dunecore",
             "dunedataprep",
             "duneexamples",
             "duneopdet",
+            "dunepdlegacy"
             "duneprototypes",
             "dunereco",
             "dunesim",
@@ -295,6 +297,7 @@ _supported_suites = [
             "icaruscode",
             "icarusutil",
             "sbnalg",
+            "sbnana",
             "sbnanaobj",
             "sbncode",
             "sbndcode",
@@ -377,7 +380,7 @@ def _known_nu_specs():
 def _known_dune_specs():
     suite = suite_for("dune")
     known_specs = suite.repositories()
-    others = ["garsoft", "garana", "duneanaobj", "dunepdlegacy", "sandreco", "webevd"]
+    others = ["garsoft", "garana", "sandreco", "webevd"]
     known_specs.update({p: suite.org.repo(p) for p in others})
     return known_specs
 
@@ -385,7 +388,7 @@ def _known_dune_specs():
 def _known_sbn_specs():
     suite = suite_for("sbn")
     known_specs = suite.repositories()
-    others = ["sbnana", "sbndata", "sbndqm"]
+    others = ["sbndata", "sbndqm"]
     known_specs.update({p: suite.org.repo(p) for p in others})
     # sbncode needs special instructions:
     #  ["sbncode", { github => ["$sbn_github/sbncode", git_args => [ qw(--recurse-submodules) ]] }]
