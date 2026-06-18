@@ -226,13 +226,13 @@ _supported_suites = [
         gh_org_name="DUNE",
         repos=[
             "duneana",
-            "duneanaobj"
+            "duneanaobj",
             "dunecalib",
             "dunecore",
             "dunedataprep",
             "duneexamples",
             "duneopdet",
-            "dunepdlegacy"
+            "dunepdlegacy",
             "duneprototypes",
             "dunereco",
             "dunesim",
