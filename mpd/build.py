@@ -168,7 +168,7 @@ def build(project_config, parallel, generator_options, targets=None):
     print()
     tty.msg("Building with command:\n\n" + cyan(all_arguments_str) + "\n")
 
-    subprocess.run(all_arguments)
+    return subprocess.run(all_arguments)
 
 
 def process(args):
@@ -188,4 +188,6 @@ def process(args):
 
     if not args.configure_only:
         targets = build_targets_from_packages(config, args.packages)
-        build(config, args.parallel, args.generator_options, targets)
+        result = build(config, args.parallel, args.generator_options, targets)
+        if result.returncode != 0:
+            tty.die("Build failed.")

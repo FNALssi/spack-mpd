@@ -1,4 +1,5 @@
 import subprocess
+import sys
 
 import spack.llnl.util.tty as tty
 
@@ -46,4 +47,6 @@ def process(args):
     print()
     tty.msg("Testing with command:\n\n" + maybe_with_color("c", arguments_str) + "\n")
 
-    subprocess.run(arguments)
+    result = subprocess.run(arguments)
+    if result.returncode != 0:
+        sys.exit(result.returncode)
