@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 import time
@@ -164,3 +165,42 @@ def remove_view(local_env_dir):
     # Remove ._view directory
     if dotview_path.exists():
         remove_dir(dotview_path)
+
+
+def runtime_library_dirs(view_path):
+    """Return runtime library directories from a Spack view.
+
+    The returned list is ordered and de-duplicated, and includes nested
+    directories named ``lib`` or ``lib64`` (for packages like oneAPI TBB that
+    install libraries outside top-level view/lib).
+    """
+
+    view_path = Path(view_path)
+    if not view_path.exists():
+        return []
+
+    lib_dir_names = {"lib", "lib64"}
+    seen = set()
+    ordered = []
+
+    def _add_path(path):
+        if not path.exists():
+            return
+        resolved = path.resolve().as_posix()
+        if resolved not in seen:
+            seen.add(resolved)
+            ordered.append(resolved)
+
+    for name in ("lib", "lib64"):
+        _add_path(view_path / name)
+
+    for root, dirnames, _ in os.walk(view_path, topdown=True, followlinks=False):
+        root_path = Path(root)
+        if root_path.name in lib_dir_names:
+            _add_path(root_path)
+
+        for dirname in sorted(dirnames):
+            if dirname in lib_dir_names:
+                _add_path(root_path / dirname)
+
+    return ordered

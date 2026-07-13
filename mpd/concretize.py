@@ -20,7 +20,7 @@ from spack import traverse
 from spack.spec import InstallStatus
 
 from .config import update
-from .util import bold, cyan, get_number, gray, make_yaml_file, yellow
+from .util import bold, cyan, get_number, gray, make_yaml_file, runtime_library_dirs, yellow
 
 SUBCOMMAND = "new-project"
 ALIASES = ["n"]
@@ -187,15 +187,17 @@ def cmake_presets(project_config, dependencies, cetmodules4, view_path):
     compiler_paths = project_config["compiler_paths"]
 
     cxxstd = project_config["cxxstd"]["value"]
-    view_lib_dirs = [(view_path / d).resolve().as_posix() for d in ("lib", "lib64")]
+    view_lib_dirs = runtime_library_dirs(view_path)
+    rpath_value = ";".join(view_lib_dirs)
 
     configure_presets = {
         "CMAKE_BUILD_TYPE": {"type": "STRING", "value": "RelWithDebInfo"},
         "CMAKE_CXX_EXTENSIONS": {"type": "BOOL", "value": "OFF"},
         "CMAKE_CXX_STANDARD_REQUIRED": {"type": "BOOL", "value": "ON"},
         "CMAKE_CXX_STANDARD": {"type": "STRING", "value": cxxstd},
+        "CMAKE_BUILD_RPATH": {"type": "STRING", "value": rpath_value},
         "CMAKE_INSTALL_RPATH_USE_LINK_PATH": {"type": "BOOL", "value": "ON"},
-        "CMAKE_INSTALL_RPATH": {"type": "STRING", "value": ";".join(view_lib_dirs)},
+        "CMAKE_INSTALL_RPATH": {"type": "STRING", "value": rpath_value},
     }
 
     if cetmodules4:
