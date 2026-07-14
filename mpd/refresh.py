@@ -32,6 +32,13 @@ def setup_subparser(subparsers):
         help="specify a package with constraints (e.g., root %%gcc@11, foo ^bar@x.y.z)\n"
         "(can be specified multiple times)",
     )
+    refresh.add_argument(
+        "--env-var-prepend",
+        action="append",
+        metavar="<ENV_VAR>=<suffix>",
+        help="prepend colon-separated paths to ENV_VAR for each checked-out package\n"
+        "(can be specified multiple times)",
+    )
     refresh.add_argument("variants", nargs="*", help="variants to apply to developed packages")
     refresh.add_argument(
         "-f",
@@ -72,7 +79,7 @@ def process(args):
     dependencies = getattr(args, "dependencies", None)
     if dependencies:
         dependencies = [" ".join(dep_tokens) for dep_tokens in dependencies]
-    new_config = config.refresh(name, args.variants, dependencies)
+    new_config = config.refresh(name, args.variants, dependencies, args.env_var_prepend)
 
     # Normalize configs for comparison (convert OrderedDict to dict, sort lists)
     def normalize(cfg):

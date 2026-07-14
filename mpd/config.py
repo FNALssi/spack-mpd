@@ -278,6 +278,31 @@ def categorize_constraints(constraints):
     return constraint_map
 
 
+def parse_env_var_prepends(env_var_prepends):
+    """Validate and normalize --env-var-prepend arguments.
+
+    Args:
+        env_var_prepends: Iterable of strings in the format ENV_VAR=suffix.
+
+    Returns:
+        list[str]: Normalized entries preserving input order.
+    """
+    if not env_var_prepends:
+        return []
+
+    normalized = []
+    for item in env_var_prepends:
+        env_var, sep, suffix = item.partition("=")
+        if not sep or not env_var or not suffix:
+            tty.die(
+                "Argument to --env-var-prepend must have the form "
+                "'<ENV_VAR>=<suffix>'"
+            )
+        normalized.append(f"{env_var}={suffix}")
+
+    return normalized
+
+
 def parse_general_variants(variants):
     """
     Parse general variants (positional args) and categorize them.
@@ -477,7 +502,7 @@ def build_dependency_requirements(dependency_variant_map, virtual_dependencies, 
     return dependency_requirements
 
 
-def handle_variants(project_cfg, variants, dependencies=None):
+def handle_variants(project_cfg, variants, dependencies=None, env_var_prepends=None):
     """
     Process variants and dependencies, updating project configuration.
 
@@ -537,6 +562,10 @@ def handle_variants(project_cfg, variants, dependencies=None):
     project_cfg["ignored"] = ignored_packages
     project_cfg["dependencies"] = dependency_requirements
     project_cfg["languages"] = list(languages)
+    if env_var_prepends is not None:
+        project_cfg["env_var_prepend"] = parse_env_var_prepends(env_var_prepends)
+    elif "env_var_prepend" not in project_cfg:
+        project_cfg["env_var_prepend"] = []
 
     return project_cfg
 
@@ -620,7 +649,8 @@ def project_config_from_args(args):
     dependencies = getattr(args, "dependencies", None)
     if dependencies:
         dependencies = [" ".join(dep_tokens) for dep_tokens in dependencies]
-    return handle_variants(project, args.variants, dependencies)
+    env_var_prepends = getattr(args, "env_var_prepend", None)
+    return handle_variants(project, args.variants, dependencies, env_var_prepends)
 
 
 def mpd_project_exists(project_name):
@@ -665,7 +695,7 @@ def update(project_config, status=None, installed_at=None):
         shutil.copy(f.name, config_file)
 
 
-def refresh(project_name, new_variants, new_dependencies=None):
+def refresh(project_name, new_variants, new_dependencies=None, new_env_var_prepends=None):
     config_file = mpd_config_file()
     if config_file.exists():
         with open(config_file, "r") as f:
@@ -680,7 +710,9 @@ def refresh(project_name, new_variants, new_dependencies=None):
     srcs_path = Path(project_cfg["source"])
 
     prepare_project_directories(top_path, srcs_path)
-    config["projects"][project_name] = handle_variants(project_cfg, new_variants, new_dependencies)
+    config["projects"][project_name] = handle_variants(
+        project_cfg, new_variants, new_dependencies, new_env_var_prepends
+    )
     with NamedTemporaryFile() as f:
         syaml.dump(config, stream=f)
         shutil.copy(f.name, config_file)

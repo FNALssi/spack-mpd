@@ -660,6 +660,28 @@ def _add_compiler_env_vars(local_env_dir, compiler_symlinks_dir):
         syaml.dump(env_config, stream=f, default_flow_style=False)
 
 
+def _add_env_var_prepend_paths(project_config):
+    env_var_prepend = project_config.get("env_var_prepend", [])
+    if not env_var_prepend:
+        return
+
+    env_yaml_path = Path(project_config["local"]) / "spack.yaml"
+    with open(env_yaml_path, "r") as f:
+        env_config = syaml.load(f)
+
+    env_vars = env_config["spack"].setdefault("env_vars", {})
+    prepend_path = env_vars.setdefault("prepend_path", {})
+
+    build_dir = Path(project_config["build"])
+    package_src_dirs = sorted(set(project_config.get("srcs", {}).values()))
+    for prepend_spec in env_var_prepend:
+        env_var, suffix = prepend_spec.split("=", 1)
+        prepend_path[env_var] = ":".join(str(build_dir / pkg / suffix) for pkg in package_src_dirs)
+
+    with open(env_yaml_path, "w") as f:
+        syaml.dump(env_config, stream=f, default_flow_style=False)
+
+
 def handle_installation(project_config, env, packages, yes_to_all, compiler_symlinks_dir):
     """Handle the installation process with user prompts and execution.
 
@@ -734,6 +756,7 @@ def handle_installation(project_config, env, packages, yes_to_all, compiler_syml
         _cmake_workaround_for_python_package(
             development_env, local_env_dir, "py-tensorflow", "set", "TENSORFLOW_DIR", "tensorflow"
         )
+        _add_env_var_prepend_paths(project_config)
         update(project_config, status="ready")
         tty.msg(
             f"{bold(name)} is ready for development " f"(e.g type {cyan('spack mpd build ...')})\n"
