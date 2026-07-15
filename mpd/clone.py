@@ -67,12 +67,17 @@ def setup_subparser(subparsers):
     if not gh:
         help_msg += yellow("\n(not supported on this system - requires gh, which cannot be found)")
     git.add_argument("--fork", action="store_true", help=help_msg)
-    git.add_argument("--help-repos", action="store_true", help="list supported repositories")
-    git.add_argument("--help-suites", action="store_true", help="list supported suites")
+    git.add_argument("--help-repos", action="store_true", help="list known repositories")
+    git.add_argument(
+        "--help-repos-with-urls",
+        action="store_true",
+        help="list known repositories with full URLs",
+    )
+    git.add_argument("--help-suites", action="store_true", help="list known suites")
     git.add_argument(
         "--help-suites-with-paths",
         action="store_true",
-        help="list supported suites and suite YAML file paths",
+        help="list known suites and suite YAML file paths",
     )
 
 
@@ -232,7 +237,7 @@ def suite_for(suite_name: str) -> Suite:
 
 def help_suites(show_suite_paths=False):
     print()
-    tty.msg("Supported suites:\n")
+    tty.msg("Known suites:\n")
     width = shutil.get_terminal_size(fallback=(100, 24)).columns
     initial_indent = "    - "
     subsequent_indent = "      "
@@ -326,17 +331,40 @@ def known_repos():
     return result
 
 
-def help_repos():
-    print()
-    tty.msg("Supported repositories:\n")
+def _repo_location(repo, with_urls=False):
+    url = repo.url()
+    if with_urls:
+        return url
 
+    github_prefix = "https://github.com/"
+    git_suffix = ".git"
+    if url.startswith(github_prefix) and url.endswith(git_suffix):
+        return url[len(github_prefix) : -len(git_suffix)]
+
+    return url
+
+
+def _repo_organization(repo):
+    path = urllib.parse.urlparse(repo.url()).path.strip("/")
+    if not path:
+        return None
+    return path.split("/", 1)[0]
+
+
+def help_repos(with_urls=False):
+    print()
     repos = known_repos()
+    orgs = {_repo_organization(repo) for repo in repos.values()}
+    orgs.discard(None)  # discard any repos that don't have a GitHub organization
+    tty.msg(f"Known repositories: {len(repos)} across {len(orgs)} organizations\n")
+
     title = "Repository name"
+    location_title = "URL" if with_urls else "GitHub Organization/Repository"
     repo_width = max(len(s) for s in repos.keys())
-    print(f"  {title:<{repo_width}}  URL")
-    print("  " + "-" * 100)
+    print(f"  {title:<{repo_width}}  {location_title}")
+    print("  " + "-" * repo_width + "  " + "-" * 30)
     for name, repo in sorted(repos.items()):
-        print(f"  {name:<{repo_width}}  {repo.url()}")
+        print(f"  {name:<{repo_width}}  {_repo_location(repo, with_urls=with_urls)}")
     print()
 
 
@@ -507,6 +535,8 @@ def process(args):
         help_suites(show_suite_paths=True)
     elif args.help_repos:
         help_repos()
+    elif args.help_repos_with_urls:
+        help_repos(with_urls=True)
     else:
         print()
         tty.die(
