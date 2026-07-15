@@ -1,0 +1,8 @@
+larsoftobj:
+  gh_org_name: LArSoft
+  repos:
+    - larcorealg
+    - larcoreobj
+    - lardataalg
+    - lardataobj
+    - larvecutils

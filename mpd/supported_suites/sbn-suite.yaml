@@ -1,0 +1,13 @@
+sbn:
+  gh_org_name: SBNSoftware
+  repos:
+    - icarus_signal_processing
+    - icarusalg
+    - icaruscode
+    - icarusutil
+    - sbnalg
+    - sbnana
+    - sbnanaobj
+    - sbncode
+    - sbndcode
+    - sbnobj

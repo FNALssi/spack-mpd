@@ -10,6 +10,7 @@ from enum import Enum, auto
 import spack.llnl.util.filesystem as fs
 import spack.llnl.util.tty as tty
 import spack.util.git
+import spack.util.spack_yaml as syaml
 from spack.util import executable
 
 from .config import selected_project_config
@@ -162,11 +163,11 @@ class GitHubOrg:
 
 
 class Suite:
-    def __init__(self, name, gh_org_name=None, repos=[]):
+    def __init__(self, name, gh_org_name=None, repos=None):
         self.name = name
         self.org_name = gh_org_name
         self.org = GitHubOrg(self.org_name)
-        self.repos = repos
+        self.repos = repos or []
 
     def repositories(self):
         return {p: self.org.repo(p) for p in self.repos}
@@ -174,171 +175,46 @@ class Suite:
 
 # N.B. Listing of repositories is done in alphabetical order.
 
-_supported_suites = [
-    Suite(
-        "art",
-        gh_org_name="art-framework-suite",
-        repos=[
-            "art",
-            "canvas",
-            "cetlib",
-            "cetlib-except",
-            "fhicl-cpp",
-            "hep-concurrency",
-            "messagefacility",
-        ],
-    ),
-    Suite(
-        "artdaq",
-        gh_org_name="art-daq",
-        repos=[
-            "artdaq_core",
-            "artdaq_core_demo",
-            "artdaq_daqinterface",
-            "artdaq_database",
-            "artdaq_epics_plugin",
-            "artdaq_ganglia_plugin",
-            "artdaq_mfextensions",
-            "artdaq_mpich_plugin",
-            "artdaq_utilities",
-        ],
-    ),
-    Suite(
-        "critic",
-        gh_org_name="art-framework-suite",
-        repos=[
-            "art",
-            "art-root-io",
-            "canvas",
-            "canvas-root-io",
-            "cetlib",
-            "cetlib-except",
-            "critic",
-            "fhicl-cpp",
-            "fhicl-py",
-            "gallery",
-            "hep-concurrency",
-            "messagefacility",
-        ],
-    ),
-    Suite(
-        "dune",
-        gh_org_name="DUNE",
-        repos=[
-            "duneana",
-            "duneanaobj",
-            "dunecalib",
-            "dunecore",
-            "dunedaqdataformats",
-            "dunedataprep",
-            "dunedetdataformats",
-            "duneexamples",
-            "duneopdet",
-            "dunepdlegacy",
-            "duneprototypes",
-            "dunereco",
-            "dunesim",
-            "dunesw",
-            "duneutil",
-            "protoduneana",
-        ],
-    ),
-    Suite(
-        "gallery",
-        gh_org_name="art-framework-suite",
-        repos=[
-            "canvas",
-            "canvas-root-io",
-            "cetlib",
-            "cetlib-except",
-            "fhicl-cpp",
-            "fhicl-py",
-            "gallery",
-            "hep-concurrency",
-            "messagefacility",
-        ],
-    ),
-    Suite(
-        "larsoft",
-        gh_org_name="LArSoft",
-        repos=[
-            "larana",
-            "larcore",
-            "lardata",
-            "lareventdisplay",
-            "larevt",
-            "larexamples",
-            "larfinder",
-            "larg4",
-            "larpandora",
-            "larreco",
-            "larrecodnn",
-            "larsim",
-            "larsimdnn",
-            "larsimrad",
-            "larsoft",
-            "larwirecell",
-        ],
-    ),
-    Suite(
-        "larsoftobj",
-        gh_org_name="LArSoft",
-        repos=["larcorealg", "larcoreobj", "lardataalg", "lardataobj", "larvecutils"],
-    ),
-    Suite(
-        "nu",
-        gh_org_name="NuSoftHEP",
-        repos=["nuevdb", "nufinder", "nug4", "nugen", "nurandom", "nusimdata", "nutools"],
-    ),
-    Suite(
-        "sbn",
-        gh_org_name="SBNSoftware",
-        repos=[
-            "icarus_signal_processing",
-            "icarusalg",
-            "icaruscode",
-            "icarusutil",
-            "sbnalg",
-            "sbnana",
-            "sbnanaobj",
-            "sbncode",
-            "sbndcode",
-            "sbnobj",
-        ],
-    ),
-    Suite(
-        "sbndaq",
-        gh_org_name="SBNSoftware",
-        repos=[
-            "sbndaq",
-            "sbndaq-artdaq",
-            "sbndaq-artdaq-core",
-            "sbndaq-decode",
-            "sbndaq-minargon",
-            "sbndaq-online",
-            "sbndaq-xporter",
-        ],
-    ),
-    Suite(
-        "uboone",
-        gh_org_name="uboone",
-        repos=[
-            "ubana",
-            "ubcore",
-            "ubcrt",
-            "ubcv",
-            "ubevt",
-            "ublite",
-            "ubobj",
-            "uboonecode",
-            "uboonedata",
-            "ubraw",
-            "ubreco",
-            "ubsim",
-            "ubutil",
-        ],
-    ),
-]
+def _suite_files_path():
+    return os.path.join(os.path.dirname(__file__), "supported_suites")
+
+
+def _load_supported_suites():
+    suites = []
+    suite_files_path = _suite_files_path()
+
+    if not os.path.isdir(suite_files_path):
+        tty.die(f"Suite directory does not exist: {suite_files_path}")
+
+    for filename in sorted(os.listdir(suite_files_path)):
+        if not filename.endswith("-suite.yaml"):
+            continue
+
+        suite_file = os.path.join(suite_files_path, filename)
+        with open(suite_file) as f:
+            loaded = syaml.load(f)
+
+        if not isinstance(loaded, dict) or len(loaded) != 1:
+            tty.die(
+                "Suite definition must contain exactly one top-level suite mapping: "
+                + suite_file
+            )
+
+        suite_name, suite_info = next(iter(loaded.items()))
+        if not isinstance(suite_info, dict):
+            tty.die(f"Invalid suite definition in {suite_file}: expected a mapping")
+
+        gh_org_name = suite_info.get("gh_org_name")
+        repos = suite_info.get("repos", [])
+        if not isinstance(repos, list):
+            tty.die(f"Invalid repos list in {suite_file}: expected a sequence")
+
+        suites.append(Suite(suite_name, gh_org_name=gh_org_name, repos=repos))
+
+    return suites
+
+
+_supported_suites = _load_supported_suites()
 
 
 def suite_for(suite_name: str) -> Suite:

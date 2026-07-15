@@ -1,0 +1,12 @@
+gallery:
+  gh_org_name: art-framework-suite
+  repos:
+    - canvas
+    - canvas-root-io
+    - cetlib
+    - cetlib-except
+    - fhicl-cpp
+    - fhicl-py
+    - gallery
+    - hep-concurrency
+    - messagefacility

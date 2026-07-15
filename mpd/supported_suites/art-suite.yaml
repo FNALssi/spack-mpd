@@ -1,0 +1,10 @@
+art:
+  gh_org_name: art-framework-suite
+  repos:
+    - art
+    - canvas
+    - cetlib
+    - cetlib-except
+    - fhicl-cpp
+    - hep-concurrency
+    - messagefacility

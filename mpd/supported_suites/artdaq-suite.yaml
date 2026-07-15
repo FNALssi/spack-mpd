@@ -1,0 +1,12 @@
+artdaq:
+  gh_org_name: art-daq
+  repos:
+    - artdaq_core
+    - artdaq_core_demo
+    - artdaq_daqinterface
+    - artdaq_database
+    - artdaq_epics_plugin
+    - artdaq_ganglia_plugin
+    - artdaq_mfextensions
+    - artdaq_mpich_plugin
+    - artdaq_utilities

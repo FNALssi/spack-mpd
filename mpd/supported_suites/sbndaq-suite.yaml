@@ -1,0 +1,10 @@
+sbndaq:
+  gh_org_name: SBNSoftware
+  repos:
+    - sbndaq
+    - sbndaq-artdaq
+    - sbndaq-artdaq-core
+    - sbndaq-decode
+    - sbndaq-minargon
+    - sbndaq-online
+    - sbndaq-xporter

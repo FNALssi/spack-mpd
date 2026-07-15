@@ -1,0 +1,16 @@
+uboone:
+  gh_org_name: uboone
+  repos:
+    - ubana
+    - ubcore
+    - ubcrt
+    - ubcv
+    - ubevt
+    - ublite
+    - ubobj
+    - uboonecode
+    - uboonedata
+    - ubraw
+    - ubreco
+    - ubsim
+    - ubutil

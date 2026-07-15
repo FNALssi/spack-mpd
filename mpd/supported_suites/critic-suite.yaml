@@ -1,0 +1,15 @@
+critic:
+  gh_org_name: art-framework-suite
+  repos:
+    - art
+    - art-root-io
+    - canvas
+    - canvas-root-io
+    - cetlib
+    - cetlib-except
+    - critic
+    - fhicl-cpp
+    - fhicl-py
+    - gallery
+    - hep-concurrency
+    - messagefacility

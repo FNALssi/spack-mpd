@@ -1,0 +1,19 @@
+larsoft:
+  gh_org_name: LArSoft
+  repos:
+    - larana
+    - larcore
+    - lardata
+    - lareventdisplay
+    - larevt
+    - larexamples
+    - larfinder
+    - larg4
+    - larpandora
+    - larreco
+    - larrecodnn
+    - larsim
+    - larsimdnn
+    - larsimrad
+    - larsoft
+    - larwirecell

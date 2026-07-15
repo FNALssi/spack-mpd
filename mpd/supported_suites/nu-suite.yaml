@@ -1,0 +1,10 @@
+nu:
+  gh_org_name: NuSoftHEP
+  repos:
+    - nuevdb
+    - nufinder
+    - nug4
+    - nugen
+    - nurandom
+    - nusimdata
+    - nutools
