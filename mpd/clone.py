@@ -2,8 +2,10 @@ import os
 import os.path
 import re
 import select
+import shutil
 import subprocess
 import sys
+import textwrap
 import urllib
 from enum import Enum, auto
 
@@ -15,7 +17,7 @@ from spack.util import executable
 
 from .config import selected_project_config
 from .preconditions import State, preconditions
-from .util import bold, maybe_with_color
+from .util import bold, gray, maybe_with_color, yellow
 
 SUBCOMMAND = "git-clone"
 ALIASES = ["g", "clone"]
@@ -63,12 +65,15 @@ def setup_subparser(subparsers):
     git = git_parser.add_mutually_exclusive_group()
     help_msg = "fork GitHub repository or set origin to already forked repository"
     if not gh:
-        help_msg += maybe_with_color(
-            "y", "\n(not supported on this system - requires gh, which cannot be found)"
-        )
+        help_msg += yellow("\n(not supported on this system - requires gh, which cannot be found)")
     git.add_argument("--fork", action="store_true", help=help_msg)
     git.add_argument("--help-repos", action="store_true", help="list supported repositories")
     git.add_argument("--help-suites", action="store_true", help="list supported suites")
+    git.add_argument(
+        "--help-suites-with-paths",
+        action="store_true",
+        help="list supported suites and suite YAML file paths",
+    )
 
 
 class CloneState(Enum):
@@ -163,17 +168,19 @@ class GitHubOrg:
 
 
 class Suite:
-    def __init__(self, name, gh_org_name=None, repos=None):
+    def __init__(self, name, gh_org_name=None, repos=None, suite_file=None):
         self.name = name
         self.org_name = gh_org_name
         self.org = GitHubOrg(self.org_name)
         self.repos = repos or []
+        self.suite_file = suite_file
 
     def repositories(self):
         return {p: self.org.repo(p) for p in self.repos}
 
 
 # N.B. Listing of repositories is done in alphabetical order.
+
 
 def _suite_files_path():
     return os.path.join(os.path.dirname(__file__), "supported_suites")
@@ -196,8 +203,7 @@ def _load_supported_suites():
 
         if not isinstance(loaded, dict) or len(loaded) != 1:
             tty.die(
-                "Suite definition must contain exactly one top-level suite mapping: "
-                + suite_file
+                "Suite definition must contain exactly one top-level suite mapping: " + suite_file
             )
 
         suite_name, suite_info = next(iter(loaded.items()))
@@ -209,7 +215,10 @@ def _load_supported_suites():
         if not isinstance(repos, list):
             tty.die(f"Invalid repos list in {suite_file}: expected a sequence")
 
-        suites.append(Suite(suite_name, gh_org_name=gh_org_name, repos=repos))
+        suite_file_display = os.path.abspath(suite_file)
+        suites.append(
+            Suite(suite_name, gh_org_name=gh_org_name, repos=repos, suite_file=suite_file_display)
+        )
 
     return suites
 
@@ -221,16 +230,30 @@ def suite_for(suite_name: str) -> Suite:
     return next(filter(lambda s: s.name == suite_name, _supported_suites))
 
 
-def help_suites():
+def help_suites(show_suite_paths=False):
     print()
     tty.msg("Supported suites:\n")
-    title = "Suite"
-    suite_width = max(len(s.name) for s in _supported_suites)
-    print(f"  {title:<{suite_width}}  Repositories")
-    print("  " + "-" * 100)
+    width = shutil.get_terminal_size(fallback=(100, 24)).columns
+    initial_indent = "    - "
+    subsequent_indent = "      "
     for suite in sorted(_supported_suites, key=lambda s: s.name):
-        repo_string = " ".join(suite.repos)
-        print(f"  {suite.name:<{suite_width}}  {repo_string}")
+        suite_source = gray(f" (see {suite.suite_file})") if show_suite_paths else ""
+        print(f"  {yellow(suite.name)}{suite_source}")
+        if suite.repos:
+            repo_text = ", ".join(suite.repos)
+            print(
+                textwrap.fill(
+                    repo_text,
+                    width=max(width, 40),
+                    initial_indent=initial_indent,
+                    subsequent_indent=subsequent_indent,
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                )
+            )
+        else:
+            print("    (no repositories listed)")
+        print()
     print()
 
 
@@ -480,6 +503,8 @@ def process(args):
 
     if args.help_suites:
         help_suites()
+    elif args.help_suites_with_paths:
+        help_suites(show_suite_paths=True)
     elif args.help_repos:
         help_repos()
     else:
