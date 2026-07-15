@@ -1,5 +1,4 @@
 import os
-import os.path
 import re
 import select
 import shutil
@@ -8,6 +7,7 @@ import sys
 import textwrap
 import urllib
 from enum import Enum, auto
+from pathlib import Path
 
 import spack.llnl.util.filesystem as fs
 import spack.llnl.util.tty as tty
@@ -15,6 +15,7 @@ import spack.util.git
 import spack.util.spack_yaml as syaml
 from spack.util import executable
 
+from . import init as mpd_init
 from .config import selected_project_config
 from .preconditions import State, preconditions
 from .util import bold, gray, maybe_with_color, yellow
@@ -59,6 +60,20 @@ def setup_subparser(subparsers):
         "--suites",
         metavar="<suite name>",
         help="clone repositories corresponding to the given suite name (multiple allowed)",
+        action="extend",
+        nargs="+",
+    )
+    git_parser.add_argument(
+        "--add-suite",
+        metavar="<suite YAML file>",
+        help="add one or more suite-definition YAML files",
+        action="extend",
+        nargs="+",
+    )
+    git_parser.add_argument(
+        "--remove-suite",
+        metavar="<suite name>",
+        help="remove one or more known suites by name",
         action="extend",
         nargs="+",
     )
@@ -154,7 +169,7 @@ class GitHubRepo:
 class SimpleGitRepo:
     def __init__(self, url):
         path = urllib.parse.urlparse(url).path
-        self._name = os.path.basename(path).replace(".git", "")
+        self._name = Path(path).name.replace(".git", "")
         self._url = url
 
     def name(self):
@@ -184,55 +199,120 @@ class Suite:
         return {p: self.org.repo(p) for p in self.repos}
 
 
-# N.B. Listing of repositories is done in alphabetical order.
-
-
 def _suite_files_path():
-    return os.path.join(os.path.dirname(__file__), "supported_suites")
+    return mpd_init.known_suites_dir(mpd_init.mpd_config_dir())
 
 
-def _load_supported_suites():
+def _suite_seed_marker_path():
+    return _suite_files_path() / ".builtins-seeded"
+
+
+def _populate_known_suites():
+    suite_files_path = _suite_files_path()
+    suite_files_path.mkdir(exist_ok=True)
+    if _suite_seed_marker_path().exists():
+        return
+
+    for suite_file in (Path(__file__).parent / "builtin_suites").glob("*-suite.yaml"):
+        destination = suite_files_path / suite_file.name
+        if destination.exists():
+            continue
+        shutil.copyfile(suite_file, destination)
+
+    _suite_seed_marker_path().touch(exist_ok=True)
+
+
+def _load_suite_from_file(suite_file):
+    with open(suite_file) as f:
+        loaded = syaml.load(f)
+
+    if not isinstance(loaded, dict) or len(loaded) != 1:
+        tty.die("Suite definition must contain exactly one top-level suite mapping: " + suite_file)
+
+    suite_name, suite_info = next(iter(loaded.items()))
+    if not isinstance(suite_name, str) or not suite_name:
+        tty.die(f"Invalid suite definition in {suite_file}: expected a non-empty suite name")
+
+    if not isinstance(suite_info, dict):
+        tty.die(f"Invalid suite definition in {suite_file}: expected a mapping")
+
+    gh_org_name = suite_info.get("gh_org_name")
+    if gh_org_name is not None and not isinstance(gh_org_name, str):
+        tty.die(f"Invalid gh_org_name in {suite_file}: expected a string")
+
+    repos = suite_info.get("repos", [])
+    if not isinstance(repos, list) or not all(isinstance(repo, str) for repo in repos):
+        tty.die(f"Invalid repos list in {suite_file}: expected a sequence of strings")
+
+    suite_file_display = str(Path(suite_file).absolute())
+    return Suite(suite_name, gh_org_name=gh_org_name, repos=repos, suite_file=suite_file_display)
+
+
+def _load_known_suites():
     suites = []
+    _populate_known_suites()
     suite_files_path = _suite_files_path()
 
-    if not os.path.isdir(suite_files_path):
-        tty.die(f"Suite directory does not exist: {suite_files_path}")
+    if not suite_files_path.is_dir():
+        return suites
 
-    for filename in sorted(os.listdir(suite_files_path)):
-        if not filename.endswith("-suite.yaml"):
+    for suite_file in sorted(suite_files_path.iterdir()):
+        if not suite_file.name.endswith("-suite.yaml"):
             continue
 
-        suite_file = os.path.join(suite_files_path, filename)
-        with open(suite_file) as f:
-            loaded = syaml.load(f)
-
-        if not isinstance(loaded, dict) or len(loaded) != 1:
-            tty.die(
-                "Suite definition must contain exactly one top-level suite mapping: " + suite_file
-            )
-
-        suite_name, suite_info = next(iter(loaded.items()))
-        if not isinstance(suite_info, dict):
-            tty.die(f"Invalid suite definition in {suite_file}: expected a mapping")
-
-        gh_org_name = suite_info.get("gh_org_name")
-        repos = suite_info.get("repos", [])
-        if not isinstance(repos, list):
-            tty.die(f"Invalid repos list in {suite_file}: expected a sequence")
-
-        suite_file_display = os.path.abspath(suite_file)
-        suites.append(
-            Suite(suite_name, gh_org_name=gh_org_name, repos=repos, suite_file=suite_file_display)
-        )
+        suites.append(_load_suite_from_file(suite_file))
 
     return suites
 
 
-_supported_suites = _load_supported_suites()
+def _add_suite_file(suite_file):
+    suite_file = Path(suite_file).expanduser().absolute()
+
+    if not suite_file.is_file():
+        tty.die(f"Suite file does not exist: {suite_file}")
+
+    if not suite_file.name.endswith("-suite.yaml"):
+        tty.die(f"Suite file must end with '-suite.yaml': {suite_file}")
+
+    suite = _load_suite_from_file(suite_file)
+    suite_files_path = _suite_files_path()
+    suite_files_path.mkdir(exist_ok=True)
+    destination = suite_files_path / suite_file.name
+    if destination.exists():
+        tty.warn(f"A suite file for {bold(suite.name)} already exists at {destination}")
+        should_overwrite = tty.get_yes_or_no(
+            "Would you like to overwrite the existing suite file?", default=False
+        )
+        if not should_overwrite:
+            tty.info(f"Skipped adding suite from {gray(str(suite_file))}")
+            return False
+
+    shutil.copyfile(suite_file, destination)
+    tty.msg(f"Added suite {bold(suite.name)} from {gray(str(suite_file))}")
+    return True
+
+
+def _remove_suite(suite_name):
+    matching = [suite for suite in _load_known_suites() if suite.name == suite_name]
+    if not matching:
+        tty.die(f"Cannot remove unknown suite {bold(suite_name)}")
+
+    suite = matching[0]
+    should_remove = tty.get_yes_or_no(
+        f"Would you like to remove suite {bold(suite_name)}?", default=False
+    )
+    if not should_remove:
+        tty.info(f"Skipped removing suite {bold(suite_name)}")
+        return False
+
+    suite_file = Path(suite.suite_file)
+    suite_file.unlink()
+    tty.msg(f"Removed suite {bold(suite_name)} from {gray(str(suite_file))}")
+    return True
 
 
 def suite_for(suite_name: str) -> Suite:
-    return next(filter(lambda s: s.name == suite_name, _supported_suites))
+    return next(filter(lambda s: s.name == suite_name, _load_known_suites()))
 
 
 def help_suites(show_suite_paths=False):
@@ -241,7 +321,7 @@ def help_suites(show_suite_paths=False):
     width = shutil.get_terminal_size(fallback=(100, 24)).columns
     initial_indent = "    - "
     subsequent_indent = "      "
-    for suite in sorted(_supported_suites, key=lambda s: s.name):
+    for suite in sorted(_load_known_suites(), key=lambda s: s.name):
         suite_source = gray(f" (see {suite.suite_file})") if show_suite_paths else ""
         print(f"  {yellow(suite.name)}{suite_source}")
         if suite.repos:
@@ -371,8 +451,8 @@ def help_repos(with_urls=False):
 def _clone(repo, srcs_area):
     git = spack.util.git.git(required=True)
     git.add_default_arg("-C", srcs_area)
-    local_src_dir = os.path.join(srcs_area, repo.name())
-    result = git("clone", repo.url(), local_src_dir, fail_on_error=False, error=str)
+    local_src_dir = Path(srcs_area) / repo.name()
+    result = git("clone", repo.url(), str(local_src_dir), fail_on_error=False, error=str)
     if "Cloning into" in result and git.returncode == 0:
         return None
     return result.rstrip()
@@ -439,7 +519,7 @@ def clone_repos(repos, should_fork, srcs_area, local_area):
             status.update(CloneState.ERROR, clone_msg=result)
 
         if status.okay() and should_fork:
-            with fs.working_dir(os.path.join(srcs_area, name)):
+            with fs.working_dir(str(Path(srcs_area) / name)):
                 result = gh("repo", "set-default", repo.url(), output=str, error=str)
                 if gh.returncode != 0:
                     status.update(
@@ -472,6 +552,25 @@ def clone_repos(repos, should_fork, srcs_area, local_area):
 
 
 def process(args):
+    # Handle suite additions before clone operations so a command like
+    #   spack mpd g --add-suite <suite-file> --suites <suite-name>
+    # can use the newly added suite in the same invocation.
+    added_suite = False
+    if args.add_suite:
+        preconditions(State.INITIALIZED)
+        print()
+        for suite_file in args.add_suite:
+            if _add_suite_file(suite_file):
+                added_suite = True
+
+    removed_suite = False
+    if args.remove_suite:
+        preconditions(State.INITIALIZED)
+        print()
+        for suite_name in args.remove_suite:
+            if _remove_suite(suite_name):
+                removed_suite = True
+
     if args.fork:
         if not gh:
             tty.die(
@@ -525,6 +624,14 @@ def process(args):
             tty.msg("You may now invoke:\n\n  spack mpd refresh\n")
         else:
             tty.msg("No repositories added\n")
+        return
+
+    if args.add_suite or args.remove_suite:
+        print()
+        if added_suite or removed_suite:
+            tty.msg("Suite definitions updated\n")
+        else:
+            tty.msg("No suite definitions changed\n")
         return
 
     preconditions(State.INITIALIZED)

@@ -40,6 +40,10 @@ def mpd_selected_projects_dir(config_dir):
     return config_dir / "selected"
 
 
+def known_suites_dir(config_dir):
+    return config_dir / "known_suites"
+
+
 def initialized():
     config_dir = mpd_config_dir()
     config_file = mpd_config_file(mpd_config_dir())
@@ -51,6 +55,7 @@ def initialize_mpd(config_dir):
     config_dir.mkdir(exist_ok=True)
     mpd_config_file(config_dir).touch(exist_ok=True)
     mpd_selected_projects_dir(config_dir).mkdir(exist_ok=True)
+    known_suites_dir(config_dir).mkdir(exist_ok=True)
 
 
 def process(args):
