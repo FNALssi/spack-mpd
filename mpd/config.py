@@ -217,7 +217,7 @@ def parse_dependency_spec(dependency_spec):
                 tty.die(f"Incomplete dependency specification in '{dependency_spec}'")
 
             # Build dependency constraint: ^package + any following constraints
-            dep_constraint = "^" + tokens[i + 1].value
+            dep_constraint_parts = ["^" + tokens[i + 1].value]
             i += 2
 
             # Collect any version/variant info for this dependency
@@ -225,10 +225,10 @@ def parse_dependency_spec(dependency_spec):
                 if tokens[i].kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
                     # Another package name without ^ means something is wrong
                     break
-                dep_constraint += tokens[i].value
+                dep_constraint_parts.append(tokens[i].value)
                 i += 1
 
-            constraints.append(dep_constraint)
+            constraints.append(" ".join(dep_constraint_parts))
         else:
             # Regular constraint (version, variant, compiler, etc.)
             if token.kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
@@ -253,10 +253,21 @@ def categorize_constraints(constraints):
         # Categorize the constraint based on its first character
         if constraint_str.startswith("^"):
             # Dependency constraint: extract dependency name as key
-            # e.g., "^bar@x.y.z" -> key="bar", value="^bar@x.y.z"
-            dep_name = (
-                constraint_str.split("@")[0].split("%")[0].split("+")[0].split("~")[0][1:]
-            )  # Remove ^
+            # e.g., "^bar@x.y.z" or "^bar libcxx=none" -> key="bar"
+            dep_name = None
+            dep_tokens = list(SpecParser(constraint_str).tokens())
+            for i, token in enumerate(dep_tokens):
+                if token.kind != SpecTokens.DEPENDENCY:
+                    continue
+                if i + 1 < len(dep_tokens):
+                    next_token = dep_tokens[i + 1]
+                    if next_token.kind == SpecTokens.UNQUALIFIED_PACKAGE_NAME:
+                        dep_name = next_token.value
+                        break
+
+            if dep_name is None:
+                tty.die(f"Could not parse dependency constraint '{constraint_str}'")
+
             constraint_map[dep_name] = _variant_pair(dep_name, constraint_str)
         elif constraint_str.startswith("%"):
             # Compiler constraint

@@ -190,3 +190,22 @@ def test_add_env_var_prepend_paths(tmp_path):
     prepend_path = loaded["spack"]["env_vars"]["prepend_path"]
     assert prepend_path["PATH"] == "/tmp/compilers"
     assert prepend_path["MY_ENVIRONMENT_VARIABLE"] == expected
+
+
+def test_parse_dependency_spec_preserves_dependency_constraints_spacing():
+    pkg_name, constraints = config.parse_dependency_spec(
+        "py-llvmlite ^llvm libcxx=none libunwind=none"
+    )
+
+    assert pkg_name == "py-llvmlite"
+    assert constraints == ["^llvm libcxx=none libunwind=none"]
+
+
+def test_categorize_constraints_parses_dependency_name_with_space_separated_constraints():
+    constraint_map = config.categorize_constraints(["^llvm libcxx=none libunwind=none"])
+
+    assert "llvm" in constraint_map
+    assert constraint_map["llvm"] == {
+        "value": "llvm",
+        "variant": "^llvm libcxx=none libunwind=none",
+    }
