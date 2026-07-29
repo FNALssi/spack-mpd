@@ -24,7 +24,7 @@ requirements:
 | `spack mpd new-project` | :white_check_mark: | | :x: |
 | `spack mpd select` | :white_check_mark: | | :x: |
 | `spack mpd clear` | :white_check_mark: | | :x: |
-| `spack mpd git-clone` | :white_check_mark: | :white_check_mark: | |
+| `spack mpd git-clone` | :white_check_mark: | :white_check_mark: [^2] | |
 | `spack mpd refresh` | :white_check_mark: | :white_check_mark: | :x: |
 | `spack mpd zap` | :white_check_mark: | :white_check_mark: | |
 | `spack mpd build` | :white_check_mark: | :white_check_mark: | |
@@ -33,6 +33,8 @@ requirements:
 | `spack mpd rm-project` | :white_check_mark: | :x: [^1] | :x: |
 
 [^1]: Without `--force`, `rm-project` requires that no project is selected. With `--force`, a selected project is permitted.
+
+[^2]: Cloning repositories (via a `<repo spec>` or `--suites`) requires a selected project. The suite-management and help options (`--add-suite`, `--remove-suite`, `--help-repos`, `--help-repos-with-urls`, `--help-suites`, `--help-suites-with-paths`) require only that MPD is initialized.
 
 ## Selecting a project
 

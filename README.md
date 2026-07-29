@@ -56,7 +56,7 @@ developers.
 8. Helper commands
    1. [MPD status](doc/Helpers.md#status)
    2. [Cloning repositories to develop](doc/Helpers.md#cloning-repositories-to-develop)
-   3. [Listing projects](doc/Helpers.md#listing-available-projects)
+   3. [Listing projects](doc/Helpers.md#listing-projects)
 
 ## Limitations
 

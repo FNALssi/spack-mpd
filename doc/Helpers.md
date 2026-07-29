@@ -36,7 +36,10 @@ git-clone` command is:
 
 ```console
 $ spack mpd git-clone -h
-usage: spack mpd git-clone [-h] [--suites <suite name> [<suite name> ...]] [--fork | --help-repos | --help-suites]
+usage: spack mpd git-clone [-h] [--suites <suite name> [<suite name> ...]]
+                           [--add-suite <suite YAML file> [<suite YAML file> ...]]
+                           [--remove-suite <suite name> [<suite name> ...]]
+                           [--fork | --help-repos | --help-repos-with-urls | --help-suites | --help-suites-with-paths]
                            [<repo spec> ...]
 
 clone git repositories for development
@@ -47,11 +50,19 @@ positional arguments:
                         (b) any URL to a Git repository.
 
 optional arguments:
-  --fork                fork GitHub repository or set origin to already forked repository
-  --help-repos          list supported repositories
-  --help-suites         list supported suites
   --suites <suite name> [<suite name> ...]
                         clone repositories corresponding to the given suite name (multiple allowed)
+  --add-suite <suite YAML file> [<suite YAML file> ...]
+                        add one or more suite-definition YAML files
+  --remove-suite <suite name> [<suite name> ...]
+                        remove one or more known suites by name
+  --fork                fork GitHub repository or set origin to already forked repository
+  --help-repos          list known repositories
+  --help-repos-with-urls
+                        list known repositories with full URLs
+  --help-suites         list known suites
+  --help-suites-with-paths
+                        list known suites and suite YAML file paths
   -h, --help            show this help message and exit
 ```
 
@@ -70,6 +81,82 @@ A `repo spec` can be:
 After cloning any repositories into your selected project's source
 directory, be sure to refresh the project (`spack mpd refresh`), which
 will recreate the Spack environment to reflect the changes.
+
+### Suites
+
+A _suite_ is a named collection of repositories that can be cloned
+together.  You can list the known suites and the repositories they
+contain with `--help-suites`:
+
+```console
+$ spack mpd git-clone --help-suites
+
+==> Known suites:
+
+  critic
+    - art, art-root-io, canvas, canvas-root-io, cetlib, cetlib-except,
+      critic, fhicl-cpp, fhicl-py, gallery, hep-concurrency, messagefacility
+  ⋮
+```
+
+Use `--help-suites-with-paths` to additionally print the path to the
+YAML file that defines each suite.  Once you know a suite's name, you
+can clone all of its repositories at once:
+
+```console
+$ spack mpd git-clone --suites critic
+```
+
+#### Adding and removing suites
+
+MPD ships with a set of built-in suites, but you can define your own.
+A suite-definition file must be named `<something>-suite.yaml` and
+contain exactly one top-level suite mapping, for example:
+
+```yaml
+# my-suite.yaml
+my:
+  gh_org_name: art-framework-suite
+  repos:
+    - cetlib
+    - cetlib-except
+    - hep-concurrency
+```
+
+- `gh_org_name` is the GitHub organization used to construct the clone
+  URL for each repository (i.e. `https://github.com/<gh_org_name>/<repo>.git`).
+- `repos` is the list of repositories that make up the suite.
+
+Register the suite with the `--add-suite` option, which copies the YAML
+file into MPD's known-suites directory:
+
+```console
+$ spack mpd git-clone --add-suite my-suite.yaml
+
+==> Added suite my from my-suite.yaml
+```
+
+If a suite file with the same name already exists, you will be prompted
+before it is overwritten.  Because `--add-suite` is processed before any
+clone operations, you can add and use a suite in a single invocation:
+
+```console
+$ spack mpd git-clone --add-suite my-suite.yaml --suites my
+```
+
+To remove a known suite by name, use `--remove-suite` (you will be
+prompted for confirmation):
+
+```console
+$ spack mpd git-clone --remove-suite my
+
+==> Removed suite my from .../var/mpd/known_suites/my-suite.yaml
+```
+
+> [!NOTE]
+> Adding or removing a suite only requires MPD to be initialized——a
+> project need not be selected.  Cloning repositories (via `<repo spec>`
+> or `--suites`), however, does require a selected project.
 
 ## Listing projects
 

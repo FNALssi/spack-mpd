@@ -20,7 +20,8 @@ Both approaches are supported through the `spack mpd new-project` command:
 ```console
 $ spack mpd new-project --help
 usage: spack mpd new-project [-hCdfy] [--name NAME] [-T TOP] [-S SRCS] [-E ENV]
-                             [-C COMPILER] [-d SPEC [CONSTRAINT ...]] [variants ...]
+                             [-C COMPILER] [-d SPEC [CONSTRAINT ...]]
+                             [--env-var-prepend <ENV_VAR>=<suffix>] [variants ...]
 
 create MPD development area
 
@@ -39,6 +40,9 @@ optional arguments:
                         (default: /scratch/knoepfel/art-devel)
   -d SPEC [CONSTRAINT ...], --dependency SPEC [CONSTRAINT ...]
                         specify a package with constraints (e.g., root %gcc@11, foo ^bar@x.y.z)
+                        (can be specified multiple times)
+  --env-var-prepend <ENV_VAR>=<suffix>
+                        prepend colon-separated paths to ENV_VAR for each checked-out package
                         (can be specified multiple times)
   -f, --force           overwrite existing project with same name
   -h, --help            show this help message and exit
@@ -78,6 +82,43 @@ and `cxxstd=20`).  In addition, it is possible to specify virtual
 packages using the notation (e.g.) `^[virtuals=tbb] intel-tbb-oneapi`,
 where `tbb` is the virtual package provided by the concrete package
 `intel-tbb-oneapi`.
+
+## Prepending environment variables
+
+Some developed packages produce artifacts (e.g. generated Python
+modules or plugin libraries) in their build directories that must be
+discoverable through an environment variable at runtime.  The
+`--env-var-prepend` option instructs MPD to prepend a build-directory
+path to a given environment variable for **each** checked-out package.
+
+The argument must have the form `<ENV_VAR>=<suffix>`, where `<suffix>`
+is appended to each developed package's build directory.  For example:
+
+```console
+$ spack mpd new-project --name test --env-var-prepend PYTHONPATH=python
+```
+
+If the project develops `cetlib` and `cetlib-except` with a build
+directory of `/scratch/knoepfel/test-devel/build`, MPD will prepend the
+following (colon-separated) paths to `PYTHONPATH` in the project's
+environment:
+
+```
+/scratch/knoepfel/test-devel/build/cetlib/python:/scratch/knoepfel/test-devel/build/cetlib-except/python
+```
+
+The option may be specified multiple times to prepend to more than one
+environment variable:
+
+```console
+$ spack mpd new-project --name test \
+    --env-var-prepend PYTHONPATH=python \
+    --env-var-prepend FHICL_FILE_PATH=fcl
+```
+
+The same `--env-var-prepend` option is available to [`spack mpd
+refresh`](#from-an-empty-set-of-repositories), allowing the prepended
+paths to be added or updated after a project has been created.
 
 ## From an existing set of repositories
 
@@ -238,8 +279,10 @@ Upon invoking `refresh` you will then see printout that is very
 similar to what is [mentioned above when developing from an existing
 set of repositories](#from-an-existing-set-of-repositories) .  The
 `refresh` command accepts any of the [variants mentioned
-above](#variant-support).  Any variants provided will be added to (or
-override) the set of constraints the concretizer must honor.
+above](#variant-support), as well as the
+[`--env-var-prepend`](#prepending-environment-variables) option.  Any
+variants provided will be added to (or override) the set of constraints
+the concretizer must honor.
 
 ## Missing intermediate dependencies
 
