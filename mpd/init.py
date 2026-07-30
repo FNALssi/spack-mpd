@@ -16,8 +16,8 @@ MPD_DIR = Path(spack.paths.prefix) / "var" / "mpd"
 def setup_subparser(subparsers):
     init = subparsers.add_parser(
         SUBCOMMAND,
-        description="initialize MPD on this system",
-        help="initialize MPD on this system",
+        description="initialize MPD for this instance",
+        help="initialize MPD for this instance",
     )
     init.add_argument("-f", "--force", action="store_true", help="allow reinitialization")
     init.add_argument(
@@ -81,7 +81,7 @@ def process(args):
     spack.config.set("config:mpd_dir", str(config_dir), scope="site")
 
     if config_dir.exists() and args.force:
-        tty.warn("Reinitializing MPD on this system will remove all MPD projects")
+        tty.warn("Reinitializing MPD for this Spack instance will remove all MPD projects")
         if args.yes:
             should_reinitialize = True
         else:

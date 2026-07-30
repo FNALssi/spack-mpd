@@ -41,7 +41,7 @@ positional arguments:
     clear               clear selected MPD project
     git-clone (g, clone)
                         clone git repositories
-    init                initialize MPD on this system
+    init                initialize MPD for this instance
     install (i)         install built repositories
     list (ls)           list MPD projects
     new-project (n)     create MPD development area

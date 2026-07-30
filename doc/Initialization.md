@@ -1,10 +1,10 @@
-# Initializing MPD (once per system)
+# Initializing MPD (once per Spack instance)
 
 > [!WARNING]
 > If you have not already [installed MPD](Installation.md), you must do that first.
 
 You must initialize MPD on the system where you intend to use it.
-This needs to be done only once per system and is achieved by typing:
+This needs to be done only once per Spack instance and is achieved by typing:
 
 ```console
 $ spack mpd init
@@ -35,7 +35,7 @@ all existing projects:
 
 ```console
 $ spack mpd init -f
-==> Warning: Reinitializing MPD on this system will remove all MPD projects
+==> Warning: Reinitializing MPD for this Spack instance will remove all MPD projects
 ==> Would you like to proceed with reinitialization? [y/N] y
 ==> MPD initialized for Spack instance at /scratch/knoepfel/knoepfel-spack
 ==> MPD configuration directory: /scratch/knoepfel/knoepfel-spack/var/mpd

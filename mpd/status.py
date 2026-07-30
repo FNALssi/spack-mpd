@@ -10,7 +10,7 @@ SUBCOMMAND = "status"
 
 def setup_subparser(subparsers):
     subparsers.add_parser(
-        SUBCOMMAND, description="current MPD status on this system", help="current MPD status"
+        SUBCOMMAND, description="current MPD status for this instance", help="current MPD status"
     )
 
 
