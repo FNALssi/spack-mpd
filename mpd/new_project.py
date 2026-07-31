@@ -1,11 +1,11 @@
 from pathlib import Path
 
 import spack.environment as ev
-import spack.llnl.util.tty as tty
 
 from .concretize import concretize_project
 from .config import mpd_project_exists, print_config_info, project_config_from_args, select, update
 from .preconditions import State, preconditions
+from .spack_compat import tty
 from .util import bold, gray, remove_view
 
 SUBCOMMAND = "new-project"

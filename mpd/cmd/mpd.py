@@ -1,8 +1,7 @@
 import importlib
 
-import spack.llnl.util.tty as tty
-
 from .. import config
+from ..spack_compat import tty
 
 description = "develop multiple packages using Spack for external software"
 section = "developer"

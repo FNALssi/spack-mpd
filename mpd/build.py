@@ -1,10 +1,9 @@
 import subprocess
 from pathlib import Path
 
-import spack.llnl.util.tty as tty
-
 from .config import selected_project_config
 from .preconditions import State, activate_development_environment, preconditions
+from .spack_compat import tty
 from .util import cyan, remove_dir
 
 SUBCOMMAND = "build"

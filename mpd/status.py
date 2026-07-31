@@ -1,8 +1,6 @@
-import spack.environment as ev
-import spack.llnl.util.tty as tty
-
 from . import config
 from .preconditions import State, preconditions
+from .spack_compat import active_environment, tty
 from .util import bold, cyan, gray
 
 SUBCOMMAND = "status"
@@ -45,7 +43,7 @@ def process(args):
     msg = f"Selected project:   {cyan(name)}"
     tty.info(msg + _development_status(selected) + _install_status(selected))
 
-    env = ev.active_environment()
+    env = active_environment()
     if env and env.path != selected["local"]:
         tty.warn(
             f"An environment is active that does not correspond to the MPD project {cyan(name)}."

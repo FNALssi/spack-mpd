@@ -1,8 +1,8 @@
-import spack.llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
 
 from . import config
 from .preconditions import State, preconditions
+from .spack_compat import tty
 from .util import bold, cyan, maybe_with_color
 
 SUBCOMMAND = "list"

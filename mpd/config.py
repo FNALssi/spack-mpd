@@ -17,7 +17,6 @@ except ImportError:
 
 import spack.compilers
 import spack.environment as ev
-import spack.llnl.util.tty as tty
 import spack.store
 import spack.util.spack_yaml as syaml
 from spack.repo import PATH, UnknownPackageError
@@ -31,6 +30,7 @@ except ImportError:
     from spack_repo.builtin.build_systems.cmake import CMakePackage
 
 from . import init
+from .spack_compat import active_environment, tty
 from .util import cyan, gray, green, magenta, spack_cmd_line, yellow
 
 
@@ -807,7 +807,7 @@ def update_cache():
             sp.unlink()
 
     # Implicitly select project if environment is active
-    active_env = ev.active_environment()
+    active_env = active_environment()
     if not active_env:
         return
 

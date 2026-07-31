@@ -2,9 +2,9 @@
 # Spack Project Developers. See the top-level COPYRIGHT file for details.
 #
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
-import spack.llnl.util.filesystem as fs
 import spack.util.spack_yaml as syaml
 from spack.extensions.mpd import clone, init
+from spack.extensions.mpd.spack_compat import fs
 from spack.main import SpackCommand
 
 mpd = SpackCommand("mpd")

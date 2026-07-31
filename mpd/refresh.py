@@ -2,12 +2,12 @@ import json
 from pathlib import Path
 
 import spack.environment as ev
-import spack.llnl.util.tty as tty
 
 from . import config
 from .concretize import concretize_project
 from .config import print_config_info, selected_project_config
 from .preconditions import State, preconditions
+from .spack_compat import tty
 from .util import bold, gray
 
 SUBCOMMAND = "refresh"

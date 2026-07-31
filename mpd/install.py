@@ -2,10 +2,10 @@ import subprocess
 from datetime import datetime
 
 import spack.environment as ev
-import spack.llnl.util.tty as tty
 
 from .config import selected_project_config, update
 from .preconditions import State, activate_development_environment, preconditions
+from .spack_compat import tty
 from .util import bold, cyan, gray
 
 SUBCOMMAND = "install"

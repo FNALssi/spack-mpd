@@ -1,7 +1,6 @@
-import spack.llnl.util.tty as tty
-
 from . import config
 from .preconditions import State, preconditions
+from .spack_compat import tty
 from .util import maybe_with_color
 
 SUBCOMMAND = "clear"

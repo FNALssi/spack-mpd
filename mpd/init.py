@@ -1,11 +1,9 @@
 import shutil
 from pathlib import Path
 
-import spack.config
-import spack.llnl.util.filesystem as fs
-import spack.llnl.util.tty as tty
 import spack.paths
 
+from .spack_compat import config_get, config_set, fs, tty
 from .util import gray
 
 SUBCOMMAND = "init"
@@ -29,7 +27,7 @@ def setup_subparser(subparsers):
 
 
 def mpd_config_dir():
-    return Path(spack.config.get("config:mpd_dir", MPD_DIR.resolve(), scope="site"))
+    return Path(config_get("config:mpd_dir", MPD_DIR.resolve(), scope="site"))
 
 
 def mpd_config_file(config_dir):
@@ -78,7 +76,7 @@ def process(args):
     # If the value of "config:mpd_dir" has not been set yet, we set it here.  If
     # it has already been set, we are simply setting it to its current value.
     # The default returned by mpd_config_dir() is the value of MPD_DIR.
-    spack.config.set("config:mpd_dir", str(config_dir), scope="site")
+    config_set("config:mpd_dir", str(config_dir), scope="site")
 
     if config_dir.exists() and args.force:
         tty.warn("Reinitializing MPD for this Spack instance will remove all MPD projects")

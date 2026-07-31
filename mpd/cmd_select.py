@@ -1,9 +1,8 @@
 from pathlib import Path
 
-import spack.llnl.util.tty as tty
-
 from . import config
 from .preconditions import State, preconditions
+from .spack_compat import tty
 from .util import cyan, get_number, gray
 
 SUBCOMMAND = "select"

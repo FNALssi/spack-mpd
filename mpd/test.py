@@ -1,10 +1,9 @@
 import subprocess
 import sys
 
-import spack.llnl.util.tty as tty
-
 from .config import selected_project_config
 from .preconditions import State, activate_development_environment, preconditions
+from .spack_compat import tty
 from .util import maybe_with_color
 
 SUBCOMMAND = "test"

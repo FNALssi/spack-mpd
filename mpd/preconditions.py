@@ -2,9 +2,9 @@ from enum import Flag, auto
 
 import spack.environment as ev
 import spack.environment.shell as ev_shell
-import spack.llnl.util.tty as tty
 
 from . import config, init
+from .spack_compat import active_environment, tty
 from .util import bold, cyan, gray, green
 
 
@@ -78,7 +78,7 @@ def check_active(conditions):
     if should_be_active is None:
         return None
 
-    active_env = ev.active_environment()
+    active_env = active_environment()
     active_env_name = active_env.name if active_env else ""
     selected_project = config.selected_project(missing_ok=True)
     selected_project_config = None
@@ -103,7 +103,7 @@ def check_active(conditions):
     # from the development environment of the selected project.
     if not should_be_active and active_env_name == project_env_name:
         return (
-            f"The Spack environment {cyan(ev.active_environment().name)} "
+            f"The Spack environment {cyan(active_environment().name)} "
             f"must {bold('not')} be active"
         )
 
@@ -143,7 +143,7 @@ def preconditions(*conditions):
 
 def activate_development_environment(env_dir):
     development_env = ev.Environment(env_dir)
-    active = ev.active_environment()
+    active = active_environment()
     print()
     if active and active.name == development_env.name:
         tty.msg(green("Using active development environment ") + gray(f"({development_env.name})"))

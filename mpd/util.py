@@ -4,8 +4,9 @@ import sys
 import time
 from pathlib import Path
 
-import spack.llnl.util.tty as tty
 import spack.util.spack_yaml as syaml
+
+from .spack_compat import tty
 
 
 def bold(msg):

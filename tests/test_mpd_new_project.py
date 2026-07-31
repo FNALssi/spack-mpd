@@ -5,9 +5,9 @@
 import contextlib
 import re
 
-import spack.llnl.util.filesystem as fs
 import spack.util.spack_yaml as syaml
 from spack.extensions.mpd import concretize, config
+from spack.extensions.mpd.spack_compat import fs
 from spack.main import SpackCommand
 
 

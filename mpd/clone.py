@@ -9,8 +9,6 @@ import urllib
 from enum import Enum, auto
 from pathlib import Path
 
-import spack.llnl.util.filesystem as fs
-import spack.llnl.util.tty as tty
 import spack.util.git
 import spack.util.spack_yaml as syaml
 from spack.util import executable
@@ -18,6 +16,7 @@ from spack.util import executable
 from . import init as mpd_init
 from .config import selected_project_config
 from .preconditions import State, preconditions
+from .spack_compat import fs, tty
 from .util import bold, gray, maybe_with_color, yellow
 
 SUBCOMMAND = "git-clone"
