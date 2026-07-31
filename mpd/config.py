@@ -645,9 +645,11 @@ def project_config_from_args(args):
     if chosen_compiler.external:
         compiler_paths = chosen_compiler.extra_attributes["compilers"]
     else:
-        if cc := getattr(chosen_compiler.package, "cc", None):
+        cc = getattr(chosen_compiler.package, "cc", None)
+        if cc:
             compiler_paths["c"] = cc
-        if cxx := getattr(chosen_compiler.package, "cxx", None):
+        cxx = getattr(chosen_compiler.package, "cxx", None)
+        if cxx:
             compiler_paths["cxx"] = cxx
 
     project["chosen_compiler"] = str(chosen_compiler)
@@ -856,7 +858,8 @@ def print_config_info(config):
     if len(ignored_packages):
         print("\n    *" + gray("ignored: repository not registered as a CMake package with Spack"))
 
-    if env := config["env"]:
+    env = config["env"]
+    if env:
         print(f"\n  Reusing dependencies from environment:\n    {green(env)}")
 
     dependencies = config["dependencies"]

@@ -117,16 +117,20 @@ def check_active(conditions):
 
 def preconditions(*conditions):
     errors = []
-    if initialization_precondition := check_initialized(conditions):
+    initialization_precondition = check_initialized(conditions)
+    if initialization_precondition:
         errors.append(initialization_precondition)
 
-    if selected_precondition := check_selected(conditions):
+    selected_precondition = check_selected(conditions)
+    if selected_precondition:
         errors.append(selected_precondition)
 
-    if selected_precondition := check_packages(conditions):
-        errors.append(selected_precondition)
+    packages_precondition = check_packages(conditions)
+    if packages_precondition:
+        errors.append(packages_precondition)
 
-    if active_precondition := check_active(conditions):
+    active_precondition = check_active(conditions)
+    if active_precondition:
         errors.append(active_precondition)
 
     if errors:

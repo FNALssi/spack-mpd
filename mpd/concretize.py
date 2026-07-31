@@ -432,7 +432,8 @@ def setup_environment_items(project_config):
     """
     from_items = []
     include_list = []
-    if proto_env := project_config["env"]:
+    proto_env = project_config["env"]
+    if proto_env:
         # If an external environment is used, we really, really want to use that one.
         from_items += [{"type": "environment", "path": proto_env}]
 
@@ -528,7 +529,8 @@ def extract_cmake_args(env, packages):
         # builder interface, which also supports packages that provide a CMakeBuilder
         # class.
         pkg_builder = builder.create(s.package)
-        if cmake_args_method := getattr(pkg_builder, "cmake_args", False):
+        cmake_args_method = getattr(pkg_builder, "cmake_args", False)
+        if cmake_args_method:
             cmake_args[s.name] = cmake_args_method()
 
     return cmake_args
@@ -543,7 +545,8 @@ def collect_first_order_dependencies(env, packages, project_config):
     first_order_deps = {"cmake"}
 
     chosen_compiler = None
-    if compiler := project_config.get("compiler"):
+    compiler = project_config.get("compiler")
+    if compiler:
         found_compilers = spack.cmd.parse_specs(compiler["value"])
         if not found_compilers:
             indent = " " * len("==> Error: ")
@@ -691,7 +694,8 @@ def handle_installation(project_config, env, packages, yes_to_all, compiler_syml
     name = project_config["name"]
     local_env_dir = project_config["local"]
 
-    if absent := absent_dependencies(env, packages, project_config["ignored"]):
+    absent = absent_dependencies(env, packages, project_config["ignored"])
+    if absent:
 
         def _parens_number(i):
             return f"({i})"
