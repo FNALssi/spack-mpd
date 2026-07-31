@@ -32,8 +32,7 @@ optional arguments:
   --name NAME           (required if --top not specified)
   -C COMPILER, --compiler COMPILER
                         compiler to use (e.g., gcc@13.2.0, clang@15.0.0)
-  -E ENV, --env ENV     environment from which to create project
-                        (multiple allowed)
+  -E ENV, --env ENV     environment (name or absolute path) from which to create project
   -S SRCS, --srcs SRCS  directory containing repositories to develop
                         (default: <top-level directory>/srcs)
   -T TOP, --top TOP     top-level directory for MPD area

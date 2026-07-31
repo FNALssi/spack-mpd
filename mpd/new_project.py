@@ -36,7 +36,7 @@ def setup_subparser(subparsers):
         "-f", "--force", action="store_true", help="overwrite existing project with same name"
     )
     new_project.add_argument(
-        "-E", "--env", help="environment from which to create project\n(multiple allowed)"
+        "-E", "--env", help="environment (name or absolute path) from which to create project"
     )
     new_project.add_argument(
         "-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts"
