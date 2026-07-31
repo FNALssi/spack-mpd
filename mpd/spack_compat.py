@@ -2,14 +2,19 @@ import spack.config
 import spack.environment as ev
 
 try:
-    import spack.util.filesystem as fs
-except ImportError:
     import spack.llnl.util.filesystem as fs
+except ImportError:
+    import spack.util.filesystem as fs
 
 try:
-    import spack.util.tty as tty
-except ImportError:
     import spack.llnl.util.tty as tty
+
+    if not hasattr(tty, "msg"):
+        # spack.llnl.util.tty exists as an empty namespace package in some
+        # Spack versions; fall back to the real module in that case.
+        raise ImportError("spack.llnl.util.tty is an empty namespace package")
+except ImportError:
+    import spack.util.tty as tty
 
 
 def config_get(path, default=None, scope=None):
