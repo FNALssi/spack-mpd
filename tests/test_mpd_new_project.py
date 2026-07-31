@@ -7,8 +7,7 @@ import re
 
 import spack.llnl.util.filesystem as fs
 import spack.util.spack_yaml as syaml
-from spack.extensions.mpd import concretize
-from spack.extensions.mpd import config
+from spack.extensions.mpd import concretize, config
 from spack.main import SpackCommand
 
 
@@ -155,15 +154,7 @@ def test_add_env_var_prepend_paths(tmp_path):
 
     with open(env_yaml, "w") as f:
         syaml.dump(
-            {
-                "spack": {
-                    "env_vars": {
-                        "prepend_path": {
-                            "PATH": "/tmp/compilers",
-                        }
-                    }
-                }
-            },
+            {"spack": {"env_vars": {"prepend_path": {"PATH": "/tmp/compilers"}}}},
             stream=f,
             default_flow_style=False,
         )
@@ -182,10 +173,7 @@ def test_add_env_var_prepend_paths(tmp_path):
         loaded = syaml.load(f)
 
     expected = ":".join(
-        [
-            str(build_dir / "pkg1" / "my_string"),
-            str(build_dir / "pkg2" / "my_string"),
-        ]
+        [str(build_dir / "pkg1" / "my_string"), str(build_dir / "pkg2" / "my_string")]
     )
     prepend_path = loaded["spack"]["env_vars"]["prepend_path"]
     assert prepend_path["PATH"] == "/tmp/compilers"

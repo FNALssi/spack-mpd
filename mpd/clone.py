@@ -646,6 +646,4 @@ def process(args):
         help_repos(with_urls=True)
     else:
         print()
-        tty.die(
-            f"At least one option required when invoking 'spack {' '.join(sys.argv[1:])}'" "\n"
-        )
+        tty.die(f"At least one option required when invoking 'spack {' '.join(sys.argv[1:])}'\n")

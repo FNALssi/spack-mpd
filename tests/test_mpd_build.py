@@ -12,10 +12,7 @@ def test_build_targets_from_packages_accepts_repo_or_package_name(tmp_path):
     project_config = {
         "source": str(source_path),
         "generator": {"value": "ninja"},
-        "srcs": {
-            "phlex": "phlex",
-            "phlex_examples": "phlex-examples",
-        },
+        "srcs": {"phlex": "phlex", "phlex_examples": "phlex-examples"},
     }
 
     targets = build.build_targets_from_packages(project_config, ["phlex_examples", "phlex"])

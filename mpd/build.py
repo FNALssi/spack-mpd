@@ -97,7 +97,9 @@ def configure(project_config, cmake_defines=None):
 
 def source_directories(project_config):
     source_path = Path(project_config["source"])
-    return sorted(f.name for f in source_path.iterdir() if not f.name.startswith(".") and f.is_dir())
+    return sorted(
+        f.name for f in source_path.iterdir() if not f.name.startswith(".") and f.is_dir()
+    )
 
 
 def package_directory_target(project_config, package_source_directory):

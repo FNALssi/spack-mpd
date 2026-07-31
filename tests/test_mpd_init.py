@@ -19,5 +19,7 @@ def test_mpd_init(tmp_mpd_dir):
     assert f"Warning: MPD already initialized for Spack instance at {spack.paths.prefix}" in out
 
     out = mpd("init", "-f", "-y")
-    assert "Warning: Reinitializing MPD for this Spack instance will remove all MPD projects" in out
+    assert (
+        "Warning: Reinitializing MPD for this Spack instance will remove all MPD projects" in out
+    )
     assert f"MPD initialized for Spack instance at {spack.paths.prefix}" in out

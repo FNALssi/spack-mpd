@@ -147,7 +147,9 @@ def remove_dir(dir_path, keep_dir=False):
     # If removal didn't reach the intended state after attempts, log a warning
     if keep_dir:
         if dir_path.exists() and any(dir_path.iterdir()):
-            tty.warn(f"Failed to remove contents of directory {dir_path} after {max_attempts} attempts")
+            tty.warn(
+                f"Failed to remove contents of directory {dir_path} after {max_attempts} attempts"
+            )
     else:
         if dir_path.exists():
             tty.warn(f"Failed to remove directory {dir_path} after {max_attempts} attempts")

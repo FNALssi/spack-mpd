@@ -305,10 +305,7 @@ def parse_env_var_prepends(env_var_prepends):
     for item in env_var_prepends:
         env_var, sep, suffix = item.partition("=")
         if not sep or not env_var or not suffix:
-            tty.die(
-                "Argument to --env-var-prepend must have the form "
-                "'<ENV_VAR>=<suffix>'"
-            )
+            tty.die("Argument to --env-var-prepend must have the form '<ENV_VAR>=<suffix>'")
         normalized.append(f"{env_var}={suffix}")
 
     return normalized

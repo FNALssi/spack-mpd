@@ -759,7 +759,7 @@ def handle_installation(project_config, env, packages, yes_to_all, compiler_syml
         _add_env_var_prepend_paths(project_config)
         update(project_config, status="ready")
         tty.msg(
-            f"{bold(name)} is ready for development " f"(e.g type {cyan('spack mpd build ...')})\n"
+            f"{bold(name)} is ready for development (e.g type {cyan('spack mpd build ...')})\n"
         )
     else:
         tty.die("Installation failed. Please review the error messages above and try again.\n")

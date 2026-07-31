@@ -29,8 +29,7 @@ def setup_subparser(subparsers):
     new_project.add_argument(
         "-S",
         "--srcs",
-        help="directory containing repositories to develop\n"
-        "(default: <top-level directory>/srcs)",
+        help="directory containing repositories to develop\n(default: <top-level directory>/srcs)",
     )
     new_project.add_argument(
         "-f", "--force", action="store_true", help="overwrite existing project with same name"
