@@ -79,3 +79,34 @@ def test_remove_suite_can_abort(with_mpd_init, tmp_path, monkeypatch):
 def test_remove_suite_errors_for_unknown_suite(with_mpd_init):
     out = mpd("g", "--remove-suite", "no-such-suite", fail_on_error=False)
     assert "Cannot remove unknown suite" in out
+
+
+def test_github_ssh_url_rewrite():
+    assert (
+        clone._github_ssh_url("https://github.com/FNALssi/cetlib.git")
+        == "git@github.com:FNALssi/cetlib.git"
+    )
+    assert clone._github_ssh_url("https://gitlab.com/FNALssi/cetlib.git") is None
+    assert clone._github_ssh_url("git@github.com:FNALssi/cetlib.git") is None
+
+
+def test_clone_repos_reports_https_fallback(monkeypatch, tmp_path, capsys):
+    repo = clone.GitHubRepo("FNALssi", "cetlib")
+
+    def fake_clone(_repo, _srcs_area, prefer_ssh=False):
+        assert prefer_ssh is True
+        return (None, True)
+
+    monkeypatch.setattr(clone, "_clone", fake_clone)
+
+    changed = clone.clone_repos(
+        {"cetlib": repo},
+        should_fork=False,
+        srcs_area=str(tmp_path),
+        local_area=str(tmp_path),
+        prefer_ssh=True,
+    )
+
+    assert changed is True
+    out = capsys.readouterr().out
+    assert "cloned via https fallback" in out

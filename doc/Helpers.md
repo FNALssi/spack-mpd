@@ -39,6 +39,7 @@ $ spack mpd git-clone -h
 usage: spack mpd git-clone [-h] [--suites <suite name> [<suite name> ...]]
                            [--add-suite <suite YAML file> [<suite YAML file> ...]]
                            [--remove-suite <suite name> [<suite name> ...]]
+                           [--prefer-ssh]
                            [--fork | --help-repos | --help-repos-with-urls | --help-suites | --help-suites-with-paths]
                            [<repo spec> ...]
 
@@ -56,6 +57,7 @@ optional arguments:
                         add one or more suite-definition YAML files
   --remove-suite <suite name> [<suite name> ...]
                         remove one or more known suites by name
+  --prefer-ssh          prefer SSH for GitHub repositories and fall back to HTTPS if unavailable
   --fork                fork GitHub repository or set origin to already forked repository
   --help-repos          list known repositories
   --help-repos-with-urls
@@ -71,12 +73,17 @@ A `repo spec` can be:
 - any repository name listed by the `spack mpd git-clone --help-repos` option, or
 - any URL to a Git repository.
 
-> [!WARNING]
-> When using `spack mpd git-clone <repository name>`, the cloned repository
-> will be read-only (i.e. no pushes allowed to the remote
-> repository).  Users who would like to clone repositories with
-> write permissions should use the corresponding repository URL
-> (e.g. `spack mpd git-clone git@github.com/Org/RepoName.git`).
+## Read-only vs. writeable repositories
+
+When using `spack mpd git-clone <repository name>`, the cloned repository
+is read-only by default (i.e. no pushes allowed to the remote
+repository).  There are two ways to clone a repository with write permissions:
+
+1. Use `--prefer-ssh` to first attempt cloning with the
+   `git@github.com:` SSH prefix, falling back to HTTPS if SSH is unavailable
+   (e.g. `spack mpd git-clone --prefer-ssh cetlib`).
+2. Explicitly use a URL that denotes write access
+   (e.g. `spack mpd git-clone git@github.com:Org/RepoName.git`).
 
 After cloning any repositories into your selected project's source
 directory, be sure to refresh the project (`spack mpd refresh`), which

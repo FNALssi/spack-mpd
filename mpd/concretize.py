@@ -20,8 +20,7 @@ from spack import traverse
 from spack.spec import InstallStatus
 
 from .config import update
-from .spack_compat import config_set
-from .spack_compat import tty
+from .spack_compat import config_set, tty
 from .util import bold, cyan, get_number, gray, make_yaml_file, runtime_library_dirs, yellow
 
 SUBCOMMAND = "new-project"

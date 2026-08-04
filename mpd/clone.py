@@ -76,6 +76,11 @@ def setup_subparser(subparsers):
         action="extend",
         nargs="+",
     )
+    git_parser.add_argument(
+        "--prefer-ssh",
+        action="store_true",
+        help="prefer SSH for GitHub repositories and fall back to HTTPS if unavailable",
+    )
     git = git_parser.add_mutually_exclusive_group()
     help_msg = "fork GitHub repository or set origin to already forked repository"
     if not gh:
@@ -447,14 +452,38 @@ def help_repos(with_urls=False):
     print()
 
 
-def _clone(repo, srcs_area):
+def _github_ssh_url(url):
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or parsed.netloc != "github.com":
+        return None
+
+    path = parsed.path.lstrip("/")
+    if not path:
+        return None
+
+    return f"git@github.com:{path}"
+
+
+def _clone(repo, srcs_area, prefer_ssh=False):
     git = spack.util.git.git(required=True)
     git.add_default_arg("-C", srcs_area)
+
+    clone_url = repo.url()
+    used_https_fallback = False
+    if prefer_ssh:
+        ssh_url = _github_ssh_url(clone_url)
+        if ssh_url:
+            git("ls-remote", ssh_url, fail_on_error=False, output=str, error=str)
+            if git.returncode == 0:
+                clone_url = ssh_url
+            else:
+                used_https_fallback = True
+
     local_src_dir = Path(srcs_area) / repo.name()
-    result = git("clone", repo.url(), str(local_src_dir), fail_on_error=False, error=str)
+    result = git("clone", clone_url, str(local_src_dir), fail_on_error=False, error=str)
     if "Cloning into" in result and git.returncode == 0:
-        return None
-    return result.rstrip()
+        return None, used_https_fallback
+    return result.rstrip(), used_https_fallback
 
 
 def _color_from(status):
@@ -502,15 +531,18 @@ def _fork_repository():
     return ansi_escape.sub("", result)
 
 
-def clone_repos(repos, should_fork, srcs_area, local_area):
+def clone_repos(repos, should_fork, srcs_area, local_area, prefer_ssh=False):
     name_width = max(len(n) + 1 for n in repos.keys())
     name_width = max(name_width, 20)
     changed_srcs_dir = False
     for name, repo in repos.items():
-        result = _clone(repo, srcs_area)
+        result, used_https_fallback = _clone(repo, srcs_area, prefer_ssh=prefer_ssh)
         status = RepoStatus()
         if result is None:
-            status.update(CloneState.DONE, clone_msg="cloned")
+            clone_msg = "cloned"
+            if used_https_fallback:
+                clone_msg += " via https fallback"
+            status.update(CloneState.DONE, clone_msg=clone_msg)
             changed_srcs_dir = True
         elif "already exists" in result:
             status.update(CloneState.SKIPPED, clone_msg="already cloned")
@@ -595,7 +627,13 @@ def process(args):
             for repo_spec in args.repos:
                 repo = repos.get(repo_spec, SimpleGitRepo(repo_spec))
                 repos_to_clone[repo.name()] = repo
-            if clone_repos(repos_to_clone, should_fork, config["source"], config["local"]):
+            if clone_repos(
+                repos_to_clone,
+                should_fork,
+                config["source"],
+                config["local"],
+                prefer_ssh=args.prefer_ssh,
+            ):
                 changed_srcs_dir = True
 
         if args.suites:
@@ -614,7 +652,11 @@ def process(args):
                     preamble += " and forking"
                 tty.msg(f"{preamble} suite {bold(s)}:\n")
                 if clone_repos(
-                    suite.repositories(), should_fork, config["source"], config["local"]
+                    suite.repositories(),
+                    should_fork,
+                    config["source"],
+                    config["local"],
+                    prefer_ssh=args.prefer_ssh,
                 ):
                     changed_srcs_dir = True
 
