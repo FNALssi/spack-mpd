@@ -379,6 +379,8 @@ def verify_develop_versions(packages) -> None:
     error_msg += (
         f"\n\n{indent}Substitute the repository's actual development branch if it is\n"
         f"{indent}not named 'develop'.\n"
+        f"\n\nYou may use {cyan('spack edit <package>')} to add this to the recipe."
+        f"\nIf you do, please make a pull request for that repo."
     )
 
     print()
