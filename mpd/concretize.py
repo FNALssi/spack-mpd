@@ -3,6 +3,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import spack.compilers
 import spack.compilers.config
 import spack.environment as ev
 import spack.environment.shell as ev_shell
+import spack.repo
 import spack.store
 import spack.util.spack_yaml as syaml
 from spack import traverse
@@ -33,7 +35,10 @@ def _run(cmd):
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         if result.stderr:
-            print(result.stderr, end="")
+            # Write to stderr, not stdout: stdout is block-buffered when piped,
+            # which lets our own error message overtake the child's explanation
+            # of why it failed.
+            print(result.stderr, end="", file=sys.stderr)
         result.check_returncode()
     return result
 
@@ -333,6 +338,51 @@ def ordered_roots(env, package_requirements):
 
     sorted_packages = toposort_packages(parent_children)
     return [install_prefixes[p] for p in sorted_packages]
+
+
+def verify_develop_versions(packages) -> None:
+    """Verify that each developed package's recipe declares a "develop" version.
+
+    MPD builds every cloned package from its checked-out sources, which it
+    expresses as a hard ``require: ["@develop"]`` (see _DEVELOP_VARIANT in
+    config.py).  A recipe that declares no develop version therefore cannot
+    concretize.  Spack reports that as a failed version requirement, naming a
+    version the user never typed and no recipe to fix, so check it up front
+    where the offending recipe can be named instead.
+    """
+    missing_develop = {}
+
+    for pkg_name in packages:
+        try:
+            pkg_cls = spack.repo.PATH.get_pkg_class(pkg_name)
+        except spack.repo.UnknownPackageError:
+            # Source directories that match no recipe are already reported when
+            # the project's sources are scanned; nothing to add here.
+            continue
+
+        if not any(str(v) == "develop" for v in pkg_cls.versions):
+            missing_develop[pkg_name] = spack.repo.PATH.filename_for_package_name(pkg_name)
+
+    if not missing_develop:
+        return
+
+    indent = " " * len("==> Error: ")
+    error_msg = (
+        "MPD builds each cloned package from its checked-out sources, which\n"
+        f"{indent}requires a {bold('develop')} version in the package's recipe.\n"
+        f"{indent}The following recipes do not declare one:\n"
+    )
+    for pkg_name, recipe in sorted(missing_develop.items()):
+        error_msg += "\n - " + bold(pkg_name)
+        error_msg += f"\n     recipe: {yellow(recipe)}"
+        error_msg += "\n     add:    " + yellow('version("develop", branch="develop")')
+    error_msg += (
+        f"\n\n{indent}Substitute the repository's actual development branch if it is\n"
+        f"{indent}not named 'develop'.\n"
+    )
+
+    print()
+    tty.die(error_msg + "\n")
 
 
 def verify_no_missing_intermediate_deps(env, packages, ignored_packages) -> None:
@@ -771,6 +821,10 @@ def handle_installation(project_config, env, packages, yes_to_all, compiler_syml
 
 def concretize_project(project_config, yes_to_all):
     packages, package_requirements = prepare_package_requirements(project_config)
+
+    # Fail before spending time in the solver--a package with no develop version
+    # cannot satisfy the "@develop" requirement MPD imposes on cloned sources.
+    verify_develop_versions(packages)
 
     print()
     tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
