@@ -197,3 +197,27 @@ def test_categorize_constraints_parses_dependency_name_with_space_separated_cons
         "value": "llvm",
         "variant": "^llvm libcxx=none libunwind=none",
     }
+
+
+def test_format_compiler_help_message_empty_compiler_list():
+    msg = config._format_compiler_help_message([])
+
+    assert msg == (
+        "No compilers are configured in this Spack instance. "
+        "Configure one manually or run `spack compiler find`."
+    )
+
+
+def test_format_compiler_help_message_lists_known_compilers_sorted_and_unique():
+    class FakeCompiler:
+        def __init__(self, spec):
+            self.spec = spec
+
+        def __str__(self):
+            return self.spec
+
+    msg = config._format_compiler_help_message(
+        [FakeCompiler("gcc@12.2.0"), FakeCompiler("clang@16.0.0"), FakeCompiler("gcc@12.2.0")]
+    )
+
+    assert msg == "Available compilers:\n  clang@16.0.0\n  gcc@12.2.0"

@@ -144,6 +144,19 @@ def all_available_compilers():
     return compilers_from_yaml + compilers_from_store
 
 
+def _format_compiler_help_message(available_compilers):
+    compilers = sorted({str(c) for c in available_compilers})
+    if not compilers:
+        return (
+            "No compilers are configured in this Spack instance. "
+            "Configure one manually or run `spack compiler find`."
+        )
+
+    lines = ["Available compilers:"]
+    lines.extend(f"  {compiler}" for compiler in compilers)
+    return "\n".join(lines)
+
+
 def handle_variant(token):
     if token.kind in (SpecTokens.KEY_VALUE_PAIR, SpecTokens.PROPAGATED_KEY_VALUE_PAIR):
         match = SPLIT_KVP.match(token.value)
@@ -595,7 +608,11 @@ def select_compiler(desired_compiler):
 
         if not compilers:
             desired_compiler_variant = desired_compiler["variant"]
-            tty.die(f"No compiler found that corresponds to '{desired_compiler_variant}'")
+            tty.die(
+                f"No compiler found that corresponds to '{desired_compiler_variant}'\n"
+                + _format_compiler_help_message(all_compilers)
+                + "\n"
+            )
 
         # Most recent version wins
         compilers.sort(key=lambda spec: spec.version, reverse=True)
@@ -608,9 +625,7 @@ def select_compiler(desired_compiler):
     if len(all_compilers) > 0:
         return all_compilers[0]
 
-    tty.die(
-        "No default compiler available--you must specify the compiler (e.g. --compiler gcc@x.y)"
-    )
+    tty.die(_format_compiler_help_message(all_compilers) + "\n")
 
 
 def project_config_from_args(args):
