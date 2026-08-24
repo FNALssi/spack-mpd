@@ -81,6 +81,9 @@ def setup_subparser(subparsers):
         action="store_true",
         help="prefer SSH for GitHub repositories and fall back to HTTPS if unavailable",
     )
+    ref = git_parser.add_mutually_exclusive_group()
+    ref.add_argument("--branch", metavar="<branch name>", help="check out the specified branch")
+    ref.add_argument("--tag", metavar="<tag name>", help="check out the specified tag")
     git = git_parser.add_mutually_exclusive_group()
     help_msg = "fork GitHub repository or set origin to already forked repository"
     if not gh:
@@ -464,7 +467,11 @@ def _github_ssh_url(url):
     return f"git@github.com:{path}"
 
 
-def _clone(repo, srcs_area, prefer_ssh=False):
+def _clone(repo, srcs_area, prefer_ssh=False, branch=None, tag=None):
+    local_src_dir = Path(srcs_area) / repo.name()
+    if local_src_dir.exists():
+        return "destination already exists", False
+
     git = spack.util.git.git(required=True)
     git.add_default_arg("-C", srcs_area)
 
@@ -479,8 +486,15 @@ def _clone(repo, srcs_area, prefer_ssh=False):
             else:
                 used_https_fallback = True
 
-    local_src_dir = Path(srcs_area) / repo.name()
-    result = git("clone", clone_url, str(local_src_dir), fail_on_error=False, error=str)
+    clone_args = ["clone"]
+    if branch:
+        clone_args.extend(["--branch", branch])
+    elif tag:
+        # git clone --branch accepts both branch and tag names. Git checks out
+        # a tag detached, which is the appropriate state for a tag checkout.
+        clone_args.extend(["--branch", tag])
+    clone_args.extend([clone_url, str(local_src_dir)])
+    result = git(*clone_args, fail_on_error=False, error=str)
     if "Cloning into" in result and git.returncode == 0:
         return None, used_https_fallback
     return result.rstrip(), used_https_fallback
@@ -531,12 +545,16 @@ def _fork_repository():
     return ansi_escape.sub("", result)
 
 
-def clone_repos(repos, should_fork, srcs_area, local_area, prefer_ssh=False):
+def clone_repos(
+    repos, should_fork, srcs_area, local_area, prefer_ssh=False, branch=None, tag=None
+):
     name_width = max(len(n) + 1 for n in repos.keys())
     name_width = max(name_width, 20)
     changed_srcs_dir = False
     for name, repo in repos.items():
-        result, used_https_fallback = _clone(repo, srcs_area, prefer_ssh=prefer_ssh)
+        result, used_https_fallback = _clone(
+            repo, srcs_area, prefer_ssh=prefer_ssh, branch=branch, tag=tag
+        )
         status = RepoStatus()
         if result is None:
             clone_msg = "cloned"
@@ -633,6 +651,8 @@ def process(args):
                 config["source"],
                 config["local"],
                 prefer_ssh=args.prefer_ssh,
+                branch=args.branch,
+                tag=args.tag,
             ):
                 changed_srcs_dir = True
 
@@ -657,6 +677,8 @@ def process(args):
                     config["source"],
                     config["local"],
                     prefer_ssh=args.prefer_ssh,
+                    branch=args.branch,
+                    tag=args.tag,
                 ):
                     changed_srcs_dir = True
 

@@ -2,6 +2,9 @@
 # Spack Project Developers. See the top-level COPYRIGHT file for details.
 #
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+import pytest
+
+import spack.util.git
 import spack.util.spack_yaml as syaml
 from spack.extensions.mpd import clone, init
 from spack.extensions.mpd.spack_compat import fs
@@ -93,7 +96,7 @@ def test_github_ssh_url_rewrite():
 def test_clone_repos_reports_https_fallback(monkeypatch, tmp_path, capsys):
     repo = clone.GitHubRepo("FNALssi", "cetlib")
 
-    def fake_clone(_repo, _srcs_area, prefer_ssh=False):
+    def fake_clone(_repo, _srcs_area, prefer_ssh=False, branch=None, tag=None):
         assert prefer_ssh is True
         return (None, True)
 
@@ -110,3 +113,53 @@ def test_clone_repos_reports_https_fallback(monkeypatch, tmp_path, capsys):
     assert changed is True
     out = capsys.readouterr().out
     assert "cloned via https fallback" in out
+
+
+@pytest.mark.parametrize("option", ["branch", "tag"])
+def test_clone_passes_ref_to_git(monkeypatch, tmp_path, option):
+    repo = clone.GitHubRepo("FNALssi", "cetlib")
+    calls = []
+
+    class FakeGit:
+        returncode = 0
+
+        def add_default_arg(self, *args):
+            calls.append(("default",) + args)
+
+        def __call__(self, *args, **kwargs):
+            calls.append(args)
+            return "Cloning into cetlib"
+
+    monkeypatch.setattr(clone.spack.util.git, "git", lambda required: FakeGit())
+
+    kwargs = {option: "v1.2.3" if option == "tag" else "feature/test"}
+    result, fallback = clone._clone(repo, str(tmp_path), **kwargs)
+
+    assert result is None
+    assert fallback is False
+    assert calls[-1] == ("clone", "--branch", kwargs[option], repo.url(), str(tmp_path / "cetlib"))
+
+
+def test_clone_skips_existing_destination(monkeypatch, tmp_path, capsys):
+    repo = clone.GitHubRepo("FNALssi", "cetlib")
+    (tmp_path / "cetlib").mkdir()
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("git clone should not run for an existing destination")
+
+    monkeypatch.setattr(clone.spack.util.git, "git", fail_if_called)
+    changed = clone.clone_repos(
+        {"cetlib": repo},
+        should_fork=False,
+        srcs_area=str(tmp_path),
+        local_area=str(tmp_path),
+        branch="feature/test",
+    )
+
+    assert changed is False
+    assert "already cloned" in capsys.readouterr().out
+
+
+def test_branch_and_tag_are_mutually_exclusive():
+    with pytest.raises(SystemExit):
+        mpd("g", "--branch", "main", "--tag", "v1.0", "cetlib")

@@ -40,6 +40,7 @@ usage: spack mpd git-clone [-h] [--suites <suite name> [<suite name> ...]]
                            [--add-suite <suite YAML file> [<suite YAML file> ...]]
                            [--remove-suite <suite name> [<suite name> ...]]
                            [--prefer-ssh]
+                           [--branch <branch name> | --tag <tag name>]
                            [--fork | --help-repos | --help-repos-with-urls | --help-suites | --help-suites-with-paths]
                            [<repo spec> ...]
 
@@ -58,6 +59,9 @@ optional arguments:
   --remove-suite <suite name> [<suite name> ...]
                         remove one or more known suites by name
   --prefer-ssh          prefer SSH for GitHub repositories and fall back to HTTPS if unavailable
+  --branch <branch name>
+                        check out the specified branch
+  --tag <tag name>      check out the specified tag
   --fork                fork GitHub repository or set origin to already forked repository
   --help-repos          list known repositories
   --help-repos-with-urls
@@ -72,6 +76,18 @@ A `repo spec` can be:
 
 - any repository name listed by the `spack mpd git-clone --help-repos` option, or
 - any URL to a Git repository.
+
+Use `--branch` or `--tag` to select a ref while cloning. The options are
+mutually exclusive. Tags are checked out with a detached HEAD, as with
+standard Git behavior:
+
+```console
+$ spack mpd git-clone --branch feature/foo cetlib
+$ spack mpd git-clone --tag v1.2.3 cetlib
+```
+
+If the destination directory already exists, MPD skips that repository and
+does not change its current checkout, even when `--branch` or `--tag` is specified.
 
 ## Read-only vs. writeable repositories
 
