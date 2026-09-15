@@ -62,6 +62,27 @@ A few observations:
   new-project`).  Unless specified otherwise, the sources directory
   will be a subdirectory of the top-level directory.
 
+## Reusing an existing environment
+
+The `-E`/`--env` option accepts the name or absolute path of an existing
+Spack environment.  MPD uses that environment as the source of packages
+to reuse when concretizing the new project's environment.  For example:
+
+```console
+$ spack mpd new-project --name test -E gcc-14-1 -C gcc@14.1.0
+```
+
+The supplied environment is saved in the project configuration.  A later
+`spack mpd refresh` reuses it automatically; `-E`/`--env` is available
+only when creating a project with `spack mpd new-project`.
+
+Reusing an environment does not lock every dependency of a developed
+package to the corresponding concrete package in that environment.  Spack
+may concretize a different dependency when the developed package's
+requirements, project constraints, or the concretizer configuration do
+not select the existing package.  To require a particular dependency
+version or variant, provide an explicit constraint with `-d`/`--dependency`.
+
 ## Variant support
 
 Two categories of positional variants can be specified:
