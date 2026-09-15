@@ -83,6 +83,17 @@ requirements, project constraints, or the concretizer configuration do
 not select the existing package.  To require a particular dependency
 version or variant, provide an explicit constraint with `-d`/`--dependency`.
 
+To require all non-developed dependencies to match concrete packages in
+the supplied environment, add `--require-reuse` when creating the project:
+
+```console
+$ spack mpd new-project --name test -E gcc-14-1 --require-reuse -C gcc@14.1.0
+```
+
+MPD fails after concretization if any dependency cannot be reused from the
+environment specified by `-E`.  This setting is saved with the project and
+is also enforced by `spack mpd refresh`.
+
 ## Variant support
 
 Two categories of positional variants can be specified:

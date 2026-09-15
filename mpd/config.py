@@ -639,6 +639,7 @@ def project_config_from_args(args):
         )
     project["name"] = project_name
     project["env"] = args.env
+    project["require_reuse"] = args.require_reuse
 
     srcs_path = Path(args.srcs) if args.srcs else top_path / "srcs"
 

@@ -445,6 +445,25 @@ def absent_dependencies(env, packages, ignored_packages) -> list:
     return sorted(set(absent))
 
 
+def verify_required_reuse(env, packages, ignored_packages, proto_env):
+    """Ensure all non-developed specs match concrete specs in proto_env."""
+    source_env = ev.read(proto_env)
+    reusable_hashes = {spec.dag_hash() for spec in source_env.all_specs()}
+    missing = []
+    for spec in env.all_specs():
+        if spec.name in packages or spec.name in ignored_packages:
+            continue
+        if spec.dag_hash() not in reusable_hashes:
+            missing.append(spec.cshort_spec)
+
+    if missing:
+        details = "\n".join(f" - {spec}" for spec in sorted(set(missing)))
+        tty.die(
+            "The following dependencies cannot be reused from the environment\n"
+            f"specified by -E/--env ({proto_env}):\n\n{details}\n"
+        )
+
+
 def prepare_package_requirements(project_config):
     """Prepare package requirements for environment creation.
 
@@ -839,6 +858,9 @@ def concretize_project(project_config, yes_to_all):
     env = create_initial_environment(
         project_config, packages, package_requirements, from_items, include_list
     )
+
+    if project_config.get("require_reuse"):
+        verify_required_reuse(env, packages, project_config["ignored"], project_config["env"])
 
     verify_no_missing_intermediate_deps(env, packages, project_config["ignored"])
 

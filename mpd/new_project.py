@@ -38,6 +38,11 @@ def setup_subparser(subparsers):
         "-E", "--env", help="environment (name or absolute path) from which to create project"
     )
     new_project.add_argument(
+        "--require-reuse",
+        action="store_true",
+        help="require all dependencies to be reused from the environment specified by -E/--env",
+    )
+    new_project.add_argument(
         "-y", "--yes-to-all", action="store_true", help="Answer yes/default to all prompts"
     )
     new_project.add_argument(
@@ -65,6 +70,9 @@ def setup_subparser(subparsers):
 
 def process(args):
     preconditions(State.INITIALIZED, ~State.ACTIVE_ENVIRONMENT)
+
+    if args.require_reuse and not args.env:
+        tty.die("--require-reuse requires -E/--env.\n")
 
     print()
 

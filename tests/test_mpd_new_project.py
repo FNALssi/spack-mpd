@@ -20,6 +20,24 @@ def mpd(*args):
     return SpackCommand("mpd")(*args)
 
 
+class _FakeSpec:
+    def __init__(self, name, dag_hash, cshort_spec):
+        self.name = name
+        self._dag_hash = dag_hash
+        self.cshort_spec = cshort_spec
+
+    def dag_hash(self):
+        return self._dag_hash
+
+
+class _FakeEnvironment:
+    def __init__(self, specs):
+        self._specs = specs
+
+    def all_specs(self):
+        return self._specs
+
+
 @contextlib.contextmanager
 def new_project(name=None, top=None, srcs=None, cwd=None, extra_args=None):
     arguments = []
@@ -179,6 +197,56 @@ def test_new_project_accepts_env_var_prepend(with_mpd_init, tmp_path):
         assert "Creating project: test-env-arg" in out
         project_cfg = config.selected_project_config()
         assert project_cfg["env_var_prepend"] == ["MY_ENVIRONMENT_VARIABLE=my_string"]
+
+
+def test_new_project_require_reuse_requires_env(with_mpd_init, tmp_path):
+    command = SpackCommand("mpd")
+    out = command(
+        "new-project",
+        "--name",
+        "require-reuse",
+        "-T",
+        str(tmp_path),
+        "--require-reuse",
+        fail_on_error=False,
+    )
+
+    assert command.returncode == 1
+    assert "--require-reuse requires -E/--env" in out
+
+
+def test_new_project_persists_require_reuse(with_mpd_init, tmp_path):
+    with new_project(
+        name="require-reuse",
+        cwd=tmp_path,
+        extra_args=["-E", "test-environment", "--require-reuse"],
+    ):
+        assert config.selected_project_config()["require_reuse"] is True
+
+
+def test_verify_required_reuse_accepts_matching_specs(monkeypatch):
+    # Test the post-concretization reuse check directly; no Spack concretization is performed here.
+    shared_spec = _FakeSpec("dependency", "abc123", "dependency@1.0/abc123")
+    monkeypatch.setattr(concretize.ev, "read", lambda _: _FakeEnvironment([shared_spec]))
+
+    concretize.verify_required_reuse(
+        _FakeEnvironment([shared_spec]), packages={}, ignored_packages=[], proto_env="source-env"
+    )
+
+
+def test_verify_required_reuse_reports_missing_specs(monkeypatch, capsys):
+    # Test the post-concretization reuse check directly; no Spack concretization is performed here.
+    missing_spec = _FakeSpec("dependency", "abc123", "dependency@1.0/abc123")
+    monkeypatch.setattr(concretize.ev, "read", lambda _: _FakeEnvironment([]))
+
+    with pytest.raises(SystemExit):
+        concretize.verify_required_reuse(
+            _FakeEnvironment([missing_spec]),
+            packages={},
+            ignored_packages=[],
+            proto_env="source-env",
+        )
+    assert "dependency@1.0/abc123" in capsys.readouterr().err
 
 
 def test_refresh_accepts_env_var_prepend(with_mpd_init, tmp_path):
