@@ -5,19 +5,21 @@ import re
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import spack.builder as builder
 import spack.cmd
 import spack.compilers
 import spack.compilers.config
+import spack.deptypes as dt
 import spack.environment as ev
 import spack.environment.shell as ev_shell
 import spack.repo
 import spack.store
 import spack.util.spack_yaml as syaml
 from spack import traverse
-from spack.spec import InstallStatus
+from spack.spec import InstallStatus, Spec
 
 from .config import update
 from .spack_compat import config_set, install_status, tty
@@ -27,6 +29,20 @@ SUBCOMMAND = "new-project"
 ALIASES = ["n"]
 
 CMAKE_CACHE_VARIABLE_PATTERN = re.compile(r"-D(.*):(.*)=(.*)")
+SPACK_INJECTED_DEPENDENCIES = {"compiler-wrapper", "gcc-runtime"}
+
+
+@dataclass(frozen=True)
+class DependencyOrigin:
+    developed_package: str
+    recipe_constraint: Spec
+    deptypes: frozenset[str]
+
+
+@dataclass(frozen=True)
+class PromotedDependency:
+    constraint: Spec
+    origins: tuple[DependencyOrigin, ...]
 
 
 def _run(cmd):
@@ -555,7 +571,7 @@ def create_initial_environment(
     local_env_dir = project_config["local"]
 
     default_view_dict = dict(root=".spack-env/view", exclude=["gcc-runtime"])
-    reuse_block = {"from": from_items}
+    reuse_block = {"roots": False, "from": from_items}
 
     full_block = dict(
         config=dict(deprecated=True),
@@ -606,13 +622,55 @@ def extract_cmake_args(env, packages):
     return cmake_args
 
 
+def _dependency_only_constraint(spec, recipe_dependencies):
+    """Return the minimum root constraint that preserves a selected dependency."""
+    constraint = Spec(spec.format("{name}{@versions}{ namespace=namespace_if_anonymous}"))
+
+    for dependency in recipe_dependencies:
+        if dependency.spec.name == spec.name:
+            constraint.constrain(dependency.spec)
+
+    # Recipe defaults are preferences and need not be repeated as hard constraints.
+    # Keep non-default selections, while excluding synthetic variants such as patches.
+    for name, selected in spec.variants.items():
+        if not spec.package.has_variant(name):
+            continue
+        default = spec.package.get_variant(name).default
+        if selected.value != default:
+            constraint.constrain(Spec(str(selected)))
+
+    return constraint
+
+
+def _active_recipe_dependencies(parent, edge):
+    """Return recipe requirements represented by a selected concrete edge."""
+    names = {edge.spec.name, *edge.virtuals}
+    matches = []
+    dependencies = parent.package.dependencies_by_name(when=True)
+    for name in names:
+        for when, dependency_list in dependencies.get(name, {}).items():
+            if not parent.satisfies(when):
+                continue
+            for dependency in dependency_list:
+                if not dependency.depflag & edge.depflag:
+                    continue
+                if edge.spec.satisfies(dependency.spec):
+                    matches.append(dependency)
+    return matches
+
+
+def _deptypes(depflag):
+    return frozenset(dt.flag_to_tuple(depflag))
+
+
 def collect_first_order_dependencies(env, packages, project_config):
     """Collect first-order dependencies for the development environment.
 
     Returns:
-        tuple: (first_order_deps set, cetmodules4 bool)
+        tuple: (promoted dependencies, supplemental roots, cetmodules4 bool)
     """
-    first_order_deps = {"cmake"}
+    promoted_by_name = {}
+    supplemental_roots = {"cmake"}
 
     chosen_compiler = None
     compiler = project_config.get("compiler")
@@ -643,6 +701,10 @@ def collect_first_order_dependencies(env, packages, project_config):
             if dep.spec.satisfies(chosen_compiler):
                 # The development environment should not include the compiler as a root spec.
                 continue
+            if dep.spec.name in SPACK_INJECTED_DEPENDENCIES:
+                # Spack 1.x adds compiler infrastructure directly to concrete DAGs. These
+                # edges do not originate from package recipes and should not become roots.
+                continue
             if dep.spec.external:
                 # We don't need to (and probably shouldn't) include things like glibc.
                 continue
@@ -651,15 +713,88 @@ def collect_first_order_dependencies(env, packages, project_config):
                 # Do not use cetmodules4 if one of the dependencies does not use version 4.
                 cetmodules4 = cetmodules4 and str(dep.spec.version.up_to(1)) == "4"
 
-            first_order_deps.add(dep.spec.name)
+            recipe_dependencies = _active_recipe_dependencies(s, dep)
+            if not recipe_dependencies:
+                tty.die(
+                    "Internal error: could not recover the active recipe dependency "
+                    f"from {s.name} to {dep.spec.name}."
+                )
+            constraint = _dependency_only_constraint(dep.spec, recipe_dependencies)
 
-    # gcc-runtime is a build-time dependency that will be built if needed.
-    first_order_deps.discard("gcc-runtime")
+            origins = tuple(
+                DependencyOrigin(
+                    developed_package=s.name,
+                    recipe_constraint=recipe_dependency.spec.copy(),
+                    deptypes=_deptypes(recipe_dependency.depflag & dep.depflag),
+                )
+                for recipe_dependency in recipe_dependencies
+            )
 
-    return first_order_deps, cetmodules4
+            existing = promoted_by_name.get(dep.spec.name)
+            if existing is None:
+                promoted_by_name[dep.spec.name] = PromotedDependency(constraint, origins)
+            elif existing.constraint == constraint:
+                promoted_by_name[dep.spec.name] = PromotedDependency(
+                    existing.constraint, existing.origins + origins
+                )
+            else:
+                tty.die(
+                    "Internal error: unified concretization selected incompatible "
+                    f"configurations for promoted dependency {dep.spec.name}:\n"
+                    f" - {existing.constraint}\n - {constraint}"
+                )
+
+    promoted = tuple(promoted_by_name[name] for name in sorted(promoted_by_name))
+    return promoted, supplemental_roots, cetmodules4
 
 
-def finalize_environment(project_config, packages, first_order_deps):
+def verify_promoted_dependencies(env, promoted_dependencies):
+    """Verify promoted roots against their selected and recipe constraints."""
+    roots_by_name = {root.name: root for root in env.concrete_roots()}
+    failures = []
+
+    for promoted in promoted_dependencies:
+        result = roots_by_name.get(promoted.constraint.name)
+        for origin in promoted.origins:
+            if (
+                result is not None
+                and result.satisfies(promoted.constraint)
+                and result.satisfies(origin.recipe_constraint)
+            ):
+                continue
+
+            details = (
+                f" - developed package: {origin.developed_package}\n"
+                f"   dependency types: {', '.join(sorted(origin.deptypes))}\n"
+                f"   promoted constraint: {promoted.constraint}\n"
+                f"   recipe constraint: {origin.recipe_constraint}\n"
+            )
+            if result is None:
+                details += "   result: missing promoted root"
+            else:
+                details += f"   result: {result}"
+            failures.append(details)
+
+    if failures:
+        tty.die(
+            "Finalized dependency roots do not satisfy the constraints selected "
+            "from the developed packages:\n\n" + "\n".join(failures)
+        )
+
+
+def enable_dependency_root_reuse(local_env_dir):
+    """Allow promoted dependency roots to reuse compatible concrete specs."""
+    env_yaml_path = Path(local_env_dir) / "spack.yaml"
+    with open(env_yaml_path, "r") as f:
+        env_config = syaml.load(f)
+
+    env_config["spack"]["concretizer"]["reuse"]["roots"] = True
+
+    with open(env_yaml_path, "w") as f:
+        syaml.dump(env_config, stream=f, default_flow_style=False)
+
+
+def finalize_environment(project_config, packages, promoted_dependencies, supplemental_roots):
     """Add first-order dependencies and finalize the environment.
 
     Returns:
@@ -668,13 +803,22 @@ def finalize_environment(project_config, packages, first_order_deps):
     local_env_dir = project_config["local"]
 
     new_roots = "Adding the following packages as top-level dependencies:"
-    sorted_first_order_deps = sorted(first_order_deps)
+    promoted_roots = [str(dep.constraint) for dep in promoted_dependencies]
+    promoted_names = {dep.constraint.name for dep in promoted_dependencies}
+    supplemental = [root for root in supplemental_roots if Spec(root).name not in promoted_names]
+    sorted_first_order_deps = sorted(promoted_roots + supplemental)
     for dep in sorted_first_order_deps:
         new_roots += f"\n    - {dep}"
     tty.msg(gray(new_roots))
+
+    # Root reuse is disabled for the initial solve so developed packages cannot
+    # conceal recipe updates. The roots added below are dependencies and should
+    # reuse compatible installations selected by that fresh solve.
+    enable_dependency_root_reuse(local_env_dir)
     _run(["spack", "-D", local_env_dir, "add"] + list(sorted_first_order_deps))
 
     _run(["spack", "-D", local_env_dir, "concretize"])
+    verify_promoted_dependencies(ev.Environment(local_env_dir), promoted_dependencies)
 
     tty.info(gray("Finalizing concretization"))
 
@@ -682,8 +826,10 @@ def finalize_environment(project_config, packages, first_order_deps):
     _run(["spack", "-D", local_env_dir, "rm"] + list(packages.keys()))
     _run(["spack", "-D", local_env_dir, "concretize"])
 
+    final_env = ev.Environment(local_env_dir)
+    verify_promoted_dependencies(final_env, promoted_dependencies)
     update(project_config, status="concretized")
-    return ev.Environment(local_env_dir)
+    return final_env
 
 
 def _cmake_workaround_for_python_package(
@@ -868,14 +1014,13 @@ def concretize_project(project_config, yes_to_all):
 
     tty.info(cyan("Creating local development environment"))
 
-    first_order_deps, cetmodules4 = collect_first_order_dependencies(env, packages, project_config)
-    make_cmake_files(
-        project_config,
-        cmake_args,
-        ordered_roots(env, packages),
-        cetmodules4,
-        Path(env.view_path_default),
+    developed_roots = ordered_roots(env, packages)
+    promoted_dependencies, supplemental_roots, cetmodules4 = collect_first_order_dependencies(
+        env, packages, project_config
     )
 
-    env = finalize_environment(project_config, packages, first_order_deps)
+    env = finalize_environment(project_config, packages, promoted_dependencies, supplemental_roots)
+    make_cmake_files(
+        project_config, cmake_args, developed_roots, cetmodules4, Path(env.view_path_default)
+    )
     handle_installation(project_config, env, packages, yes_to_all, compiler_symlinks_dir)

@@ -4,13 +4,16 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 import contextlib
 import re
+from types import SimpleNamespace
 
 import pytest
 
+import spack.cmd
 import spack.util.spack_yaml as syaml
 from spack.extensions.mpd import concretize, config
 from spack.extensions.mpd.spack_compat import fs
 from spack.main import SpackCommand, SpackCommandError
+from spack.spec import Spec
 
 
 # The default value of the top-level directory changes depending on the working
@@ -247,6 +250,241 @@ def test_verify_required_reuse_reports_missing_specs(monkeypatch, capsys):
             proto_env="source-env",
         )
     assert "dependency@1.0/abc123" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "from_items",
+    [[{"type": "local"}, {"type": "external"}], [{"type": "environment", "path": "source-env"}]],
+)
+def test_create_initial_environment_does_not_reuse_roots(monkeypatch, tmp_path, from_items):
+    captured = {}
+    expected_env = object()
+
+    def capture_yaml(_, contents, prefix):
+        captured["contents"] = contents
+        captured["prefix"] = prefix
+        return tmp_path / "initial.yaml"
+
+    monkeypatch.setattr(concretize, "make_yaml_file", capture_yaml)
+    monkeypatch.setattr(concretize, "_run", lambda _: None)
+    monkeypatch.setattr(concretize, "update", lambda *args, **kwargs: None)
+    monkeypatch.setattr(concretize.ev, "exists", lambda _: False)
+    monkeypatch.setattr(concretize.ev, "create", lambda *args, **kwargs: None)
+    monkeypatch.setattr(concretize.ev, "read", lambda _: expected_env)
+
+    result = concretize.create_initial_environment(
+        {"name": "test", "local": str(tmp_path)}, {"developed": {}}, {}, from_items, []
+    )
+
+    assert result is expected_env
+    assert captured["contents"]["spack"]["concretizer"]["reuse"] == {
+        "roots": False,
+        "from": from_items,
+    }
+
+
+def test_dependency_only_constraint_preserves_only_required_configuration(monkeypatch):
+    selected = Spec(
+        "dependency@=1.2+required+selected+defaulted patches:=abc "
+        "platform=linux os=ubuntu22.04 target=x86_64 %cxx=gcc@=10 ^transitive@=3"
+    )
+    variant_defaults = {"required": False, "selected": False, "defaulted": True}
+    package = SimpleNamespace(
+        has_variant=lambda name: name in variant_defaults,
+        get_variant=lambda name: SimpleNamespace(default=variant_defaults[name]),
+    )
+    monkeypatch.setattr(type(selected), "package", property(lambda _: package))
+    recipe_dependency = SimpleNamespace(spec=Spec("dependency@1:+required"))
+
+    constraint = concretize._dependency_only_constraint(selected, [recipe_dependency])
+
+    assert str(constraint) == "dependency@=1.2+required+selected"
+    assert selected.satisfies(constraint)
+    assert constraint.architecture is None
+    assert not constraint.dependencies(virtuals=("c", "cxx", "fortran"))
+    assert "patches" not in constraint.variants
+    assert "defaulted" not in constraint.variants
+    assert not constraint.edges_to_dependencies()
+    assert constraint.abstract_hash is None
+
+
+def test_collect_first_order_dependencies_merges_origins(monkeypatch):
+    dependency = Spec("dependency@=2.0+shared")
+    dependency.external_path = None
+    edge = SimpleNamespace(
+        spec=dependency, virtuals=(), depflag=concretize.dt.LINK | concretize.dt.RUN
+    )
+    injected_edges = []
+    for name in ("compiler-wrapper", "gcc-runtime"):
+        spec = Spec(name)
+        spec.external_path = None
+        injected_edges.append(SimpleNamespace(spec=spec, virtuals=(), depflag=concretize.dt.BUILD))
+    parents = [SimpleNamespace(name=name) for name in ("developed-a", "developed-b")]
+    recipe_dependency = SimpleNamespace(
+        spec=Spec("dependency@2:"), depflag=concretize.dt.LINK | concretize.dt.RUN
+    )
+
+    class Environment:
+        def concretized_specs(self):
+            return [(parent.name, parent) for parent in parents]
+
+    original_traverse_edges = concretize.traverse.traverse_edges
+
+    def traverse_edges(roots, *args, **kwargs):
+        if roots and any(roots[0] is parent for parent in parents):
+            return [(1, injected) for injected in injected_edges] + [(1, edge)]
+        return original_traverse_edges(roots, *args, **kwargs)
+
+    monkeypatch.setattr(concretize.traverse, "traverse_edges", traverse_edges)
+    monkeypatch.setattr(
+        concretize, "_active_recipe_dependencies", lambda parent, selected: [recipe_dependency]
+    )
+    monkeypatch.setattr(
+        concretize,
+        "_dependency_only_constraint",
+        lambda selected, dependencies: Spec("dependency@=2.0+shared"),
+    )
+    monkeypatch.setattr(spack.cmd, "parse_specs", lambda _: [Spec("gcc@=12")])
+
+    promoted, supplemental, cetmodules4 = concretize.collect_first_order_dependencies(
+        Environment(), {parent.name: {} for parent in parents}, {"compiler": {"value": "gcc@=12"}}
+    )
+
+    assert len(promoted) == 1
+    assert promoted[0].constraint.satisfies("dependency@=2.0+shared")
+    assert [origin.developed_package for origin in promoted[0].origins] == [
+        "developed-a",
+        "developed-b",
+    ]
+    assert all(
+        origin.recipe_constraint.satisfies("dependency@2:") for origin in promoted[0].origins
+    )
+    assert all(origin.deptypes == frozenset({"link", "run"}) for origin in promoted[0].origins)
+    assert supplemental == {"cmake"}
+    assert cetmodules4 is True
+
+
+def test_verify_promoted_dependencies_accepts_satisfying_root():
+    root = Spec("dependency@1.2+shared")
+    promoted = concretize.PromotedDependency(
+        Spec("dependency@1.2+shared"),
+        (
+            concretize.DependencyOrigin(
+                "developed", Spec("dependency@1:"), frozenset({"link", "run"})
+            ),
+        ),
+    )
+
+    class Environment:
+        def concrete_roots(self):
+            return [root]
+
+    concretize.verify_promoted_dependencies(Environment(), (promoted,))
+
+
+def test_verify_promoted_dependencies_reports_recipe_violation(capsys):
+    root = Spec("dependency@1.2")
+    promoted = concretize.PromotedDependency(
+        Spec("dependency@1.2"),
+        (concretize.DependencyOrigin("developed", Spec("dependency@2:"), frozenset({"link"})),),
+    )
+
+    class Environment:
+        def concrete_roots(self):
+            return [root]
+
+    with pytest.raises(SystemExit):
+        concretize.verify_promoted_dependencies(Environment(), (promoted,))
+
+    error = capsys.readouterr().err
+    assert "developed package: developed" in error
+    assert "dependency types: link" in error
+    assert "recipe constraint: dependency@2:" in error
+    assert "result: dependency@1.2" in error
+
+
+def test_finalize_environment_verifies_both_concretizations(monkeypatch, tmp_path):
+    commands = []
+    root_reuse = []
+    environments = [object(), object()]
+    verified = []
+    promoted = concretize.PromotedDependency(
+        Spec("dependency@1.2"),
+        (concretize.DependencyOrigin("developed", Spec("dependency@1:"), frozenset()),),
+    )
+
+    monkeypatch.setattr(concretize, "_run", lambda command: commands.append(command))
+    monkeypatch.setattr(
+        concretize, "enable_dependency_root_reuse", lambda path: root_reuse.append(path)
+    )
+    monkeypatch.setattr(concretize.ev, "Environment", lambda _: environments.pop(0))
+    monkeypatch.setattr(
+        concretize,
+        "verify_promoted_dependencies",
+        lambda env, dependencies: verified.append((env, dependencies)),
+    )
+    monkeypatch.setattr(concretize, "update", lambda *args, **kwargs: None)
+
+    result = concretize.finalize_environment(
+        {"local": str(tmp_path)}, {"developed": {}}, (promoted,), {"cmake"}
+    )
+
+    assert commands == [
+        ["spack", "-D", str(tmp_path), "add", "cmake", "dependency@1.2"],
+        ["spack", "-D", str(tmp_path), "concretize"],
+        ["spack", "-D", str(tmp_path), "rm", "developed"],
+        ["spack", "-D", str(tmp_path), "concretize"],
+    ]
+    assert root_reuse == [str(tmp_path)]
+    assert len(verified) == 2
+    assert verified[0][1] == (promoted,)
+    assert verified[1][1] == (promoted,)
+    assert result is verified[1][0]
+
+
+def test_finalize_environment_omits_duplicate_supplemental_root(monkeypatch, tmp_path):
+    commands = []
+    promoted = concretize.PromotedDependency(
+        Spec("cmake@=3.31"),
+        (concretize.DependencyOrigin("developed", Spec("cmake@3.24:"), frozenset()),),
+    )
+
+    monkeypatch.setattr(concretize, "_run", lambda command: commands.append(command))
+    monkeypatch.setattr(concretize, "enable_dependency_root_reuse", lambda path: None)
+    monkeypatch.setattr(concretize.ev, "Environment", lambda _: object())
+    monkeypatch.setattr(concretize, "verify_promoted_dependencies", lambda *args: None)
+    monkeypatch.setattr(concretize, "update", lambda *args, **kwargs: None)
+
+    concretize.finalize_environment(
+        {"local": str(tmp_path)}, {"developed": {}}, (promoted,), {"cmake"}
+    )
+
+    assert commands[0] == ["spack", "-D", str(tmp_path), "add", "cmake@=3.31"]
+
+
+def test_enable_dependency_root_reuse_preserves_sources(tmp_path):
+    env_yaml = tmp_path / "spack.yaml"
+    reuse_sources = [{"type": "local"}, {"type": "external"}]
+    with open(env_yaml, "w") as f:
+        syaml.dump(
+            {
+                "spack": {
+                    "specs": ["developed"],
+                    "concretizer": {
+                        "unify": True,
+                        "reuse": {"roots": False, "from": reuse_sources},
+                    },
+                }
+            },
+            stream=f,
+            default_flow_style=False,
+        )
+
+    concretize.enable_dependency_root_reuse(tmp_path)
+
+    with open(env_yaml, "r") as f:
+        config = syaml.load(f)
+    assert config["spack"]["concretizer"]["reuse"] == {"roots": True, "from": reuse_sources}
 
 
 def test_refresh_accepts_env_var_prepend(with_mpd_init, tmp_path):
