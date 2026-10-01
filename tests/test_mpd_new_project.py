@@ -719,6 +719,31 @@ def test_parse_dependency_spec_preserves_dependency_constraints_spacing():
     assert constraints == ["^llvm libcxx=none libunwind=none"]
 
 
+def test_parse_general_variants_preserves_propagated_variants():
+    general, packages, virtuals = config.parse_general_variants(
+        ["cxxstd==23", "++shared", "~~debug", "root", "@6.32", "+python"]
+    )
+
+    assert general == {
+        "cxxstd": {"value": "23", "variant": "cxxstd==23"},
+        "shared": {"value": True, "variant": "++shared"},
+        "debug": {"value": False, "variant": "~~debug"},
+    }
+    assert packages == {
+        "root": {
+            "version": {"value": "6.32", "variant": "@6.32"},
+            "python": {"value": True, "variant": "+python"},
+        }
+    }
+    assert virtuals == {}
+
+
+def test_parse_general_variants_rejects_dependency_syntax(capsys):
+    with pytest.raises(SystemExit):
+        config.parse_general_variants(["^[virtuals=mpi]", "mpich"])
+    assert "Please use the --dependency flag instead" in capsys.readouterr().err
+
+
 def test_categorize_constraints_parses_dependency_name_with_space_separated_constraints():
     constraint_map = config.categorize_constraints(["^llvm libcxx=none libunwind=none"])
 

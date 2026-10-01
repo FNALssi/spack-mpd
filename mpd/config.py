@@ -23,7 +23,7 @@ import spack.store
 import spack.util.spack_yaml as syaml
 from spack.repo import PATH, UnknownPackageError
 from spack.spec import Spec
-from spack.spec_parser import SPLIT_KVP, SpecParser, SpecTokens
+from spack.spec_parser import SPLIT_KVP
 
 try:
     from spack.build_systems.cmake import CMakePackage
@@ -32,7 +32,7 @@ except ImportError:
     from spack_repo.builtin.build_systems.cmake import CMakePackage
 
 from . import init
-from .spack_compat import active_environment, tty
+from .spack_compat import SpecParser, SpecTokens, active_environment, tty
 from .util import cyan, gray, green, magenta, spack_cmd_line, yellow
 
 
