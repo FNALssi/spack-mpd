@@ -666,7 +666,11 @@ def _dependency_only_constraint(spec, recipe_dependencies):
     for name, selected in spec.variants.items():
         if not spec.package.has_variant(name):
             continue
-        default = spec.package.get_variant(name).default
+        try:
+            default = spec.package.get_variant(name).default
+        except ValueError:
+            # Reused specs can retain variants no longer defined for their version.
+            continue
         if selected.value != default:
             constraint.constrain(Spec(str(selected)))
 
@@ -993,7 +997,8 @@ def handle_installation(project_config, env, packages, yes_to_all, compiler_syml
         development_env.install_all()
         development_env.write()
         result_code = 0
-    except Exception:
+    except Exception as error:
+        tty.error(f"{type(error).__name__}: {error}")
         result_code = 1
     finally:
         ev_shell.deactivate().apply_modifications()

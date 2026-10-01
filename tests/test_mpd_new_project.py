@@ -490,6 +490,25 @@ def test_dependency_only_constraint_preserves_only_required_configuration(monkey
     assert constraint.abstract_hash is None
 
 
+@pytest.mark.parametrize("inactive_variant", ["+coroutine", "~coroutine"])
+def test_dependency_only_constraint_skips_inactive_variants(monkeypatch, inactive_variant):
+    selected = Spec(f"boost@=1.90.0 {inactive_variant} +shared")
+
+    def get_variant(name):
+        if name == "coroutine":
+            raise ValueError(f"No variant '{name}' on spec: {selected}")
+        return SimpleNamespace(default=False)
+
+    package = SimpleNamespace(has_variant=lambda name: True, get_variant=get_variant)
+    monkeypatch.setattr(type(selected), "package", property(lambda _: package))
+    recipe_dependency = SimpleNamespace(spec=Spec("boost@1.90:"))
+
+    constraint = concretize._dependency_only_constraint(selected, [recipe_dependency])
+
+    assert str(constraint) == "boost@=1.90.0+shared"
+    assert selected.satisfies(constraint)
+
+
 def test_collect_first_order_dependencies_merges_origins(monkeypatch):
     dependency = Spec("dependency@=2.0+shared")
     dependency.external_path = None
@@ -708,6 +727,45 @@ def test_add_env_var_prepend_paths(tmp_path):
     prepend_path = loaded["spack"]["env_vars"]["prepend_path"]
     assert prepend_path["PATH"] == "/tmp/compilers"
     assert prepend_path["MY_ENVIRONMENT_VARIABLE"] == expected
+
+
+@pytest.mark.parametrize("failure_stage", ["activate", "install", "write"])
+def test_handle_installation_reports_exception_and_deactivates(monkeypatch, capsys, failure_stage):
+    calls = []
+
+    def run_stage(stage):
+        calls.append(stage)
+        if stage == failure_stage:
+            raise RuntimeError(f"test {stage} failure")
+
+    environment = SimpleNamespace(
+        install_all=lambda: run_stage("install"),
+        write=lambda: run_stage("write"),
+    )
+    monkeypatch.setattr(concretize, "absent_dependencies", lambda *args: [])
+    monkeypatch.setattr(concretize.ev, "Environment", lambda path: environment)
+    monkeypatch.setattr(concretize, "config_set", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        concretize.ev_shell,
+        "activate",
+        lambda env: SimpleNamespace(apply_modifications=lambda: run_stage("activate")),
+    )
+    monkeypatch.setattr(
+        concretize.ev_shell,
+        "deactivate",
+        lambda: SimpleNamespace(apply_modifications=lambda: run_stage("deactivate")),
+    )
+
+    with pytest.raises(SystemExit) as error:
+        concretize.handle_installation(
+            {"name": "test", "local": "/unused", "ignored": []}, environment, {}, True, None
+        )
+
+    assert error.value.code == 1
+    assert calls[-1] == "deactivate"
+    output = capsys.readouterr().err
+    assert f"RuntimeError: test {failure_stage} failure" in output
+    assert "Installation failed" in output
 
 
 def test_parse_dependency_spec_preserves_dependency_constraints_spacing():
