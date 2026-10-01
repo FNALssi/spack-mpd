@@ -67,7 +67,14 @@ def refresh_project(name, project_config, yes_to_all):
         ev.Environment(local_env_dir).destroy()
     Path(local_env_dir).mkdir(exist_ok=True)
 
-    concretize_project(project_config, yes_to_all)
+    try:
+        concretize_project(project_config, yes_to_all)
+    except (Exception, SystemExit):
+        tty.warn(
+            "Refresh failed. Fix the underlying problem, then retry with "
+            "'spack mpd refresh --force' if the project configuration is unchanged."
+        )
+        raise
 
 
 def process(args):
@@ -86,8 +93,12 @@ def process(args):
     def normalize(cfg):
         return json.loads(json.dumps(cfg, sort_keys=True))
 
-    if normalize(current_config) == normalize(new_config) and not args.force:
-        tty.msg(f"Project {bold(name)} is up-to-date")
-        return
+    if normalize(current_config) == normalize(new_config) and not (args.force or args.yes_to_all):
+        tty.msg(f"Project {bold(name)} configuration is unchanged")
+        if not tty.get_yes_or_no("Force reconcretization anyway?", default=False):
+            tty.msg(f"Project {bold(name)} was not refreshed")
+            return
 
+    config.prepare_project_directories(Path(new_config["top"]), Path(new_config["source"]))
+    config.update(new_config)
     refresh_project(name, new_config, args.yes_to_all)

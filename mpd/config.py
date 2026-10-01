@@ -999,25 +999,16 @@ def update(project_config, status=None, installed_at=None):
 def refresh(project_name, new_variants, new_dependencies=None, new_env_var_prepends=None):
     config = mpd_config(raw=True)
 
-    # Update packages field
     assert config is not None
     assert project_name is not None
-    canonical = mpd_config()
+    canonical, _ = _canonicalized_config(config)
     project_cfg = project_config(project_name, canonical)
 
-    top_path = Path(project_cfg["top"])
-    srcs_path = Path(project_cfg["source"])
-
-    prepare_project_directories(top_path, srcs_path)
     updated = comments.CommentedMap(config["projects"][project_name])
     updated.update(
         handle_variants(project_cfg, new_variants, new_dependencies, new_env_var_prepends)
     )
-    config["projects"][project_name] = updated
-    _write_config(config)
-
-    # Return configuration for this project
-    return config["projects"][project_name]
+    return updated
 
 
 def rm_config(project_name):

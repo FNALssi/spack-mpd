@@ -10,7 +10,7 @@ import pytest
 
 import spack.cmd
 import spack.util.spack_yaml as syaml
-from spack.extensions.mpd import concretize, config
+from spack.extensions.mpd import concretize, config, refresh
 from spack.extensions.mpd.spack_compat import fs
 from spack.main import SpackCommand, SpackCommandError
 from spack.spec import Spec
@@ -301,22 +301,76 @@ def test_new_project_force_rejects_replacement_with_different_paths(with_mpd_ini
     assert not replacement.exists()
 
 
-def test_mpd_refresh(with_mpd_init, tmp_path):
+def test_mpd_refresh(with_mpd_init, tmp_path, monkeypatch):
     with new_project(name="e", cwd=tmp_path):
         # Update the cached configuration
         mpd("ls")
 
         cfg = config.selected_project_config()
+        prompts = []
+
+        def decline(question, default):
+            prompts.append((question, default))
+            return False
+
+        monkeypatch.setattr(refresh.tty, "get_yes_or_no", decline)
+        config_file = config.mpd_config_file()
+        before = config_file.read_bytes()
         out = mpd("refresh")
         new_cfg = config.selected_project_config()
-        assert "Project e is up-to-date" in out
+        assert "Project e configuration is unchanged" in out
+        assert "Project e was not refreshed" in out
+        assert prompts == [("Force reconcretization anyway?", False)]
         assert cfg == new_cfg
+        assert config_file.read_bytes() == before
         assert new_cfg["cxxstd"]["value"] == "17"
 
         out = mpd("refresh", "cxxstd=20")
         assert "Refreshing project: e" in out
+        assert len(prompts) == 1
         new_cfg = config.selected_project_config()
         assert new_cfg["cxxstd"]["value"] == "20"
+
+
+@pytest.mark.parametrize("options", [(), ("--force",), ("--yes-to-all",)])
+def test_refresh_unchanged_can_reconcretize(with_mpd_init, tmp_path, monkeypatch, options):
+    with new_project(name="refresh-unchanged", cwd=tmp_path):
+        prompts = []
+
+        def accept(question, default):
+            prompts.append((question, default))
+            return True
+
+        monkeypatch.setattr(refresh.tty, "get_yes_or_no", accept)
+        refreshed = []
+        monkeypatch.setattr(refresh, "refresh_project", lambda *args: refreshed.append(args))
+
+        out = mpd("refresh", *options)
+
+        if not options:
+            assert "Project refresh-unchanged configuration is unchanged" in out
+        assert prompts == ([("Force reconcretization anyway?", False)] if not options else [])
+        assert len(refreshed) == 1
+        assert refreshed[0][0] == "refresh-unchanged"
+        assert refreshed[0][2] == ("--yes-to-all" in options)
+
+
+def test_refresh_failure_suggests_force(tmp_path, monkeypatch, capsys):
+    local = tmp_path / "local"
+
+    def fail(*args):
+        raise RuntimeError("concretization failed")
+
+    monkeypatch.setattr(refresh, "print_config_info", lambda _: None)
+    monkeypatch.setattr(refresh, "concretize_project", fail)
+
+    with pytest.raises(RuntimeError, match="concretization failed"):
+        refresh.refresh_project("project", {"packages": {"pkg": {}}, "local": str(local)}, False)
+
+    warning = capsys.readouterr().err
+    assert "Fix the underlying problem" in warning
+    assert "spack mpd refresh --force" in warning
+    assert local.exists()
 
 
 def test_new_project_accepts_env_var_prepend(with_mpd_init, tmp_path):
