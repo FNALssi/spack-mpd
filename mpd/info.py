@@ -26,13 +26,28 @@ def setup_subparser(subparsers):
     )
     paths = info.add_mutually_exclusive_group()
     paths.add_argument(
-        "-t", "--top", metavar="<project name>", help="print top-level directory for project"
+        "-t",
+        "--top",
+        metavar="<project name>",
+        nargs="?",
+        const="",
+        help="print top-level directory for project (defaults to selected project)",
     )
     paths.add_argument(
-        "-b", "--build", metavar="<project name>", help="print build-level directory for project"
+        "-b",
+        "--build",
+        metavar="<project name>",
+        nargs="?",
+        const="",
+        help="print build-level directory for project (defaults to selected project)",
     )
     paths.add_argument(
-        "-s", "--source", metavar="<project name>", help="print source-level directory for project"
+        "-s",
+        "--source",
+        metavar="<project name>",
+        nargs="?",
+        const="",
+        help="print source-level directory for project (defaults to selected project)",
     )
 
 
@@ -90,14 +105,22 @@ def process(args):
     preconditions(State.INITIALIZED)
 
     paths = [(kind, getattr(args, kind)) for kind in ("top", "build", "source")]
-    path = next(((kind, name) for kind, name in paths if name), None)
+    path = next(((kind, name) for kind, name in paths if name is not None), None)
     if args.project and path:
         tty.die("Specify project names or a project directory option, not both")
     if args.raw and path:
         tty.die("--raw cannot be used with a project directory option")
+    if path and path[1]:
+        project_path(path[1], path[0])
+        return
     if args.project:
         project_details(args.project, args.raw)
-    elif path:
-        project_path(path[1], path[0])
+        return
+
+    selected = config.selected_project()
+    if not selected:
+        tty.die("Specify a project name or select an MPD project")
+    if path:
+        project_path(selected, path[0])
     else:
-        tty.die("Specify a project name or a project directory option")
+        project_details([selected], args.raw)

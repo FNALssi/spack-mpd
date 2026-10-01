@@ -253,12 +253,13 @@ will remove the warning.
 ### Project details
 
 Use `spack mpd info <project name>` to print details of a project. Multiple
-project names may be provided. To print its stored YAML configuration, pass
+project names may be provided. With no project name, `spack mpd info` shows
+the currently selected project. To print its stored YAML configuration, pass
 `--raw`:
 
 ```console
 $ spack mpd info -h
-usage: spack mpd info [-h] [--raw] [-t <project name> | -b <project name> | -s <project name>] [<project name> ...]
+usage: spack mpd info [-h] [--raw] [-t [<project name>] | -b [<project name>] | -s [<project name>]] [<project name> ...]
 ```
 
 ```console
@@ -321,7 +322,9 @@ $ cd $(spack mpd info --source test)
 ```
 
 Use `--top`, `--build`, or `--source` with `spack mpd info` to print only the
-corresponding directory path for one project.
+corresponding directory path for one project. If the project name is omitted,
+the selected project's path is printed. Without a selected project, supply a
+project name explicitly.
 
 This is particularly convenient when logging in to the system and
 wanting to invoke generator commands (e.g. `ninja`) immediately:
@@ -329,7 +332,7 @@ wanting to invoke generator commands (e.g. `ninja`) immediately:
 ```console
 $ spack env activate test
 (Spack environment test now active; MPD project test now selected)
-$ cd $(spack mpd info --build test)
+$ cd $(spack mpd info --build)
 (Now in test build directory)
 $ ninja
 ```
