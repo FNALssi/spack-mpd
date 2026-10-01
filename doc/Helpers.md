@@ -175,30 +175,17 @@ You can list the existing MPD projects by invoking `spack mpd list`:
 
 ```console
 $ spack mpd list -h
-usage: spack mpd list [-h] [--raw] [-t <project name> | -b <project name> | -s <project name>] [<project name> ...]
+usage: spack mpd list [-h]
 
 list MPD projects
 
-When no arguments are specified, prints a list of existing MPD projects
-and their corresponding sources directories.
-
-positional arguments:
-  <project name>        print details of the MPD project
-
 optional arguments:
-  --raw                 print YAML configuration of the MPD project
-                        (used only when project name is provided)
-  -b <project name>, --build <project name>
-                        print build-level directory for project
   -h, --help            show this help message and exit
-  -s <project name>, --source <project name>
-                        print source-level directory for project
-  -t <project name>, --top <project name>
-                        print top-level directory for project
 ```
 
-As stated in the help text, invoking `spack mpd list` with no options
-prints a table of existing projects with their sources directories:
+Invoking `spack mpd list` (or `spack mpd ls`) prints a table of existing
+projects with their sources directories. It accepts no project names or
+directory options; use `spack mpd info` for those lookups.
 
 Projects that share the same canonical source directory are annotated with
 `Shared source with:` followed by their peer project names in sorted order.
@@ -263,13 +250,19 @@ $ spack mpd ls
 Closing (or invoking `spack mpd clear` on) all but one of those shells
 will remove the warning.
 
-### Listing project details
+### Project details
 
-Details of a specific project will be printed to the screen if the
-project name is provided as a positional argument:
+Use `spack mpd info <project name>` to print details of a project. Multiple
+project names may be provided. To print its stored YAML configuration, pass
+`--raw`:
 
 ```console
-$ spack mpd list --raw test
+$ spack mpd info -h
+usage: spack mpd info [-h] [--raw] [-t <project name> | -b <project name> | -s <project name>] [<project name> ...]
+```
+
+```console
+$ spack mpd info --raw test
 
 ==> Details for test
 
@@ -315,17 +308,20 @@ installed: '---'
 
 ```
 
-### Listing project directories
+### Project directories
 
 Sometimes it is helpful for just the path of one of the project's
 directories to be printed:
 
 ```console
-$ spack mpd list --source test
+$ spack mpd info --source test
 /scratch/knoepfel/test-devel/srcs
-$ cd $(spack mpd ls --source test)
+$ cd $(spack mpd info --source test)
 (Now in test source directory)
 ```
+
+Use `--top`, `--build`, or `--source` with `spack mpd info` to print only the
+corresponding directory path for one project.
 
 This is particularly convenient when logging in to the system and
 wanting to invoke generator commands (e.g. `ninja`) immediately:
@@ -333,7 +329,7 @@ wanting to invoke generator commands (e.g. `ninja`) immediately:
 ```console
 $ spack env activate test
 (Spack environment test now active; MPD project test now selected)
-$ cd $(spack mpd list --build test)
+$ cd $(spack mpd info --build test)
 (Now in test build directory)
 $ ninja
 ```

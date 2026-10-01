@@ -13,6 +13,7 @@ subcommands = [
     "build",
     "clear",
     "clone",
+    "info",
     "init",
     "install",
     "list_projects",

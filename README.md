@@ -57,6 +57,7 @@ developers.
    1. [MPD status](doc/Helpers.md#status)
    2. [Cloning repositories to develop](doc/Helpers.md#cloning-repositories-to-develop)
    3. [Listing projects](doc/Helpers.md#listing-projects)
+   4. [Project details and directories](doc/Helpers.md#project-details)
 
 ## Limitations
 
