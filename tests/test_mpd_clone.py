@@ -2,6 +2,7 @@
 # Spack Project Developers. See the top-level COPYRIGHT file for details.
 #
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+import spack.util.git
 import spack.util.spack_yaml as syaml
 from spack.extensions.mpd import clone, config, init
 from spack.extensions.mpd.spack_compat import fs
@@ -10,11 +11,20 @@ from spack.main import SpackCommand
 mpd = SpackCommand("mpd")
 
 
-def test_new_project_clone(with_mpd_init, tmp_path):
+def test_new_project_clone(with_mpd_init, tmp_path, monkeypatch):
+    repository = tmp_path / "cetlib.git"
+    spack.util.git.git(required=True)("init", "--bare", str(repository))
+
+    def local_url(repo):
+        assert repo.name() == "cetlib"
+        return str(repository)
+
+    monkeypatch.setattr(clone.GitHubRepo, "url", local_url)
     with fs.working_dir(tmp_path):
         mpd("new-project", "--name", "test-clone")
         mpd("g", "cetlib")
         assert (tmp_path / "srcs" / "cetlib").exists()
+        assert (tmp_path / "srcs" / "cetlib" / ".git").is_dir()
         mpd("rm", "-f", "test-clone")
 
 

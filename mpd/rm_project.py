@@ -5,7 +5,7 @@ from pathlib import Path
 from . import config as mpd_config
 from .config import project_config, rm_config
 from .preconditions import State, preconditions
-from .spack_compat import tty
+from .spack_compat import ev, tty
 
 SUBCOMMAND = "rm-project"
 ALIASES = ["rm"]
@@ -37,11 +37,12 @@ def rm_project(name, config, cleanup=True):
         mpd_config.clear_project_selections(name)
         return
 
-    subprocess.run(
-        ["spack", "env", "rm", "-y", config["local"]],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    if ev.is_env_dir(config["local"]):
+        subprocess.run(
+            ["spack", "env", "rm", "-y", config["local"]],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     for path in (config["build"], config["local"], Path(config["top"]) / ".mpd"):
         shutil.rmtree(path, ignore_errors=True)
     rm_config(name)

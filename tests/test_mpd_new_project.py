@@ -729,6 +729,31 @@ def test_categorize_constraints_parses_dependency_name_with_space_separated_cons
     }
 
 
+def test_select_compiler_defaults_to_first_available(available_compilers):
+    assert config.select_compiler(None) is available_compilers[0]
+
+
+@pytest.mark.parametrize("desired, index", [("gcc", 1), ("gcc@12", 0), ("clang", 2)])
+def test_select_compiler_matches_requested_spec(available_compilers, desired, index):
+    chosen = config.select_compiler({"value": desired, "variant": "%" + desired})
+    assert chosen is available_compilers[index]
+
+
+def test_select_compiler_reports_unavailable_request(available_compilers, capsys):
+    with pytest.raises(SystemExit):
+        config.select_compiler({"value": "gcc@99", "variant": "%gcc@99"})
+    error = capsys.readouterr().err
+    assert "No compiler found that corresponds to '%gcc@99'" in error
+    assert "Available compilers:" in error
+
+
+def test_select_compiler_reports_no_compilers(available_compilers, capsys):
+    available_compilers.clear()
+    with pytest.raises(SystemExit):
+        config.select_compiler(None)
+    assert "No compilers are configured" in capsys.readouterr().err
+
+
 def test_format_compiler_help_message_empty_compiler_list():
     msg = config._format_compiler_help_message([])
 
