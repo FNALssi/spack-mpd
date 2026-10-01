@@ -115,6 +115,32 @@ def check_active(conditions):
     return None
 
 
+def require_safe_project_mutation(project_names=None):
+    if project_names is None:
+        selected = config.selected_project(missing_ok=True)
+        project_names = [selected] if selected else []
+    elif isinstance(project_names, str):
+        project_names = [project_names]
+
+    affected = set(project_names)
+    if not affected:
+        return
+    cfg = config.mpd_config()
+    conflicts = config.layout_conflicts((cfg or {}).get("projects", {}))
+    relevant = [
+        conflict
+        for conflict in conflicts
+        if affected.intersection((conflict.first_project, conflict.second_project))
+    ]
+    if relevant:
+        print()
+        tty.die(
+            "Cannot mutate an MPD project with an unsafe path layout.\n"
+            + config.format_conflicts(relevant)
+            + "\n"
+        )
+
+
 def preconditions(*conditions):
     errors = []
     initialization_precondition = check_initialized(conditions)

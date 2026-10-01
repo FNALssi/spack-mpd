@@ -89,6 +89,10 @@ After cloning any repositories into your selected project's source
 directory, be sure to refresh the project (`spack mpd refresh`), which
 will recreate the Spack environment to reflect the changes.
 
+When the canonical source directory is shared by multiple projects, cloning
+prints an informational warning naming every other project that uses it. The
+clone continues, but those projects may also need to be refreshed.
+
 ### Suites
 
 A _suite_ is a named collection of repositories that can be cloned
@@ -195,6 +199,17 @@ optional arguments:
 
 As stated in the help text, invoking `spack mpd list` with no options
 prints a table of existing projects with their sources directories:
+
+Projects that share the same canonical source directory are annotated with
+`Shared source with:` followed by their peer project names in sorted order.
+This is informational, not an unsafe-layout warning, and may appear alongside a
+multiple-shell warning.
+
+MPD also reports unsafe legacy path conflicts through `list` and `status`.
+Commands that mutate a project involved in such a conflict are blocked, while
+unrelated valid projects remain usable. Use `rm-project` to unregister a
+conflicting project safely; MPD may preserve its managed directories when it
+cannot prove deletion is safe.
 
 ```console
 $ spack mpd ls

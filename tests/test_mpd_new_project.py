@@ -173,6 +173,134 @@ def test_new_project_no_default_paths(with_mpd_init, tmp_path):
         assert f"sources {srcs_d}" in out
 
 
+def test_new_project_rejects_collision_before_creating_directories(
+    with_mpd_init, tmp_path, monkeypatch
+):
+    existing_top = tmp_path / "existing"
+    config.update(
+        {
+            "name": "existing",
+            "top": str(existing_top),
+            "source": str(tmp_path / "shared"),
+            "build": str(existing_top / "build"),
+            "local": str(existing_top / "local"),
+            "packages": {},
+        }
+    )
+    candidate_top = existing_top / "nested"
+    monkeypatch.setattr(config, "select_compiler", lambda _: pytest.fail("compiler selected"))
+
+    command = SpackCommand("mpd")
+    output = command(
+        "new-project",
+        "--name",
+        "candidate",
+        "--top",
+        str(candidate_top),
+        fail_on_error=False,
+    )
+
+    assert command.returncode == 1
+    assert "Unsafe MPD project path conflicts" in output
+    assert not candidate_top.exists()
+    assert config.selected_project() is None
+
+
+def test_new_project_allows_external_shared_source(with_mpd_init, tmp_path):
+    shared = tmp_path / "shared"
+    first_top = tmp_path / "first"
+    second_top = tmp_path / "second"
+    with new_project(name="first", top=first_top, srcs=shared):
+        with new_project(name="second", top=second_top, srcs=shared):
+            assert config.shared_source_peers("first") == ("second",)
+
+
+def test_new_project_rejects_sharing_source_inside_project_top(with_mpd_init, tmp_path):
+    first_top = tmp_path / "first"
+    shared = first_top / "srcs"
+    with new_project(name="first", top=first_top):
+        command = SpackCommand("mpd")
+        output = command(
+            "new-project",
+            "--name",
+            "second",
+            "--top",
+            str(tmp_path / "second"),
+            "--srcs",
+            str(shared),
+            fail_on_error=False,
+        )
+        assert command.returncode == 1
+        assert "Unsafe MPD project path conflicts" in output
+
+
+def test_new_project_rejects_top_around_existing_shared_source(with_mpd_init, tmp_path):
+    shared = tmp_path / "shared"
+    first = {
+        "name": "first",
+        "top": str(tmp_path / "first"),
+        "source": str(shared),
+        "build": str(tmp_path / "first" / "build"),
+        "local": str(tmp_path / "first" / "local"),
+    }
+    second = {
+        "name": "second",
+        "top": str(tmp_path / "second"),
+        "source": str(shared),
+        "build": str(tmp_path / "second" / "build"),
+        "local": str(tmp_path / "second" / "local"),
+    }
+    config.update(first)
+    config.update(second)
+
+    command = SpackCommand("mpd")
+    output = command(
+        "new-project",
+        "--name",
+        "third",
+        "--top",
+        str(tmp_path),
+        "--srcs",
+        str(tmp_path / "third-source"),
+        fail_on_error=False,
+    )
+
+    assert command.returncode == 1
+    assert "Unsafe MPD project path conflicts" in output
+    assert not (tmp_path / "build").exists()
+
+
+def test_new_project_force_rejects_replacement_with_different_paths(with_mpd_init, tmp_path):
+    top = tmp_path / "original"
+    project = {
+        "name": "existing",
+        "top": str(top),
+        "source": str(top / "srcs"),
+        "build": str(top / "build"),
+        "local": str(top / "local"),
+    }
+    config.update(project)
+    replacement = tmp_path / "replacement"
+
+    command = SpackCommand("mpd")
+    output = command(
+        "new-project",
+        "--name",
+        "existing",
+        "--top",
+        str(replacement),
+        "--force",
+        fail_on_error=False,
+    )
+
+    assert command.returncode == 1
+    assert "Cannot replace MPD project existing using different directories" in output
+    assert f"top: {top} -> {replacement}" in output
+    assert "does not move its build files or Spack environment" in output
+    assert "Run 'spack mpd rm-project --force existing'" in output
+    assert not replacement.exists()
+
+
 def test_mpd_refresh(with_mpd_init, tmp_path):
     with new_project(name="e", cwd=tmp_path):
         # Update the cached configuration

@@ -124,15 +124,31 @@ def cmake_package_variables(name, cmake_args):
     )
 
 
+def cmake_string(value):
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace(";", "\\;")
+        .replace("$", "\\$")
+    )
+
+
+def metadata_path(project_config):
+    return Path(project_config["top"]) / ".mpd"
+
+
 def cmake_develop(project_config, package_cmake_args):
     project_name = project_config["name"]
-    source_path = Path(project_config["source"])
+    output_path = metadata_path(project_config)
+    output_path.mkdir(parents=True, exist_ok=True)
     file_dir = Path(__file__).resolve().parent
-    with open((source_path / "develop.cmake").absolute(), "w") as out:
+    with open(output_path / "develop.cmake", "w") as out:
         for name, args in package_cmake_args.items():
             out.write(f"# {name} variables\n" + cmake_package_variables(name, args))
         out.write(
-            f"""set(CWD "{file_dir}")
+            f"""set(CWD "{cmake_string(file_dir)}")
+set(MPD_SOURCE_DIR "{cmake_string(project_config['source'])}")
 macro(develop pkg)
   install(CODE "execute_process(COMMAND spack python ensure-install-directory.py\\
                                         {project_name} ${{${{pkg}}_HASH}}\\
@@ -143,7 +159,7 @@ macro(develop pkg)
   if (COMMAND set_${{pkg_with_underscores}}_variables)
     cmake_language(CALL "set_${{pkg_with_underscores}}_variables")
   endif()
-  add_subdirectory(${{pkg}})
+  add_subdirectory("${{MPD_SOURCE_DIR}}/${{pkg}}" "${{CMAKE_BINARY_DIR}}/${{pkg}}")
   if (COMMAND unset_${{pkg_with_underscores}}_variables)
     cmake_language(CALL "unset_${{pkg_with_underscores}}_variables")
   endif()
@@ -184,9 +200,10 @@ find_package(cetmodules 4.02.00 REQUIRED)
 
 
 def cmake_lists(project_config, dependencies, cetmodules4):
-    source_path = Path(project_config["source"])
+    output_path = metadata_path(project_config)
+    output_path.mkdir(parents=True, exist_ok=True)
     develop_cetmodules = any("cetmodules" in p for p in [d[0] for d in dependencies])
-    with open((source_path / "CMakeLists.txt").absolute(), "w") as f:
+    with open(output_path / "CMakeLists.txt", "w") as f:
         f.write(
             cmake_lists_preamble(
                 project_config["name"],
@@ -198,7 +215,7 @@ def cmake_lists(project_config, dependencies, cetmodules4):
             if d == "cetmodules":
                 continue
             srcs_name = project_config["srcs"][d]
-            f.write(f"\ndevelop({srcs_name})")
+            f.write(f'\ndevelop("{cmake_string(srcs_name)}")')
         f.write("\n")
 
 
@@ -251,7 +268,8 @@ def cmake_presets(project_config, dependencies, cetmodules4, view_path):
         allCacheVariables["configurePresets"][f"{dep_name}_HASH"] = dep_hash
         allCacheVariables["configurePresets"][f"{dep_name}_INSTALL_PREFIX"] = dep_prefix
 
-        pkg_presets_file = source_path / dep_name / "CMakePresets.json"
+        source_name = project_config["srcs"].get(dep_name, dep_name)
+        pkg_presets_file = source_path / source_name / "CMakePresets.json"
         if not pkg_presets_file.exists():
             continue
 
@@ -287,11 +305,24 @@ def cmake_presets(project_config, dependencies, cetmodules4, view_path):
             }
         )
 
-    with open((source_path / "CMakePresets.json").absolute(), "w") as f:
+    output_path = metadata_path(project_config)
+    output_path.mkdir(parents=True, exist_ok=True)
+    with open(output_path / "CMakePresets.json", "w") as f:
         json.dump(presets, f, indent=4)
 
 
 def make_cmake_files(project_config, cmake_args, dependencies, cetmodules4, view_path):
+    source_path = Path(project_config["source"])
+    legacy_files = [
+        source_path / name for name in ("CMakeLists.txt", "develop.cmake", "CMakePresets.json")
+    ]
+    legacy_files = [path for path in legacy_files if path.exists()]
+    if legacy_files:
+        paths = "\n".join(f" - {path}" for path in legacy_files)
+        tty.warn(
+            "Files matching MPD's former generated-file locations were found. MPD no longer "
+            f"uses them; inspect them before deciding whether to remove them:\n{paths}"
+        )
     cmake_develop(project_config, cmake_args)
     cmake_lists(project_config, dependencies, cetmodules4)
     cmake_presets(project_config, dependencies, cetmodules4, view_path)

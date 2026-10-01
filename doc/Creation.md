@@ -43,7 +43,7 @@ optional arguments:
   --env-var-prepend <ENV_VAR>=<suffix>
                         prepend colon-separated paths to ENV_VAR for each checked-out package
                         (can be specified multiple times)
-  -f, --force           overwrite existing project with same name
+  -f, --force           replace existing project with same name and paths
   -h, --help            show this help message and exit
   -y, --yes-to-all      Answer yes/default to all prompts
 ```
@@ -61,6 +61,28 @@ A few observations:
   working directory (the one in which you invoke `spack mpd
   new-project`).  Unless specified otherwise, the sources directory
   will be a subdirectory of the top-level directory.
+
+## Directory ownership and source sharing
+
+MPD canonicalizes project paths, including `~`, relative components, and
+existing symbolic links. Project top-level directories may not be equal or
+nested. The generated `build`, `local`, and `<top>/.mpd` trees are exclusively
+managed by MPD and may not overlap another project's managed trees or source
+directory. Source roots may not be nested.
+
+Multiple projects may intentionally use the exact same canonical source
+directory. A shared source must be outside and disjoint from every configured
+project's top-level directory. For example, two projects rooted at
+`/work/debug` and `/work/release` may share `/work/shared-srcs`; they may not
+share `/work/debug/srcs`. A source used by only one project may retain the
+default `<top>/srcs` layout.
+
+`new-project` validates all paths before creating directories, selecting the
+project, changing an environment, or writing configuration. `--force` replaces
+an existing project only when all canonical paths are unchanged. To use
+different directories, remove the existing project and create it again. A
+project involved in an unsafe legacy layout also cannot be replaced with
+`--force`; remove and recreate it instead.
 
 ## Reusing an existing environment
 

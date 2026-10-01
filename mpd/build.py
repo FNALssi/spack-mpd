@@ -2,7 +2,12 @@ import subprocess
 from pathlib import Path
 
 from .config import selected_project_config
-from .preconditions import State, activate_development_environment, preconditions
+from .preconditions import (
+    State,
+    activate_development_environment,
+    preconditions,
+    require_safe_project_mutation,
+)
 from .spack_compat import tty
 from .util import cyan, remove_dir
 
@@ -63,7 +68,7 @@ def configure_cmake_project(project_config, cmake_defines=None):
         "cmake",
         "--preset",
         "default",
-        project_config["source"],
+        str(Path(project_config["top"]) / ".mpd"),
         "-B",
         project_config["build"],
         "-G",
@@ -174,6 +179,7 @@ def build(project_config, parallel, generator_options, targets=None):
 
 def process(args):
     preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.PACKAGES_TO_DEVELOP)
+    require_safe_project_mutation()
 
     config = selected_project_config()
     if args.clean:

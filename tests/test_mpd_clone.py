@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 import spack.util.spack_yaml as syaml
-from spack.extensions.mpd import clone, init
+from spack.extensions.mpd import clone, config, init
 from spack.extensions.mpd.spack_compat import fs
 from spack.main import SpackCommand
 
@@ -110,3 +110,14 @@ def test_clone_repos_reports_https_fallback(monkeypatch, tmp_path, capsys):
     assert changed is True
     out = capsys.readouterr().out
     assert "cloned via https fallback" in out
+
+
+def test_shared_source_warning_names_sorted_peers(monkeypatch, capsys):
+    projects = {
+        name: {"name": name, "source": "/shared"} for name in ("current", "zeta", "alpha")
+    }
+    monkeypatch.setattr(config, "mpd_config", lambda: {"projects": projects})
+
+    clone.warn_if_source_is_shared(projects["current"])
+
+    assert "alpha, zeta" in capsys.readouterr().err

@@ -124,3 +124,8 @@ is achieved by invoking `spack env activate <project>`.
 > corresponding MPD project.  Users therefore do **not** need to
 > invoke `spack mpd select <project>` before invoking `spack env
 > activate <project>`.
+
+Projects involved in an unsafe legacy path conflict may still be selected for
+inspection and recovery. Selection only changes a shell token; it does not
+bypass the layout checks that block build, install, refresh, test, clone, and
+zap operations for that project.

@@ -88,21 +88,32 @@ def list_projects():
     name_width = max(len(k) for k in projects.keys())
     name_width = max(len(name), name_width)
     location = "Sources directory"
-    location_width = max(len(v["source"]) for v in projects.values())
+    groups = config.shared_source_groups(projects)
+    canonical_sources = {
+        name: str(config.canonical_path(value["source"])) for name, value in projects.items()
+    }
+    location_width = max(len(value) for value in canonical_sources.values())
     location_width = max(len(location), location_width)
-    msg += f"   {name:<{name_width}}    {location}\n"
-    msg += "   " + "-" * name_width + "    " + "-" * location_width
+    notes = "Notes"
+    msg += f"   {name:<{name_width}}    {location:<{location_width}}    {notes}\n"
+    msg += "   " + "-" * name_width + "    " + "-" * location_width + "    " + "-" * len(notes)
 
     selected = config.selected_projects()
     for key, value in sorted(projects.items()):
         indicator, color_code, warning = format_fields(key, selected)
+        source = canonical_sources[key]
+        peers = [peer for peer in groups.get(source, ()) if peer != key]
+        notes = [note for note in (warning, f"Shared source with: {', '.join(peers)}" if peers else "") if note]
         msg += maybe_with_color(
             color_code,
-            f"\n {indicator} {key:<{name_width}}    {value['source']:<{location_width}} {warning}",
+            f"\n {indicator} {key:<{name_width}}    {source:<{location_width}}    {'; '.join(notes)}",
         )
     msg += f"\n\nType {cyan('spack mpd ls <project name>')} for more details about a project.\n"
     print()
     tty.msg(msg)
+    conflicts = config.layout_conflicts(projects)
+    if conflicts:
+        tty.warn(config.format_conflicts(conflicts))
 
 
 def project_path(project_name, path_kind):
@@ -119,7 +130,7 @@ def project_path(project_name, path_kind):
     if project_name not in projects:
         tty.die(f"No existing MPD project named {bold(project_name)}")
 
-    print(projects[project_name][path_kind])
+    print(config.canonical_path(projects[project_name][path_kind]))
 
 
 def project_details(project_names, raw):
@@ -129,6 +140,7 @@ def project_details(project_names, raw):
         return
 
     projects = cfg.get("projects")
+    raw_projects = ((config.mpd_config(raw=True) or {}).get("projects") or {})
     if not projects:
         _no_known_projects()
         return
@@ -140,12 +152,18 @@ def project_details(project_names, raw):
             continue
         preamble = f"Details for {bold(name)}"
         if raw:
-            tty.msg(preamble + "\n\n" + syaml.dump_config(projects[name]))
+            tty.msg(preamble + "\n\n" + syaml.dump_config(raw_projects[name]))
             continue
 
         tty.msg(preamble)
         config.print_config_info(projects[name])
+        peers = config.shared_source_peers(name, projects)
+        if peers:
+            tty.info(f"Shared source with: {', '.join(peers)}")
         print()
+    conflicts = config.layout_conflicts(projects)
+    if conflicts:
+        tty.warn(config.format_conflicts(conflicts))
 
 
 def process(args):

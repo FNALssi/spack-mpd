@@ -14,8 +14,9 @@ import spack.util.spack_yaml as syaml
 from spack.util import executable
 
 from . import init as mpd_init
+from . import config as mpd_config
 from .config import selected_project_config
-from .preconditions import State, preconditions
+from .preconditions import State, preconditions, require_safe_project_mutation
 from .spack_compat import fs, tty
 from .util import bold, gray, maybe_with_color, yellow
 
@@ -23,6 +24,16 @@ SUBCOMMAND = "git-clone"
 ALIASES = ["g", "clone"]
 
 gh = executable.which("gh")
+
+
+def warn_if_source_is_shared(project_config):
+    peers = mpd_config.shared_source_peers(project_config["name"])
+    if not peers:
+        return
+    tty.warn(
+        f"Source directory {project_config['source']} is shared with MPD project(s): "
+        f"{', '.join(peers)}. Those projects may need to be refreshed after cloning."
+    )
 # Stolen from https://stackoverflow.com/a/14693789/3585575
 ansi_escape = re.compile(
     r"""
@@ -614,7 +625,9 @@ def process(args):
 
     if args.repos or args.suites:
         preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
+        require_safe_project_mutation()
         config = selected_project_config()
+        warn_if_source_is_shared(config)
         changed_srcs_dir = False
         if args.repos:
             print()

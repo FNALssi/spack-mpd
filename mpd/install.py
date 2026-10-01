@@ -4,7 +4,12 @@ from datetime import datetime
 import spack.environment as ev
 
 from .config import selected_project_config, update
-from .preconditions import State, activate_development_environment, preconditions
+from .preconditions import (
+    State,
+    activate_development_environment,
+    preconditions,
+    require_safe_project_mutation,
+)
 from .spack_compat import tty
 from .util import bold, cyan, gray
 
@@ -23,6 +28,7 @@ def setup_subparser(subparsers):
 
 def process(args):
     preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.PACKAGES_TO_DEVELOP)
+    require_safe_project_mutation()
 
     project_config = selected_project_config()
     activate_development_environment(project_config["local"])

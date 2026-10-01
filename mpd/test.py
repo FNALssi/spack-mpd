@@ -2,7 +2,12 @@ import subprocess
 import sys
 
 from .config import selected_project_config
-from .preconditions import State, activate_development_environment, preconditions
+from .preconditions import (
+    State,
+    activate_development_environment,
+    preconditions,
+    require_safe_project_mutation,
+)
 from .spack_compat import tty
 from .util import maybe_with_color
 
@@ -30,6 +35,7 @@ def setup_subparser(subparsers):
 
 def process(args):
     preconditions(State.INITIALIZED, State.SELECTED_PROJECT, State.PACKAGES_TO_DEVELOP)
+    require_safe_project_mutation()
 
     config = selected_project_config()
     build_dir = config["build"]

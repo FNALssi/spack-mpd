@@ -54,7 +54,7 @@ development environment_:
 
 ```console
 $ spack env activate <mpd project local directory>
-$ cmake --preset default <srcs dir> -B <build dir> -G <generator>
+$ cmake --preset default <top dir>/.mpd -B <build dir> -G <generator>
 $ cmake --build <build dir> -- <generator commands> ...
 $ spack env deactivate
 ```
@@ -66,7 +66,7 @@ in the build directory of the project (e.g.):
 ```console
 $ spack env activate <mpd project local directory>
 $ cd <build dir>
-$ cmake --preset default <srcs dir> ...
+$ cmake --preset default <top dir>/.mpd ...
 $ ninja
 $ spack env deactivate
 ```
@@ -74,6 +74,12 @@ $ spack env deactivate
 This can be very helpful for doing iterative development where the
 CMake configuration command is not necessary.  The `spack mpd build`
 command, however, takes steps to avoid needless CMake reconfiguration.
+
+MPD writes its generated `CMakeLists.txt`, `develop.cmake`, and
+`CMakePresets.json` files beneath `<top>/.mpd`. Package-owned presets are still
+read from each repository in the source directory. Files with these names at
+the source root are no longer used by MPD; metadata regeneration warns about
+them but does not modify or delete them.
 
 > [!NOTE]
 > You do not need to explicitly activate the development environment

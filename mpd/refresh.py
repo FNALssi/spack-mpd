@@ -6,7 +6,7 @@ import spack.environment as ev
 from . import config
 from .concretize import concretize_project
 from .config import print_config_info, selected_project_config
-from .preconditions import State, preconditions
+from .preconditions import State, preconditions, require_safe_project_mutation
 from .spack_compat import tty
 from .util import bold, gray
 
@@ -72,6 +72,7 @@ def refresh_project(name, project_config, yes_to_all):
 
 def process(args):
     preconditions(State.INITIALIZED, State.SELECTED_PROJECT, ~State.ACTIVE_ENVIRONMENT)
+    require_safe_project_mutation()
 
     current_config = selected_project_config()
     name = current_config["name"]

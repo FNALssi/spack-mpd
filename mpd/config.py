@@ -1,5 +1,7 @@
 import os
-import shutil
+from copy import deepcopy
+from dataclasses import dataclass
+from itertools import combinations, product
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -32,6 +34,236 @@ except ImportError:
 from . import init
 from .spack_compat import active_environment, tty
 from .util import cyan, gray, green, magenta, spack_cmd_line, yellow
+
+
+PATH_ROLES = ("top", "source", "build", "local", "metadata")
+PROTECTED_ROLES = ("build", "local", "metadata")
+
+
+@dataclass(frozen=True)
+class PathConflict:
+    first_project: str
+    first_role: str
+    first_path: str
+    second_project: str
+    second_role: str
+    second_path: str
+    relationship: str
+
+
+def canonical_path(path):
+    return Path(path).expanduser().resolve(strict=False)
+
+
+def project_paths(project):
+    top = canonical_path(project["top"])
+    return {
+        "top": top,
+        "source": canonical_path(project["source"]),
+        "build": canonical_path(project["build"]),
+        "local": canonical_path(project["local"]),
+        "metadata": top / ".mpd",
+    }
+
+
+def path_relationship(first, second):
+    first = canonical_path(first)
+    second = canonical_path(second)
+    if first == second:
+        return "equal"
+    if second.is_relative_to(first):
+        return "contains"
+    if first.is_relative_to(second):
+        return "contained-by"
+    return None
+
+
+def _conflict(project_a, role_a, path_a, project_b, role_b, path_b):
+    role_index = {role: index for index, role in enumerate(PATH_ROLES)}
+    left = (project_a, role_index[role_a])
+    right = (project_b, role_index[role_b])
+    if right < left:
+        project_a, project_b = project_b, project_a
+        role_a, role_b = role_b, role_a
+        path_a, path_b = path_b, path_a
+    relationship = path_relationship(path_a, path_b)
+    # Already checked in layout_conflicts that the paths are related, so this should never be None
+    assert relationship is not None
+    return PathConflict(
+        project_a,
+        role_a,
+        str(path_a),
+        project_b,
+        role_b,
+        str(path_b),
+        relationship,
+    )
+
+
+def layout_conflicts(projects):
+    paths = {name: project_paths(project) for name, project in projects.items()}
+    conflicts = set()
+    for first_name, second_name in combinations(sorted(paths), 2):
+        first = paths[first_name]
+        second = paths[second_name]
+
+        if path_relationship(first["top"], second["top"]):
+            conflicts.add(
+                _conflict(
+                    first_name,
+                    "top",
+                    first["top"],
+                    second_name,
+                    "top",
+                    second["top"],
+                )
+            )
+
+        for first_role, second_role in product(PROTECTED_ROLES, repeat=2):
+            if path_relationship(first[first_role], second[second_role]):
+                conflicts.add(
+                    _conflict(
+                        first_name,
+                        first_role,
+                        first[first_role],
+                        second_name,
+                        second_role,
+                        second[second_role],
+                    )
+                )
+
+        for protected_role in PROTECTED_ROLES:
+            if path_relationship(first[protected_role], second["source"]):
+                conflicts.add(
+                    _conflict(
+                        first_name,
+                        protected_role,
+                        first[protected_role],
+                        second_name,
+                        "source",
+                        second["source"],
+                    )
+                )
+            if path_relationship(first["source"], second[protected_role]):
+                conflicts.add(
+                    _conflict(
+                        first_name,
+                        "source",
+                        first["source"],
+                        second_name,
+                        protected_role,
+                        second[protected_role],
+                    )
+                )
+
+        source_relationship = path_relationship(first["source"], second["source"])
+        if source_relationship and source_relationship != "equal":
+            conflicts.add(
+                _conflict(
+                    first_name,
+                    "source",
+                    first["source"],
+                    second_name,
+                    "source",
+                    second["source"],
+                )
+            )
+
+    for source, owners in shared_source_groups(projects).items():
+        source_path = Path(source)
+        for top_owner, top_paths in paths.items():
+            if not path_relationship(source_path, top_paths["top"]):
+                continue
+            for source_owner in owners:
+                conflicts.add(
+                    _conflict(
+                        source_owner,
+                        "source",
+                        source_path,
+                        top_owner,
+                        "top",
+                        top_paths["top"],
+                    )
+                )
+
+    role_index = {role: index for index, role in enumerate(PATH_ROLES)}
+    return tuple(
+        sorted(
+            conflicts,
+            key=lambda item: (
+                item.first_project,
+                role_index[item.first_role],
+                item.second_project,
+                role_index[item.second_role],
+            ),
+        )
+    )
+
+
+def invalid_projects(conflicts):
+    return {name for conflict in conflicts for name in (conflict.first_project, conflict.second_project)}
+
+
+def shared_source_groups(projects):
+    groups = {}
+    for name, project in projects.items():
+        source = str(canonical_path(project["source"]))
+        groups.setdefault(source, []).append(name)
+    return {source: tuple(sorted(names)) for source, names in groups.items() if len(names) > 1}
+
+
+def shared_source_peers(project_name, projects=None):
+    projects = projects if projects is not None else (mpd_config() or {}).get("projects", {})
+    if project_name not in projects:
+        return ()
+    source = str(canonical_path(projects[project_name]["source"]))
+    return tuple(name for name in shared_source_groups(projects).get(source, ()) if name != project_name)
+
+
+def format_conflicts(conflicts):
+    lines = ["Unsafe MPD project path conflicts:"]
+    for conflict in conflicts:
+        lines.append(
+            f" - project '{conflict.first_project}' {conflict.first_role} directory\n"
+            f"     {conflict.first_path}\n"
+            f"   is {conflict.relationship} project '{conflict.second_project}' "
+            f"{conflict.second_role} directory\n"
+            f"     {conflict.second_path}"
+        )
+    return "\n".join(lines)
+
+
+def removal_conflicts(project_name, projects):
+    departing = project_paths(projects[project_name])
+    conflicts = set()
+    for other_name, other_project in projects.items():
+        if other_name == project_name:
+            continue
+        other = project_paths(other_project)
+        for departing_role, other_role in product(PROTECTED_ROLES, PATH_ROLES):
+            if path_relationship(departing[departing_role], other[other_role]):
+                conflicts.add(
+                    _conflict(
+                        project_name,
+                        departing_role,
+                        departing[departing_role],
+                        other_name,
+                        other_role,
+                        other[other_role],
+                    )
+                )
+    role_index = {role: index for index, role in enumerate(PATH_ROLES)}
+    return tuple(
+        sorted(
+            conflicts,
+            key=lambda item: (
+                item.first_project,
+                role_index[item.first_role],
+                item.second_project,
+                role_index[item.second_role],
+            ),
+        )
+    )
 
 
 def _variant_pair(value, variant):
@@ -88,27 +320,57 @@ def selected_project_token():
     return projects_dir / session_id() if projects_dir else None
 
 
-def mpd_config():
+def _write_config(config):
+    config_file = mpd_config_file()
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(mode="w", dir=config_file.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+        syaml.dump(config, stream=stream)
+    os.replace(temporary, config_file)
+
+
+def _canonicalized_config(config):
+    canonical = deepcopy(config)
+    changed = False
+    for project in (canonical.get("projects") or {}).values():
+        for role in PATH_ROLES[:4]:
+            value = str(canonical_path(project[role]))
+            if project[role] != value:
+                project[role] = value
+                changed = True
+    return canonical, changed
+
+
+def mpd_config(raw=False):
     config_file = mpd_config_file()
     if not config_file.exists():
         return None
 
     with open(config_file, "r") as f:
-        return syaml.load(f)
-    return None
+        stored = syaml.load(f)
+    if raw or not stored:
+        return stored
+
+    canonical, changed = _canonicalized_config(stored)
+    projects = canonical.get("projects") or {}
+    if changed and not layout_conflicts(projects):
+        _write_config(canonical)
+    return canonical
 
 
 def prepare_project_directories(top_path, srcs_path):
     def _create_dir(path):
-        path.mkdir(exist_ok=True)
-        return str(path.absolute())
+        path.mkdir(parents=True, exist_ok=True)
+        return str(canonical_path(path))
 
-    return {
+    directories = {
         "top": _create_dir(top_path),
         "source": _create_dir(srcs_path),
         "build": _create_dir(top_path / "build"),
         "local": _create_dir(top_path / "local"),
     }
+    _create_dir(top_path / ".mpd")
+    return directories
 
 
 def ordered_requirement_list(requirements):
@@ -628,9 +890,9 @@ def select_compiler(desired_compiler):
     tty.die(_format_compiler_help_message(all_compilers) + "\n")
 
 
-def project_config_from_args(args):
+def project_paths_from_args(args):
     project = comments.CommentedMap()
-    top_path = Path(args.top).expanduser().resolve()
+    top_path = canonical_path(args.top)
     project_name = args.name if args.name else top_path.name
     if not project_name:
         tty.die(
@@ -641,10 +903,24 @@ def project_config_from_args(args):
     project["env"] = args.env
     project["require_reuse"] = args.require_reuse
 
-    srcs_path = Path(args.srcs) if args.srcs else top_path / "srcs"
+    srcs_path = canonical_path(args.srcs) if args.srcs else top_path / "srcs"
+    project.update(
+        {
+            "top": str(top_path),
+            "source": str(srcs_path),
+            "build": str(top_path / "build"),
+            "local": str(top_path / "local"),
+        }
+    )
+    return project
 
-    directories = prepare_project_directories(top_path, srcs_path)
-    project.update(directories)
+
+def prepare_project(project):
+    prepare_project_directories(Path(project["top"]), Path(project["source"]))
+
+
+def project_config_from_args(args, project=None):
+    project = project if project is not None else project_paths_from_args(args)
 
     # Handle explicit --compiler argument
     compiler_arg = getattr(args, "compiler", None)
@@ -703,11 +979,7 @@ def mpd_project_exists(project_name):
 
 
 def update(project_config, status=None, installed_at=None):
-    config_file = mpd_config_file()
-    config = None
-    if config_file.exists():
-        with open(config_file, "r") as f:
-            config = syaml.load(f)
+    config = mpd_config(raw=True)
 
     if config is None:
         config = comments.CommentedMap()
@@ -721,60 +993,47 @@ def update(project_config, status=None, installed_at=None):
         yaml_project_config.update(installed=installed_at)
     config["projects"][project_config["name"]] = yaml_project_config
 
-    # Update config file
-    with NamedTemporaryFile() as f:
-        syaml.dump(config, stream=f)
-        shutil.copy(f.name, config_file)
+    _write_config(config)
 
 
 def refresh(project_name, new_variants, new_dependencies=None, new_env_var_prepends=None):
-    config_file = mpd_config_file()
-    if config_file.exists():
-        with open(config_file, "r") as f:
-            config = syaml.load(f)
+    config = mpd_config(raw=True)
 
     # Update packages field
     assert config is not None
     assert project_name is not None
-    project_cfg = project_config(project_name, config)
+    canonical = mpd_config()
+    project_cfg = project_config(project_name, canonical)
 
     top_path = Path(project_cfg["top"])
     srcs_path = Path(project_cfg["source"])
 
     prepare_project_directories(top_path, srcs_path)
-    config["projects"][project_name] = handle_variants(
-        project_cfg, new_variants, new_dependencies, new_env_var_prepends
+    updated = comments.CommentedMap(config["projects"][project_name])
+    updated.update(
+        handle_variants(project_cfg, new_variants, new_dependencies, new_env_var_prepends)
     )
-    with NamedTemporaryFile() as f:
-        syaml.dump(config, stream=f)
-        shutil.copy(f.name, config_file)
+    config["projects"][project_name] = updated
+    _write_config(config)
 
     # Return configuration for this project
     return config["projects"][project_name]
 
 
 def rm_config(project_name):
-    config_file = mpd_config_file()
-    if config_file.exists():
-        with open(config_file, "r") as f:
-            config = syaml.load(f)
+    config = mpd_config(raw=True)
 
     assert config is not None
     assert project_name is not None
 
     # Remove project entry
     del config["projects"][project_name]
-    with NamedTemporaryFile() as f:
-        syaml.dump(config, stream=f)
-        shutil.copy(f.name, config_file)
+    _write_config(config)
 
 
 def project_config(name, config=None, missing_ok=False):
     if config is None:
-        config_file = mpd_config_file()
-        if config_file.exists():
-            with open(config_file, "r") as f:
-                config = syaml.load(f)
+        config = mpd_config()
 
     if config is None:
         if missing_ok:
@@ -814,10 +1073,8 @@ def update_cache():
             del proj_config["installed"]
             adjusted = True
 
-    if adjusted:
-        with NamedTemporaryFile() as f:
-            syaml.dump(config, stream=f)
-            shutil.copy(f.name, mpd_config_file())
+    if adjusted and not layout_conflicts(projects):
+        _write_config(config)
 
     # Remove stale selected project tokens
     for sp in selected_projects_dir().iterdir():
@@ -909,3 +1166,12 @@ def select(name):
     selected = selected_projects_dir()
     selected.mkdir(exist_ok=True)
     (selected / f"{session_id}").write_text(name)
+
+
+def clear_project_selections(name):
+    selected = selected_projects_dir()
+    if not selected.exists():
+        return
+    for token in selected.iterdir():
+        if token.read_text() == name:
+            token.unlink(missing_ok=True)

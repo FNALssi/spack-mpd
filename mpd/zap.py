@@ -4,7 +4,7 @@ import spack.environment as ev
 import spack.package_base
 
 from .config import UNINSTALLED, selected_project_config, update
-from .preconditions import State, preconditions
+from .preconditions import State, preconditions, require_safe_project_mutation
 from .util import remove_dir
 
 SUBCOMMAND = "zap"
@@ -42,6 +42,7 @@ def setup_subparser(subparsers):
 
 def process(args):
     preconditions(State.INITIALIZED, State.SELECTED_PROJECT)
+    require_safe_project_mutation()
 
     project_config = selected_project_config()
 

@@ -43,6 +43,11 @@ def process(args):
     msg = f"Selected project:   {cyan(name)}"
     tty.info(msg + _development_status(selected) + _install_status(selected))
 
+    cfg = config.mpd_config()
+    conflicts = config.layout_conflicts(cfg.get("projects", {}))
+    if conflicts:
+        tty.warn(config.format_conflicts(conflicts))
+
     env = active_environment()
     if env and env.path != selected["local"]:
         tty.warn(
