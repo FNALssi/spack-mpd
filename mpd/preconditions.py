@@ -2,6 +2,7 @@ from enum import Flag, auto
 
 import spack.environment as ev
 import spack.environment.shell as ev_shell
+from spack.util.environment import EnvironmentModifications
 
 from . import config, init
 from .spack_compat import active_environment, tty
@@ -176,5 +177,9 @@ def activate_development_environment(env_dir):
         return
 
     tty.msg(green("Activating development environment ") + gray(f"({development_env.name})"))
-    ev_shell.activate_header(development_env).apply_modifications()
     ev_shell.activate(development_env).apply_modifications()
+    env = EnvironmentModifications()
+    env.extend(ev_shell.activate(development_env))
+    env.set("SPACK_ENV", development_env.path)
+    env.apply_modifications()
+    tty.msg(green("Environment modifications applied."))
