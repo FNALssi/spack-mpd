@@ -176,4 +176,5 @@ def activate_development_environment(env_dir):
         return
 
     tty.msg(green("Activating development environment ") + gray(f"({development_env.name})"))
+    ev_shell.activate_header(development_env).apply_modifications()
     ev_shell.activate(development_env).apply_modifications()
