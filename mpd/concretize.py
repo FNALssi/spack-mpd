@@ -542,34 +542,20 @@ def prepare_package_requirements(project_config):
 
 
 def setup_environment_items(project_config):
-    """Setup environment items and include list from proto environment if specified.
+    """Setup environment items from proto environment if specified.
 
     Returns:
-        tuple: (from_items, include_list)
+        list: Environment reuse sources
     """
     from_items = []
-    include_list = []
     proto_env = project_config["env"]
     if proto_env:
         # If an external environment is used, we really, really want to use that one.
         from_items += [{"type": "environment", "path": proto_env}]
-
-        # Read the proto_env's spack.yaml to extract the include list
-        proto_env_yaml = None
-        if ev.exists(proto_env):
-            proto_env_yaml = Path(ev.read(proto_env).manifest_path)
-        else:
-            proto_env_yaml = Path(proto_env) / "spack.yaml"
-
-        if proto_env_yaml.exists():
-            with open(proto_env_yaml, "r") as f:
-                proto_config = syaml.load(f)
-                if proto_config and "spack" in proto_config:
-                    include_list = proto_config["spack"].get("include", [])
     else:
         from_items += [{"type": "local"}, {"type": "external"}]
 
-    return from_items, include_list
+    return from_items
 
 
 def setup_compiler_symlinks(project_config):
@@ -591,7 +577,7 @@ def setup_compiler_symlinks(project_config):
 
 
 def create_initial_environment(
-    project_config, packages, package_requirements, from_items, include_list
+    project_config, packages, package_requirements, from_items
 ):
     """Create and concretize the initial Spack environment.
 
@@ -611,10 +597,6 @@ def create_initial_environment(
         view=dict(default=default_view_dict),
         packages=package_requirements,
     )
-
-    # Add the include list if it exists
-    if include_list:
-        full_block["include"] = include_list
 
     # Always start fresh
     env_file = make_yaml_file("spack", dict(spack=full_block), prefix=local_env_dir)
@@ -1032,13 +1014,13 @@ def concretize_project(project_config, yes_to_all):
     tty.msg(cyan("Determining dependencies") + " (this may take a few minutes)")
 
     # Setup environment items from proto environment if specified
-    from_items, include_list = setup_environment_items(project_config)
+    from_items = setup_environment_items(project_config)
 
     compiler_symlinks_dir = setup_compiler_symlinks(project_config)
 
     # Create and concretize initial environment
     env = create_initial_environment(
-        project_config, packages, package_requirements, from_items, include_list
+        project_config, packages, package_requirements, from_items
     )
 
     if project_config.get("require_reuse"):

@@ -455,7 +455,7 @@ def test_create_initial_environment_does_not_reuse_roots(monkeypatch, tmp_path, 
     monkeypatch.setattr(concretize.ev, "read", lambda _: expected_env)
 
     result = concretize.create_initial_environment(
-        {"name": "test", "local": str(tmp_path)}, {"developed": {}}, {}, from_items, []
+        {"name": "test", "local": str(tmp_path)}, {"developed": {}}, {}, from_items
     )
 
     assert result is expected_env
