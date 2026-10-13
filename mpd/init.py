@@ -1,7 +1,10 @@
+import compileall
 import shutil
+import time
 from pathlib import Path
 
 import spack.paths
+import spack.repo
 
 from .spack_compat import config_get, config_set, fs, tty
 from .util import gray
@@ -54,6 +57,15 @@ def initialize_mpd(config_dir):
     mpd_config_file(config_dir).touch(exist_ok=True)
     mpd_selected_projects_dir(config_dir).mkdir(exist_ok=True)
     known_suites_dir(config_dir).mkdir(exist_ok=True)
+    tty.msg(gray("Ensuring indexed recipe repositories (required by Spack):\n"))
+    width = max(40, max((len(repo.namespace) + 15 for repo in spack.repo.PATH.repos), default=0))
+    for repo in spack.repo.PATH.repos:
+        print(gray(f"      {repo.namespace} ".ljust(width, ".")), end=" ", flush=True)
+        start_time = time.perf_counter()
+        repo.index._build_all_indexes()
+        duration = time.perf_counter() - start_time
+        print(gray(f"done ({duration:.1f}s)"), flush=True)
+    print()
 
 
 def process(args):
@@ -92,6 +104,7 @@ def process(args):
 
         shutil.rmtree(config_dir, ignore_errors=True)
 
-    tty.msg(f"MPD initialized for Spack instance at {spack_root}")
+    tty.msg(f"Initializing MPD for Spack instance at {spack_root}")
     tty.msg(gray(f"MPD configuration directory: {config_dir}"))
     initialize_mpd(config_dir)
+    tty.msg("MPD initialized")
