@@ -178,8 +178,7 @@ def activate_development_environment(env_dir):
 
     tty.msg(green("Activating development environment ") + gray(f"({development_env.name})"))
     ev_shell.activate(development_env).apply_modifications()
-    env_mods = EnvironmentModifications()
-    env_mods.extend(ev_shell.activate(development_env))
+    env_mods = ev_shell.activate(development_env)
     env_mods.set("SPACK_ENV", development_env.path)
     env_mods.apply_modifications()
 
