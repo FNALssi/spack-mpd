@@ -177,9 +177,14 @@ def activate_development_environment(env_dir):
         return
 
     tty.msg(green("Activating development environment ") + gray(f"({development_env.name})"))
-    ev_shell.activate(development_env).apply_modifications()
-    env_mods = ev_shell.activate(development_env)
+    env_mods = EnvironmentModifications()
     env_mods.set("SPACK_ENV", development_env.path)
+    if development_env.has_view("default"):
+        env_mods.set("CMAKE_PREFIX_PATH", development_env.default_view.root)
+    env_mods.apply_modifications()
+    tty.debug(f"environment modifications: {env_mods.shell_modifications(explicit=True)}")
+    env_mods.extend(ev_shell.activate(development_env))
+    tty.debug(f"environment modifications: {env_mods.shell_modifications(explicit=True)}")
     env_mods.apply_modifications()
 
     tty.msg(green("Environment modifications applied."))
